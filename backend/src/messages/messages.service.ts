@@ -1,0 +1,52 @@
+import { Injectable } from '@nestjs/common';
+import { FcmService } from '../fcm/fcm.service';
+import { SendMessageDto } from './dto/send-message.dto';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
+
+@Injectable()
+export class MessagesService {
+  constructor(
+    private fcmService: FcmService,
+    private auditLogsService: AuditLogsService,
+  ) {}
+
+  async sendMessage(sendMessageDto: SendMessageDto, userId: number) {
+    if (sendMessageDto.pairId) {
+      // Send to specific pair
+      const result = await this.fcmService.sendToPair(sendMessageDto.pairId, {
+        title: sendMessageDto.title,
+        body: sendMessageDto.body,
+      });
+
+      await this.auditLogsService.log({
+        userId,
+        actionType: 'message_sent',
+        entityType: 'pair',
+        entityId: sendMessageDto.pairId,
+        dataJson: { title: sendMessageDto.title, body: sendMessageDto.body },
+      });
+
+      return result;
+    } else {
+      // Send to all pairs
+      const result = await this.fcmService.sendToAllPairs({
+        title: sendMessageDto.title,
+        body: sendMessageDto.body,
+      });
+
+      await this.auditLogsService.log({
+        userId,
+        actionType: 'message_sent',
+        entityType: 'all_pairs',
+        dataJson: { title: sendMessageDto.title, body: sendMessageDto.body },
+      });
+
+      return result;
+    }
+  }
+}
+
+
+
+
+
