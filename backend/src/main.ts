@@ -6,7 +6,7 @@ import { seedDatabase } from './database/seed';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
+
   // CORS
   app.enableCors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:3001',

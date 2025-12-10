@@ -4,6 +4,112 @@
 }
 
 /* Modern Most Wanted Design */
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f36f26;
+}
+
+.mw-card {
+  background: rgba(26, 26, 26, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(243, 111, 38, 0.15);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.mw-card:hover {
+  border-color: rgba(243, 111, 38, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.mw-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.mw-input:focus {
+  outline: none;
+  border-color: #f36f26;
+  box-shadow: 0 0 0 2px rgba(243, 111, 38, 0.2);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.mw-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.mw-table th {
+  text-align: left;
+  padding: 1rem;
+  color: #9ca3af;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mw-table td {
+  padding: 1rem;
+  color: white;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mw-table tr:hover td {
+  background: rgba(243, 111, 38, 0.05);
+}
+
+.mw-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.mw-badge.active {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.mw-badge.inactive {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.mw-badge.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
 .glass-effect {
   background: rgba(26, 26, 26, 0.85);
   backdrop-filter: blur(12px);
@@ -54,9 +160,12 @@
 }
 
 @keyframes pulse-orange {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.7;
   }
@@ -100,8 +209,8 @@
   background: rgba(243, 111, 38, 0.1) !important;
 }
 
-.leaflet-control-layers input[type="radio"]:checked + span,
-.leaflet-control-layers input[type="checkbox"]:checked + span {
+.leaflet-control-layers input[type="radio"]:checked+span,
+.leaflet-control-layers input[type="checkbox"]:checked+span {
   color: #f36f26 !important;
   font-weight: 600 !important;
 }
@@ -156,13 +265,82 @@
   display: none !important;
 }
 
-/* Sidebar toggle button - positioned directly below LayersControl */
+/* Sidebar toggle button - positioned below LayersControl */
+/* Sidebar toggle button - positioned below LayersControl */
 .sidebar-toggle-control {
-  top: 50px !important;
+  top: 60px !important;
+  /* Adjusted to sit right below layers control */
   right: 10px !important;
-  z-index: 1000 !important;
+  left: auto !important;
+  z-index: 400 !important;
+  /* Lower z-index so layers menu covers it */
   margin: 0 !important;
-  padding: 0 !important;
+  pointer-events: auto !important;
+}
+
+/* Modern Leaflet Zoom Controls */
+.leaflet-control-zoom {
+  border: none !important;
+  margin-top: 20px !important;
+  margin-left: 20px !important;
+  box-shadow: none !important;
+  /* Remove container shadow */
+  background: none !important;
+  /* Remove container background */
+}
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+  background: rgba(26, 26, 26, 0.85) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(243, 111, 38, 0.2) !important;
+  color: #f36f26 !important;
+  transition: all 0.2s ease !important;
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  font-size: 18px !important;
+  font-weight: bold !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  /* Apply shadow to buttons directly */
+  position: relative !important;
+  /* Ensure z-index works */
+  z-index: 1 !important;
+}
+
+.leaflet-control-zoom-in:hover,
+.leaflet-control-zoom-out:hover {
+  background: rgba(26, 26, 26, 0.95) !important;
+  border-color: rgba(243, 111, 38, 0.4) !important;
+  color: #ff8c42 !important;
+  transform: translateY(0) !important;
+  /* Disable move to prevent gap */
+  z-index: 2 !important;
+  /* Bring to front on hover */
+}
+
+.leaflet-control-zoom-in {
+  border-top-left-radius: 12px !important;
+  border-top-right-radius: 12px !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-bottom: 1px solid rgba(243, 111, 38, 0.2) !important;
+  margin-bottom: 0 !important;
+}
+
+.leaflet-control-zoom-out {
+  border-bottom-left-radius: 12px !important;
+  border-bottom-right-radius: 12px !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  margin-top: -1px !important;
+  /* Merge borders */
+  border-top: none !important;
+  /* Let the top button's border handle the divider */
 }
 
 .sidebar-toggle-control .leaflet-control {
@@ -195,9 +373,11 @@
   border-color: rgba(243, 111, 38, 0.4) !important;
   transform: scale(1.05) !important;
 }
-
-
-
-
-
-
+/* Toast Animations */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}

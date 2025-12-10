@@ -17,7 +17,7 @@ export class DevicesService {
     private pairRepository: Repository<Pair>,
     private jwtService: JwtService,
     private fcmService: FcmService,
-  ) {}
+  ) { }
 
   async login(deviceLoginDto: DeviceLoginDto) {
     // Find pair by assigned number (username is pair number)
@@ -139,8 +139,8 @@ export class DevicesService {
           fcmToken: deviceLoginDto.fcmToken || null,
         });
         // Fetch the created device
-        device = await this.deviceRepository.findOne({ 
-          where: { id: insertResult.identifiers[0].id } 
+        device = await this.deviceRepository.findOne({
+          where: { id: insertResult.identifiers[0].id }
         });
         if (!device) {
           throw new UnauthorizedException('Failed to create device');
@@ -330,6 +330,15 @@ export class DevicesService {
       success: true,
       message: isForceLogout ? 'Force logged out successfully' : 'Logged out successfully',
     };
+  }
+
+  async delete(id: number) {
+    const device = await this.deviceRepository.findOne({ where: { id } });
+    if (!device) {
+      throw new Error('Device not found');
+    }
+    await this.deviceRepository.remove(device);
+    return { success: true, message: 'Device deleted successfully' };
   }
 }
 

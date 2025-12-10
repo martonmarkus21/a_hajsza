@@ -109,8 +109,7 @@ most_wanted/
 - [Adatbázis séma](docs/DATABASE_SCHEMA.md)
 - [WebSocket események](docs/WEBSOCKET_EVENTS.md)
 - [Telepítési útmutató](docs/INSTALLATION.md)
-- [Fejlesztési terv](docs/DEVELOPMENT_PLAN.md)
-- [Firebase beállítás](FIREBASE_SETUP.md)
+- [Firebase beállítás](docs/FIREBASE_SETUP.md)
 
 ## ⚠️ Fontos megjegyzések
 

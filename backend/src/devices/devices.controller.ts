@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Request, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request, Param, Delete } from '@nestjs/common';
 import { DevicesService } from './devices.service';
 import { DeviceLoginDto } from './dto/device-login.dto';
 import { DeviceAuthGuard } from '../auth/device-auth.guard';
@@ -8,7 +8,7 @@ import { RolesGuard } from '../auth/roles.guard';
 
 @Controller('api/devices')
 export class DevicesController {
-  constructor(private readonly devicesService: DevicesService) {}
+  constructor(private readonly devicesService: DevicesService) { }
 
   @Post('login')
   async login(@Body() deviceLoginDto: DeviceLoginDto) {
@@ -45,6 +45,15 @@ export class DevicesController {
   @Roles('admin')
   async forceLogout(@Param('deviceId') deviceId: string) {
     return await this.devicesService.logout(deviceId, true);
+  }
+
+  @Get(':id/delete') // Using GET/DELETE logic or standard DELETE
+  // NestJS uses @Delete
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async delete(@Param('id') id: string) {
+    return await this.devicesService.delete(parseInt(id));
   }
 }
 

@@ -11,14 +11,14 @@ import Login from './pages/Login';
 import Admin from './pages/Admin';
 import PairDetails from './components/PairDetails';
 import SendMessageModal from './components/SendMessageModal';
-import { 
-  FiSettings, 
-  FiSend, 
-  FiLogOut, 
-  FiWifi, 
-  FiWifiOff, 
-  FiClock, 
-  FiUsers, 
+import {
+  FiSettings,
+  FiSend,
+  FiLogOut,
+  FiWifi,
+  FiWifiOff,
+  FiClock,
+  FiUsers,
   FiMap,
   FiActivity,
   FiUser,
@@ -50,39 +50,28 @@ interface Geofence {
   };
 }
 
-// Component to handle map resize when sidebar toggles
-function MapResizeHandler({ sidebarCollapsed }: { sidebarCollapsed: boolean }) {
+// Component to handle map resize dynamically using ResizeObserver
+function MapResizeHandler() {
   const map = useMap();
-  
+
   useEffect(() => {
-    // Store current zoom and center before resize
-    const currentZoom = map.getZoom();
-    const currentCenter = map.getCenter();
-    
-    // Multiple attempts to ensure map resizes correctly
-    const timers = [
-      setTimeout(() => {
-        map.invalidateSize();
-        map.setZoom(currentZoom);
-        map.setView(currentCenter, currentZoom);
-      }, 50),
-      setTimeout(() => {
-        map.invalidateSize();
-        map.setZoom(currentZoom);
-        map.setView(currentCenter, currentZoom);
-      }, 200),
-      setTimeout(() => {
-        map.invalidateSize();
-        map.setZoom(currentZoom);
-        map.setView(currentCenter, currentZoom);
-      }, 500),
-    ];
-    
+    // ResizeObserver monitors the map container for size changes
+    // This ensures that when the sidebar is toggled (or window resized),
+    // the map adapts smoothly and immediately, avoiding the "laggy" feel.
+    const resizeObserver = new ResizeObserver(() => {
+      // invalidateSize({ animate: false }) checks if the container size changed
+      // and updates the map logic. animate: false prevents double-animation stutter.
+      map.invalidateSize({ animate: false });
+    });
+
+    const container = map.getContainer();
+    resizeObserver.observe(container);
+
     return () => {
-      timers.forEach(timer => clearTimeout(timer));
+      resizeObserver.disconnect();
     };
-  }, [sidebarCollapsed, map]);
-  
+  }, [map]);
+
   return null;
 }
 
@@ -109,7 +98,7 @@ function MapView() {
   } | null>(null);
   const [browserLocation, setBrowserLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [forceRender, setForceRender] = useState(0); // Force component re-render every second
-  
+
   // All active pairs (for sidebar display) - sorted by assignedNumber
   const allActivePairs = (pairsState.length > 0 ? pairsState : pairs)
     .filter((p) => p.active === true && p.hasActiveDevice === true)
@@ -121,15 +110,15 @@ function MapView() {
   // allowPositionUpdatesForMap only controls when NEW positions can be sent, not when to show existing ones
   const displayPairsOnMap = useMemo(() => {
     if (!gameSettings) return [];
-    
+
     return allActivePairs.filter((p) => {
       if (!p.lastPosition) return false;
-      
+
       // CRITICAL: Only show positions if timer is running
       // The position stays on the map until the next timer cycle expires
       // allowPositionUpdatesForMap only controls when NEW positions can be sent
       if (!gameSettings.isTimerRunning) return false;
-      
+
       // If we have lastPosition and timer is running, show it
       // The position was received via positionUpdate event when allowPositionUpdatesForMap was true
       // But we don't need to check allowPositionUpdatesForMap here - once a position is received, it stays
@@ -190,7 +179,7 @@ function MapView() {
           maximumAge: 0,
         }
       );
-      
+
       // Watch position for continuous updates
       const watchId = navigator.geolocation.watchPosition(
         (position) => {
@@ -206,7 +195,7 @@ function MapView() {
         }
       );
       watchIdRef.current = watchId;
-      
+
       // Also update browser location every second using interval as fallback
       const locationInterval = setInterval(() => {
         navigator.geolocation.getCurrentPosition(
@@ -224,7 +213,7 @@ function MapView() {
         );
       }, 1000); // Update every second
       locationIntervalRef.current = locationInterval;
-      
+
       return () => {
         if (watchIdRef.current !== null) {
           navigator.geolocation.clearWatch(watchIdRef.current);
@@ -257,7 +246,7 @@ function MapView() {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
         });
-        
+
         // If admin endpoint fails (403), try officer endpoint
         if (!response.ok && response.status === 403) {
           response = await fetch('http://localhost:3000/api/game-settings/countdown', {
@@ -266,7 +255,7 @@ function MapView() {
             },
           });
         }
-        
+
         if (response.ok) {
           const data = await response.json();
           // Create new object to ensure reference changes, triggering useMemo recalculation
@@ -333,7 +322,7 @@ function MapView() {
       setPairsState((prev) =>
         prev.map((pair) => {
           if (pair.id !== data.pairId) return pair;
-          
+
           // Update position for distance calculation (but don't update map position)
           // We need to track both: position for distance (from distanceUpdate) and position for map (from positionUpdate)
           const distancePosition = {
@@ -341,7 +330,7 @@ function MapView() {
             lon: data.lon,
             timestamp: data.timestamp,
           };
-          
+
           return {
             ...pair,
             // Store position for distance calculation separately
@@ -363,14 +352,14 @@ function MapView() {
       // We trust the backend and always update the position when we receive a positionUpdate event
       // The backend ensures that only one positionUpdate is sent per pair per cycle
       const positionTimestamp = new Date(data.timestamp).getTime();
-      
+
       console.log('[Frontend] Received positionUpdate for pairId:', data.pairId, 'timestamp:', data.timestamp);
-      
+
       setPairsState((prev) => {
         // Check if pair exists in state, if not, we need to add it
         // This happens when user just logged in and positionUpdate arrives before API data
         const existingPair = prev.find((p) => p.id === data.pairId);
-        
+
         if (!existingPair) {
           // Pair doesn't exist in state yet - create a minimal pair object
           // The API will merge the full data later
@@ -379,9 +368,9 @@ function MapView() {
             lon: data.lon,
             timestamp: data.timestamp,
           };
-          
+
           console.log('[Frontend] Adding new pair with position from positionUpdate. pairId:', data.pairId, 'timestamp:', data.timestamp);
-          
+
           // Create minimal pair object - API will fill in the rest
           return [...prev, {
             id: data.pairId,
@@ -395,11 +384,11 @@ function MapView() {
             distanceToNearestOfficer: data.distanceToNearestOfficer,
           }];
         }
-        
+
         // Pair exists in state - update it
         return prev.map((pair) => {
           if (pair.id !== data.pairId) return pair;
-          
+
           // CRITICAL: Always update if we receive a positionUpdate event
           // The backend ensures that only one positionUpdate is sent per pair per cycle
           // We check if the timestamp is different to avoid unnecessary re-renders
@@ -411,15 +400,15 @@ function MapView() {
               return pair;
             }
           }
-          
+
           const newPosition = {
             lat: data.lat,
             lon: data.lon,
             timestamp: data.timestamp,
           };
-          
+
           console.log('[Frontend] Updating lastPosition for pairId:', data.pairId, 'timestamp:', data.timestamp, 'lat:', data.lat, 'lon:', data.lon);
-          
+
           return {
             ...pair,
             lastPosition: newPosition, // Update position for map display (only once per cycle)
@@ -481,9 +470,9 @@ function MapView() {
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(toRad(lat1)) *
-        Math.cos(toRad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c; // Return in meters
   };
@@ -585,7 +574,7 @@ function MapView() {
     const currentPair = pairsState.find((p) => p.id === pairId);
     const currentName = currentPair?.name || '';
     const name = prompt('Add meg a pár nevét (hagyd üresen a törléshez):', currentName);
-    
+
     // If user cancels (null), do nothing
     if (name === null) return;
 
@@ -678,16 +667,15 @@ function MapView() {
         <div className="px-6 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-6">
-              <img 
-                src={logoImage} 
-                alt="Most Wanted - A hajsza" 
+              <img
+                src={logoImage}
+                alt="Most Wanted - A hajsza"
                 className="h-14 object-contain drop-shadow-lg"
               />
-              <div className={`px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 shadow-lg ${
-                connected 
-                  ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white' 
-                  : 'bg-gradient-to-r from-red-500 to-rose-600 text-white'
-              }`}>
+              <div className={`px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 shadow-lg ${connected
+                ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white'
+                : 'bg-gradient-to-r from-red-500 to-rose-600 text-white'
+                }`}>
                 <div className={`w-2 h-2 rounded-full ${connected ? 'bg-white animate-pulse' : 'bg-white'}`}></div>
                 {connected ? <FiWifi className="w-4 h-4" /> : <FiWifiOff className="w-4 h-4" />}
                 <span>{connected ? 'Csatlakozva' : 'Nincs kapcsolat'}</span>
@@ -734,16 +722,14 @@ function MapView() {
                 <FiActivity className="w-3.5 h-3.5" />
                 <span>Játék állapot</span>
               </div>
-              <div className={`text-xl font-bold flex items-center gap-2 ${
-                gameInfo.isGameActive 
-                  ? 'text-orange-400' 
-                  : 'text-red-400'
-              }`}>
-                <div className={`w-2.5 h-2.5 rounded-full ${
-                  gameInfo.isGameActive 
-                    ? 'bg-orange-400 pulse-orange' 
-                    : 'bg-red-400'
-                }`}></div>
+              <div className={`text-xl font-bold flex items-center gap-2 ${gameInfo.isGameActive
+                ? 'text-orange-400'
+                : 'text-red-400'
+                }`}>
+                <div className={`w-2.5 h-2.5 rounded-full ${gameInfo.isGameActive
+                  ? 'bg-orange-400 pulse-orange'
+                  : 'bg-red-400'
+                  }`}></div>
                 <span>{gameInfo.isGameActive ? 'FOLYAMATBAN' : 'SZÜNETEL'}</span>
               </div>
             </div>
@@ -800,7 +786,8 @@ function MapView() {
             zoom={7}
             style={{ height: '100%', width: '100%' }}
           >
-            <MapResizeHandler sidebarCollapsed={sidebarCollapsed} />
+            {/* Helper to handle map resize */}
+            <MapResizeHandler />
             <LayersControl position="topright">
               <LayersControl.BaseLayer checked name="Térkép nézet">
                 <TileLayer
@@ -814,9 +801,15 @@ function MapView() {
                   url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                 />
               </LayersControl.BaseLayer>
+              <LayersControl.BaseLayer name="Sötét mód">
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                />
+              </LayersControl.BaseLayer>
             </LayersControl>
-            
-            {/* Sidebar toggle button - positioned below LayersControl */}
+
+            {/* Sidebar toggle button - positioned on right side below LayersControl */}
             <div className="leaflet-top leaflet-right sidebar-toggle-control">
               <div className="leaflet-control">
                 <button
@@ -832,7 +825,7 @@ function MapView() {
                 </button>
               </div>
             </div>
-            
+
             {/* Geofences */}
             {activeGeofences.map((geofence) => {
               if (!geofence.active) return null;
@@ -862,13 +855,13 @@ function MapView() {
                   </Polygon>
                 );
               }
-              
+
               // Only show circle if it's NOT a game_area (game_area should always be polygon)
               if (geofence.geofenceType === 'game_area') {
                 console.warn(`Game area geofence "${geofence.name}" has no polygon data!`, geofence);
                 return null; // Don't show game_area as circle
               }
-              
+
               return (
                 <Circle
                   key={geofence.id}
@@ -935,23 +928,23 @@ function MapView() {
             {/* Pairs */}
             {displayPairsOnMap.map((pair) => {
               if (!pair.lastPosition || !pair.active) return null;
-              
+
               // Force re-render by using forceRender in key
               const pairKey = `pair-${pair.id}-${forceRender}`;
-              
+
               // Determine background color and border color based on status
               const getBackgroundColor = () => {
                 if (pair.mostWanted) return '#f36f26'; // Orange for Most Wanted (same as border)
                 return '#2a2a2a'; // Dark gray/black for others
               };
-              
+
               const getBorderColor = () => {
                 return '#f36f26'; // Always use orange border
               };
-              
+
               const backgroundColor = getBackgroundColor();
               const borderColor = getBorderColor();
-              
+
               // Create custom icon with pair number
               // Most Wanted: orange background (#f36f26), others: dark gray/black background
               // Border is always orange and thicker, number is white and larger
@@ -978,7 +971,7 @@ function MapView() {
                 iconSize: [32, 32],
                 iconAnchor: [16, 16],
               });
-              
+
               return (
                 <Marker
                   key={pairKey}
@@ -1006,36 +999,35 @@ function MapView() {
                       )}
                       {pair.lastPosition && (
                         <div className="text-xs text-gray-500 mt-2 flex items-center justify-center gap-1">
-                            <FiClock className="w-3 h-3" />
-                            <span>{new Date(pair.lastPosition.timestamp).toLocaleString('hu-HU')}</span>
-                          </div>
-                        )}
-                        {browserLocation && (pair.distancePosition || pair.lastPosition) && (
-                          <div className="text-xs text-blue-600 font-semibold mt-1 flex items-center justify-center gap-1" key={`popup-distance-${pair.id}-${forceRender}`}>
-                            <FiMapPin className="w-3 h-3" />
-                            <span>Légvonalbeli távolság: {formatDistance(
-                              calculateDistance(
-                                browserLocation.lat,
-                                browserLocation.lon,
-                                (pair.distancePosition || pair.lastPosition)!.lat,
-                                (pair.distancePosition || pair.lastPosition)!.lon
-                              )
-                            )}</span>
-                          </div>
-                        )}
-                      </div>
-                    </Popup>
-                  </Marker>
+                          <FiClock className="w-3 h-3" />
+                          <span>{new Date(pair.lastPosition.timestamp).toLocaleString('hu-HU')}</span>
+                        </div>
+                      )}
+                      {browserLocation && (pair.distancePosition || pair.lastPosition) && (
+                        <div className="text-xs text-blue-600 font-semibold mt-1 flex items-center justify-center gap-1" key={`popup-distance-${pair.id}-${forceRender}`}>
+                          <FiMapPin className="w-3 h-3" />
+                          <span>Légvonalbeli távolság: {formatDistance(
+                            calculateDistance(
+                              browserLocation.lat,
+                              browserLocation.lon,
+                              (pair.distancePosition || pair.lastPosition)!.lat,
+                              (pair.distancePosition || pair.lastPosition)!.lon
+                            )
+                          )}</span>
+                        </div>
+                      )}
+                    </div>
+                  </Popup>
+                </Marker>
               );
             })}
           </MapContainer>
         </div>
 
         {/* Sidebar */}
-        <div 
-          className={`glass-effect border-l border-orange-500/20 overflow-y-auto shadow-2xl transition-all duration-300 ${
-            sidebarCollapsed ? 'w-0 opacity-0 -translate-x-full overflow-hidden pointer-events-none' : 'w-96 opacity-100 translate-x-0'
-          }`}
+        <div
+          className={`glass-effect border-l border-orange-500/20 overflow-y-auto shadow-2xl transition-all duration-300 ${sidebarCollapsed ? 'w-0 opacity-0 -translate-x-full overflow-hidden pointer-events-none' : 'w-96 opacity-100 translate-x-0'
+            }`}
           style={{ minWidth: sidebarCollapsed ? '0' : '384px', maxWidth: sidebarCollapsed ? '0' : '384px', flexShrink: 0 }}
         >
           <div className="p-5 border-b border-orange-500/20 sticky top-0 z-10 glass-effect">
@@ -1061,29 +1053,27 @@ function MapView() {
                   if (pair.mostWanted) return '#f36f26';
                   return '#2a2a2a';
                 };
-                
+
                 const backgroundColor = getBackgroundColor();
                 const borderColor = '#f36f26';
-                
+
                 return (
                   <div
                     key={pair.id}
-                    className={`p-4 transition-all duration-200 ${
-                      selectedPair?.id === pair.id 
-                        ? 'bg-orange-500/20 border-l-4 border-orange-500' 
-                        : 'hover:bg-gray-800/50 border-l-4 border-transparent'
-                    } ${pair.captured && selectedPair?.id !== pair.id ? 'bg-red-500/10 opacity-75' : ''} ${
-                      pair.mostWanted && selectedPair?.id !== pair.id ? 'bg-orange-500/10' : ''
-                    } ${!pair.active ? 'opacity-50' : ''} cursor-pointer`}
+                    className={`p-4 transition-all duration-200 ${selectedPair?.id === pair.id
+                      ? 'bg-orange-500/20 border-l-4 border-orange-500'
+                      : 'hover:bg-gray-800/50 border-l-4 border-transparent'
+                      } ${pair.captured && selectedPair?.id !== pair.id ? 'bg-red-500/10 opacity-75' : ''} ${pair.mostWanted && selectedPair?.id !== pair.id ? 'bg-orange-500/10' : ''
+                      } ${!pair.active ? 'opacity-50' : ''} cursor-pointer`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <div 
+                      <div
                         className="flex-1 cursor-pointer"
                         onClick={() => pair.active && handlePairClick(pair)}
                       >
                         <div className="flex items-center gap-3">
                           {/* Circle number badge (same style as map markers) */}
-                          <div 
+                          <div
                             className="flex-shrink-0"
                             style={{
                               width: '36px',
@@ -1145,23 +1135,25 @@ function MapView() {
                               </div>
                             ) : (
                               <div className="w-full flex flex-col justify-center">
-                                <div className="flex items-center gap-2 mb-1.5">
-                                  {pair.mostWanted && (
-                                    <span className="px-2.5 py-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs rounded-full font-bold shadow-lg">
-                                      MW
-                                    </span>
-                                  )}
-                                  {pair.captured && (
-                                    <span className="px-2.5 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full font-bold shadow-lg">
-                                      Elfogva
-                                    </span>
-                                  )}
-                                  {!pair.active && (
-                                    <span className="px-2.5 py-1 bg-gray-600 text-white text-xs rounded-full">
-                                      Inaktív
-                                    </span>
-                                  )}
-                                </div>
+                                {(pair.mostWanted || pair.captured || !pair.active) && (
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    {pair.mostWanted && (
+                                      <span className="px-2.5 py-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs rounded-full font-bold shadow-lg">
+                                        MW
+                                      </span>
+                                    )}
+                                    {pair.captured && (
+                                      <span className="px-2.5 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full font-bold shadow-lg">
+                                        Elfogva
+                                      </span>
+                                    )}
+                                    {!pair.active && (
+                                      <span className="px-2.5 py-1 bg-gray-600 text-white text-xs rounded-full">
+                                        Inaktív
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                                 <div className="flex flex-col gap-1">
                                   {pair.lastPosition && (
                                     <div className="text-xs text-gray-500 flex items-center gap-1">
