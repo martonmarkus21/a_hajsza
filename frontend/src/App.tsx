@@ -1,31 +1,34 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Circle, Polygon, Popup, Marker, LayersControl, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, Polygon, Popup, Marker, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { useSocket } from './hooks/useSocket';
 import { usePairs } from './hooks/usePairs';
 import { useGameInfo } from './hooks/useGameInfo';
 import { Pair } from './types';
 import { authService } from './services/auth';
+import { useNotification } from './contexts/NotificationContext';
 import Login from './pages/Login';
 import Admin from './pages/Admin';
 import PairDetails from './components/PairDetails';
 import SendMessageModal from './components/SendMessageModal';
+import EditNameModal from './components/EditNameModal';
+import ConfirmationModal from './components/ConfirmationModal';
 import {
   FiSettings,
   FiSend,
   FiLogOut,
-  FiWifi,
-  FiWifiOff,
   FiClock,
   FiUsers,
   FiMap,
   FiActivity,
   FiUser,
   FiMapPin,
-  FiNavigation,
-  FiChevronLeft,
-  FiChevronRight
+  FiChevronDown,
+  FiMoon,
+  FiGlobe,
+  FiChevronRight,
+  FiX
 } from 'react-icons/fi';
 import { HiPencil } from 'react-icons/hi2';
 import { FaHandcuffs } from 'react-icons/fa6';
@@ -47,6 +50,7 @@ interface Geofence {
     type?: string;
     countyCode?: string;
     countyName?: string;
+    description?: string;
   };
 }
 
@@ -56,11 +60,7 @@ function MapResizeHandler() {
 
   useEffect(() => {
     // ResizeObserver monitors the map container for size changes
-    // This ensures that when the sidebar is toggled (or window resized),
-    // the map adapts smoothly and immediately, avoiding the "laggy" feel.
     const resizeObserver = new ResizeObserver(() => {
-      // invalidateSize({ animate: false }) checks if the container size changed
-      // and updates the map logic. animate: false prevents double-animation stutter.
       map.invalidateSize({ animate: false });
     });
 
@@ -75,12 +75,438 @@ function MapResizeHandler() {
   return null;
 }
 
+
+
+// Custom map layer selector component - UI ONLY
+type MapLayerType = 'standard' | 'satellite' | 'dark';
+
+function MapLayerSelector({
+  activeLayer,
+  onLayerChange
+}: {
+  activeLayer: MapLayerType;
+  onLayerChange: (layer: MapLayerType) => void
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const selectorRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (selectorRef.current && !selectorRef.current.contains(event.target as Node)) {
+        setIsExpanded(false);
+      }
+    };
+
+    if (isExpanded) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isExpanded]);
+
+  const layers: { id: MapLayerType; label: string; icon: React.ReactNode }[] = [
+    { id: 'standard', label: 'Térkép', icon: <FiMap className="w-5 h-5" /> },
+    { id: 'satellite', label: 'Műhold', icon: <FiGlobe className="w-5 h-5" /> },
+    { id: 'dark', label: 'Sötét', icon: <FiMoon className="w-5 h-5" /> },
+  ];
+
+  const currentLayer = layers.find(l => l.id === activeLayer) || layers[0];
+
+  return (
+    <div
+      ref={selectorRef}
+      className={`relative`}
+    >
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white hover:bg-white/10 transition-all"
+        title="Térképnézet váltás"
+      >
+        {currentLayer.icon}
+        <div className={`transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}>
+          <FiChevronDown className="w-4 h-4" />
+        </div>
+      </button>
+
+      {/* Dropdown */}
+      <div className={`absolute top-full text-left right-0 mt-2 w-40 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden transition-all duration-200 z-[1001] ${isExpanded ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"}`}>
+        {layers.map((layer) => (
+          <button
+            key={layer.id}
+            onClick={() => {
+              onLayerChange(layer.id);
+              setIsExpanded(false);
+            }}
+            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${activeLayer === layer.id ? "bg-orange-500/20 text-orange-400" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
+          >
+            {layer.icon}
+            <span>{layer.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- New Components for Redesign ---
+
+function FloatingHeader({
+  connected,
+  gameInfo,
+  activePairsCount,
+  locationUpdateCountdown,
+  gameSettings,
+  authService,
+  handleLogout,
+  onSendMessageClick,
+  isExpanded,
+  setIsExpanded,
+  activeMapLayer,
+  onMapLayerChange,
+  sidebarCollapsed,
+  onToggleSidebar
+}: {
+  connected: boolean;
+  gameInfo: any;
+  activePairsCount: number;
+  locationUpdateCountdown: { minutes: number; seconds: number } | null;
+  gameSettings: any;
+  authService: any;
+  handleLogout: () => void;
+  onSendMessageClick: () => void;
+  isExpanded: boolean;
+  setIsExpanded: (expanded: boolean) => void;
+  activeMapLayer: MapLayerType;
+  onMapLayerChange: (layer: MapLayerType) => void;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
+}) {
+  return (
+    <div className={`absolute top-0 left-0 right-0 z-[1000] flex flex-col transition-all duration-300 ease-in-out font-sans p-4`}>
+      {/* Glassmorphism Container */}
+      <div className={`bg-[#0f0f0f]/90 backdrop-blur-xl border border-white/10 shadow-2xl overflow-visible transition-all duration-300 ${isExpanded ? 'rounded-[24px]' : 'rounded-[20px]'
+        }`}>
+        {/* Top Bar (Always Visible) */}
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Round 3: Sidebar Toggle MOVED HERE */}
+            <button
+              onClick={onToggleSidebar}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white hover:bg-white/10 transition-all`}
+              title={sidebarCollapsed ? 'Oldalsáv megjelenítése' : 'Oldalsáv elrejtése'}
+            >
+              <FiUsers className="w-5 h-5" />
+              <div className={`transition-transform duration-300 ${sidebarCollapsed ? '' : 'rotate-180'}`}>
+                <FiChevronRight className="w-4 h-4" />
+              </div>
+            </button>
+
+            {/* Logo */}
+            <img
+              src={logoImage}
+              alt="Most Wanted"
+              className="h-8 object-contain drop-shadow-md select-none hidden sm:block"
+            />
+
+            {/* Status Indicators */}
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors ${connected
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+              : 'bg-red-500/10 border-red-500/20 text-red-400'
+              }`}>
+              <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`}></div>
+              <span className="hidden md:inline">{connected ? 'Online' : 'Offline'}</span>
+            </div>
+
+            {/* Round 3: Clock in Collapsed State */}
+            {/* Round 3: Clock in Collapsed State */}
+            {/* Round 3: Clock in Collapsed State */}
+            <div className={`flex items-center gap-3 transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${isExpanded ? 'max-w-0 opacity-0' : 'max-w-[200px] opacity-100'}`}>
+              <div className="h-6 w-px bg-white/10 mx-1 hidden md:block"></div>
+              <div className="hidden md:flex items-center gap-2 text-gray-400 text-base whitespace-nowrap">
+                <FiClock className="w-4 h-4 text-orange-400" />
+                <span className="text-white font-bold">{gameInfo.currentTime}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Round 3: Map Layer Selector MOVED HERE */}
+            <div className="hidden md:block">
+              <MapLayerSelector activeLayer={activeMapLayer} onLayerChange={onMapLayerChange} />
+            </div>
+
+            <div className="h-6 w-px bg-white/10 mx-1 hidden md:block"></div>
+
+            {/* User Profile */}
+            <button
+              className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-white/5 transition-all text-left group"
+              onClick={() => { /* Navigate to profile */ }}
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white shadow-lg transition-all">
+                <FiUser className="w-4 h-4" />
+              </div>
+              <div className="hidden lg:block">
+                <div className="text-sm text-gray-400 group-hover:text-gray-300 font-medium leading-none mb-0.5 transition-colors">Bejelentkezve</div>
+                <div className="text-base text-white group-hover:text-orange-400 font-bold leading-none transition-colors">{authService.getCurrentUser()?.username}</div>
+              </div>
+            </button>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 ml-2">
+              <button
+                onClick={onSendMessageClick}
+                className="p-2 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/30 transition-all"
+                title="Üzenet küldése"
+              >
+                <FiSend className="w-5 h-5" />
+              </button>
+
+              {authService.getCurrentUser()?.role === 'admin' && (
+                <a href="/admin" className="p-2 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-orange-400 hover:bg-orange-500/10 hover:border-orange-500/30 transition-all">
+                  <FiSettings className="w-5 h-5" />
+                </a>
+              )}
+
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/30 transition-all"
+                title="Kijelentkezés"
+              >
+                <FiLogOut className="w-5 h-5" />
+              </button>
+
+              {/* Toggle Expand */}
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="ml-2 p-2 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+              >
+                <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                  <FiChevronDown className="w-5 h-5" />
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Expanded Info Panel */}
+        <div className={`header-divider transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden border-t ${isExpanded ? 'max-h-[140px] border-white/5' : 'max-h-0 border-transparent'
+          }`}>
+          <div className="p-5 grid grid-cols-2 md:grid-cols-5 gap-4">
+            {/* ... existing info panel contents ... */}
+            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center gap-2 hover:bg-white/[0.06] transition-colors">
+              <div className="text-xs uppercase font-bold text-gray-500 tracking-wider">Státusz</div>
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-bold border ${gameInfo.isGameActive
+                ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${gameInfo.isGameActive ? 'bg-orange-400 pulse-orange' : 'bg-red-400'}`} />
+                {gameInfo.isGameActive ? 'FOLYAMATBAN' : 'SZÜNETEL'}
+              </div>
+            </div>
+
+            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 hover:bg-white/[0.06] transition-colors">
+              <div className="text-xs uppercase font-bold text-gray-500 tracking-wider flex items-center gap-1">
+                <FiClock className="w-3 h-3" /> Idő
+              </div>
+              <div className="text-2xl font-bold text-white tracking-tight">{gameInfo.currentTime}</div>
+            </div>
+
+            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 hover:bg-white/[0.06] transition-colors">
+              <div className="text-xs uppercase font-bold text-gray-500 tracking-wider flex items-center gap-1">
+                <FiUsers className="w-3 h-3" /> Párok
+              </div>
+              <div className="text-3xl font-bold text-orange-400">{activePairsCount}</div>
+            </div>
+
+            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 hover:bg-white/[0.06] transition-colors">
+              <div className="text-xs uppercase font-bold text-gray-500 tracking-wider flex items-center gap-1">
+                <FiMap className="w-3 h-3" /> Terület
+              </div>
+              <div className="text-base font-semibold text-white text-center px-2 truncate w-full">
+                {gameInfo.activeGameArea || 'Nincs beállítva'}
+              </div>
+            </div>
+
+            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 hover:bg-white/[0.06] transition-colors">
+              <div className="text-xs uppercase font-bold text-gray-500 tracking-wider flex items-center gap-1">
+                <FiActivity className="w-3 h-3" /> Frissítés
+              </div>
+              <div className="text-2xl font-mono font-bold text-emerald-400 tabular-nums">
+                {locationUpdateCountdown ? (
+                  `${locationUpdateCountdown.minutes}:${locationUpdateCountdown.seconds.toString().padStart(2, '0')}`
+                ) : (
+                  gameSettings?.isTimerRunning ? '--:--' : 'ÁLL'
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModernSidebar({
+  isVisible,
+  activePairs,
+  selectedPairId,
+  onPairClick,
+  onCapture,
+  onEditName,
+  browserLocation,
+  calculateDistance,
+  formatDistance,
+  forceRender,
+  isHeaderExpanded
+}: {
+  isVisible: boolean;
+  activePairs: Pair[];
+  selectedPairId: number | undefined;
+  onPairClick: (pair: Pair) => void;
+  onCapture: (pairId: number) => void;
+  onEditName: (pairId: number) => void;
+  browserLocation: { lat: number, lon: number } | null;
+  calculateDistance: Function;
+  formatDistance: Function;
+  forceRender: number;
+  isHeaderExpanded: boolean;
+}) {
+  return (
+    <div
+      className={`absolute left-4 bottom-4 z-[999] w-96 flex flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] transform ${isVisible ? 'translate-x-0 opacity-100 pointer-events-auto' : '-translate-x-[120%] opacity-0 pointer-events-none'
+        }`}
+      /* Round 3: Consistent top position (gap) regardless of Header expansion */
+      style={{ top: isHeaderExpanded ? '220px' : '100px' }}
+    >
+      {/* Glass Container */}
+      <div className="flex-1 bg-[#0f0f0f]/90 backdrop-blur-xl border border-white/10 shadow-2xl rounded-[24px] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-white/5 bg-white/[0.02]">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2.5">
+            <span className="p-1.5 rounded-lg bg-orange-500/20 text-orange-400">
+              <FiUsers className="w-4 h-4" />
+            </span>
+            <span>Aktív csapatok</span>
+          </h2>
+          <p className="text-xs text-gray-500 mt-1 ml-9">
+            {activePairs.length > 0 ? `${activePairs.length} csapat a terepen` : 'Nincs aktív csapat'}
+          </p>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+          {activePairs.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-gray-500 opacity-60">
+              <FiUsers className="w-10 h-10 mb-3" />
+              <p className="text-sm font-medium">Jelenleg nincs bejelentkezett pár.</p>
+            </div>
+          ) : (
+            activePairs.map(pair => {
+              const isSelected = selectedPairId === pair.id;
+              const isMw = pair.mostWanted;
+
+              return (
+                <div
+                  key={pair.id}
+                  onClick={() => pair.active && onPairClick(pair)}
+                  className={`group relative p-3 rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden ${isSelected
+                    ? 'bg-orange-500/10 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.1)]'
+                    : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06] hover:border-white/10'
+                    } ${pair.captured ? 'opacity-60 saturate-50' : ''}`}
+                >
+                  {/* Selection Indicator */}
+                  {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-500" />}
+
+                  <div className="flex items-center gap-3">
+                    {/* Avatar / Number - Round 3: Thinner Border, Grey BG, Larger Text */}
+                    <div className={`relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl border-[3px] border-orange-500 text-white shadow-lg pb-0.5 transition-all duration-300 ${isMw ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)]' : 'bg-[#222]'}`}>
+                      {pair.assignedNumber}
+                      {/* Status Dot */}
+                      <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-[#121212] ${pair.captured ? 'bg-red-500' : pair.active ? 'bg-emerald-500' : 'bg-gray-500'
+                        }`} />
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      {pair.name && (
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-base font-bold truncate ${isSelected ? 'text-white' : 'text-gray-200 group-hover:text-white'}`}>
+                            {pair.name}
+                          </span>
+                          {isMw && <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-orange-500 text-white shadow-sm">MW</span>}
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-1">
+                        {pair.lastPosition && (
+                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                            <FiClock className="w-3 h-3" />
+                            <span>
+                              {new Date(pair.lastPosition.timestamp).toLocaleString('hu-HU', {
+                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                        )}
+
+                        {browserLocation && (pair.distancePosition || pair.lastPosition) && (
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-orange-400" key={`dist-${pair.id}-${forceRender}`}>
+                            <FiMapPin className="w-3 h-3" />
+                            <span>
+                              Légvonal: {formatDistance(calculateDistance(
+                                browserLocation.lat,
+                                browserLocation.lon,
+                                (pair.distancePosition || pair.lastPosition)!.lat,
+                                (pair.distancePosition || pair.lastPosition)!.lon
+                              ))}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions (Always Visible, Side-by-Side) */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEditName(pair.id); }}
+                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                        title="Név szerkesztése"
+                      >
+                        <HiPencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); !pair.captured && onCapture(pair.id); }}
+                        disabled={pair.captured}
+                        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-orange-400 disabled:opacity-30 transition-colors"
+                        title="Elfogás rögzítése"
+                      >
+                        <FaHandcuffs className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MapView() {
   const { pairs, loading, refetch } = usePairs();
+  const { addNotification } = useNotification();
   const { socket, connected } = useSocket();
   const gameInfo = useGameInfo();
+  const [isClosingPairDetails, setIsClosingPairDetails] = useState(false);
+  const [renamingPair, setRenamingPair] = useState<{ id: number; name: string } | null>(null);
+  const [capturePairId, setCapturePairId] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
   const [selectedPair, setSelectedPair] = useState<Pair | null>(null);
   const [pairsState, setPairsState] = useState<Pair[]>([]);
   const [geofences, setGeofences] = useState<Geofence[]>([]);
@@ -97,34 +523,27 @@ function MapView() {
     allowPositionUpdatesForMap?: boolean;
   } | null>(null);
   const [browserLocation, setBrowserLocation] = useState<{ lat: number; lon: number } | null>(null);
-  const [forceRender, setForceRender] = useState(0); // Force component re-render every second
+  const [forceRender, setForceRender] = useState(0);
 
-  // All active pairs (for sidebar display) - sorted by assignedNumber
+  const [activeMapLayer, setActiveMapLayer] = useState<MapLayerType>('standard');
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
+
+  // All active pairs
   const allActivePairs = (pairsState.length > 0 ? pairsState : pairs)
     .filter((p) => p.active === true && p.hasActiveDevice === true)
     .sort((a, b) => (a.assignedNumber || 0) - (b.assignedNumber || 0));
 
-  // Pairs to show on map (only if timer is running)
-  // When timer expires, each pair sends ONE position update via positionUpdate WebSocket event
-  // This position stays on the map until the next timer cycle expires
-  // allowPositionUpdatesForMap only controls when NEW positions can be sent, not when to show existing ones
+  // Pairs to show on map
   const displayPairsOnMap = useMemo(() => {
     if (!gameSettings) return [];
-
     return allActivePairs.filter((p) => {
       if (!p.lastPosition) return false;
-
-      // CRITICAL: Only show positions if timer is running
-      // The position stays on the map until the next timer cycle expires
-      // allowPositionUpdatesForMap only controls when NEW positions can be sent
       if (!gameSettings.isTimerRunning) return false;
-
-      // If we have lastPosition and timer is running, show it
-      // The position was received via positionUpdate event when allowPositionUpdatesForMap was true
-      // But we don't need to check allowPositionUpdatesForMap here - once a position is received, it stays
       return true;
     });
-  }, [allActivePairs, gameSettings?.isTimerRunning, forceRender]); // Add forceRender to trigger recalculation when pairsState changes
+  }, [allActivePairs, gameSettings?.isTimerRunning, forceRender]);
+
+  // --- Effects and Helpers (Same as before) ---
 
   useEffect(() => {
     fetchGeofences();
@@ -132,133 +551,65 @@ function MapView() {
     return () => clearInterval(interval);
   }, []);
 
-  // Request browser location
-  // CRITICAL: This effect runs every time the component mounts (including when navigating back from admin panel)
   useEffect(() => {
-    // First, try to restore location from localStorage (for instant display when navigating back)
     const savedLocation = localStorage.getItem('browserLocation');
     if (savedLocation) {
       try {
         const parsed = JSON.parse(savedLocation);
-        if (parsed.lat && parsed.lon) {
-          setBrowserLocation({ lat: parsed.lat, lon: parsed.lon });
-        }
+        if (parsed.lat && parsed.lon) setBrowserLocation({ lat: parsed.lat, lon: parsed.lon });
       } catch (e) {
         console.error('Error parsing saved browser location:', e);
       }
     }
-
     if (navigator.geolocation) {
-      // Clean up any existing watch/interval first
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-      if (locationIntervalRef.current !== null) {
-        clearInterval(locationIntervalRef.current);
-        locationIntervalRef.current = null;
-      }
-
-      // Helper function to save location to localStorage
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (locationIntervalRef.current !== null) clearInterval(locationIntervalRef.current);
       const saveLocation = (lat: number, lon: number) => {
         setBrowserLocation({ lat, lon });
         localStorage.setItem('browserLocation', JSON.stringify({ lat, lon }));
       };
-
-      // Get initial position immediately
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          saveLocation(position.coords.latitude, position.coords.longitude);
-        },
-        (error) => {
-          console.error('Error getting browser location:', error);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        }
+        (p) => saveLocation(p.coords.latitude, p.coords.longitude),
+        (e) => console.error('Error:', e),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
-
-      // Watch position for continuous updates
-      const watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          saveLocation(position.coords.latitude, position.coords.longitude);
-        },
-        (error) => {
-          console.error('Error watching browser location:', error);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0, // Always get fresh location
-        }
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (p) => saveLocation(p.coords.latitude, p.coords.longitude),
+        (e) => console.error('Error:', e),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
-      watchIdRef.current = watchId;
-
-      // Also update browser location every second using interval as fallback
-      const locationInterval = setInterval(() => {
+      locationIntervalRef.current = setInterval(() => {
         navigator.geolocation.getCurrentPosition(
-          (position) => {
-            saveLocation(position.coords.latitude, position.coords.longitude);
-          },
-          (error) => {
-            console.error('Error getting browser location:', error);
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 5000,
-            maximumAge: 0,
-          }
+          (p) => saveLocation(p.coords.latitude, p.coords.longitude),
+          (e) => console.error('Error:', e),
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         );
-      }, 1000); // Update every second
-      locationIntervalRef.current = locationInterval;
-
+      }, 1000);
       return () => {
-        if (watchIdRef.current !== null) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-          watchIdRef.current = null;
-        }
-        if (locationIntervalRef.current !== null) {
-          clearInterval(locationIntervalRef.current);
-          locationIntervalRef.current = null;
-        }
+        if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+        if (locationIntervalRef.current !== null) clearInterval(locationIntervalRef.current);
       };
     }
-  }, []); // Run on mount and cleanup on unmount
+  }, []);
 
-  // Force component re-render every second to ensure distance updates are displayed
-  // The distance calculation uses distancePosition which is updated via distanceUpdate WebSocket events
   useEffect(() => {
-    const interval = setInterval(() => {
-      setForceRender((prev) => prev + 1); // Force component re-render
-    }, 1000);
+    const interval = setInterval(() => setForceRender((p) => p + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch game settings and countdown
   useEffect(() => {
     const fetchGameSettings = async () => {
       try {
-        // Try to fetch full settings (admin only)
         let response = await fetch('http://localhost:3000/api/game-settings', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
-
-        // If admin endpoint fails (403), try officer endpoint
         if (!response.ok && response.status === 403) {
           response = await fetch('http://localhost:3000/api/game-settings/countdown', {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
           });
         }
-
         if (response.ok) {
           const data = await response.json();
-          // Create new object to ensure reference changes, triggering useMemo recalculation
           setGameSettings({
             locationUpdateIntervalMinutes: data.locationUpdateIntervalMinutes || 20,
             isTimerRunning: data.isTimerRunning,
@@ -268,181 +619,79 @@ function MapView() {
           });
           setLocationUpdateCountdown(data.countdown);
         }
-      } catch (error) {
-        console.error('Error fetching game settings:', error);
-      }
+      } catch (error) { console.error('Error:', error); }
     };
-
     fetchGameSettings();
-    const interval = setInterval(fetchGameSettings, 1000); // Update every second
+    const interval = setInterval(fetchGameSettings, 1000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     if (pairs.length > 0) {
-      // Merge pairs from API with pairsState, keeping WebSocket updates
-      // CRITICAL: Never overwrite lastPosition from WebSocket with API data
-      // lastPosition should ONLY be updated via positionUpdate WebSocket events (when timer allows)
-      // distancePosition should ONLY be updated via distanceUpdate WebSocket events (every second)
       setPairsState((prev) => {
-        const merged = pairs.map((apiPair) => {
+        return pairs.map((apiPair) => {
           const existing = prev.find((p) => p.id === apiPair.id);
           if (existing) {
-            // Keep WebSocket-updated positions (both lastPosition and distancePosition)
-            // Only update other fields from API (name, active, captured, mostWanted, etc.)
-            // CRITICAL: Never delete lastPosition - frontend will filter based on allowPositionUpdatesForMap
-            // This prevents the flickering issue where positions appear and disappear
             return {
               ...apiPair,
-              // CRITICAL: Keep lastPosition from WebSocket (positionUpdate events)
-              // Only use API lastPosition if we don't have one from WebSocket
-              // Frontend will filter based on allowPositionUpdatesForMap flag
               lastPosition: existing.lastPosition || apiPair.lastPosition,
-              // CRITICAL: Keep distancePosition from WebSocket (distanceUpdate events)
-              // Distance updates are always allowed (for continuous distance calculation)
               distancePosition: existing.distancePosition,
-              // Keep distanceToNearestOfficer from WebSocket
               distanceToNearestOfficer: existing.distanceToNearestOfficer ?? apiPair.distanceToNearestOfficer,
             };
           }
-          // New pair from API - use API data (which already filters lastPosition based on timer)
           return apiPair;
         });
-        return merged;
       });
     }
   }, [pairs]);
 
   useEffect(() => {
     if (!socket) return;
-
-    // Handle distance updates - sent continuously (every second) for distance calculation
-    // This updates the position for distance calculation but NOT for map display
     const handleDistanceUpdate = (data: any) => {
       setPairsState((prev) =>
         prev.map((pair) => {
           if (pair.id !== data.pairId) return pair;
-
-          // Update position for distance calculation (but don't update map position)
-          // We need to track both: position for distance (from distanceUpdate) and position for map (from positionUpdate)
-          const distancePosition = {
-            lat: data.lat,
-            lon: data.lon,
-            timestamp: data.timestamp,
-          };
-
           return {
             ...pair,
-            // Store position for distance calculation separately
-            distancePosition: distancePosition,
+            distancePosition: { lat: data.lat, lon: data.lon, timestamp: data.timestamp },
             distanceToNearestOfficer: data.distanceToNearestOfficer || pair.distanceToNearestOfficer,
           };
         }),
       );
     };
-
-    // Handle position updates - only sent when timer allows (for map display)
-    // CRITICAL: The backend ONLY sends positionUpdate when:
-    // 1. Timer is running (isTimerRunning === true)
-    // 2. Position updates are allowed (allowPositionUpdatesForMap === true)
-    // 3. This pair hasn't sent a position yet in this cycle
-    // So if we receive a positionUpdate, we can trust it's allowed and update it
     const handlePositionUpdate = (data: any) => {
-      // CRITICAL: The backend already filters positionUpdate events, so if we receive one, it's allowed
-      // We trust the backend and always update the position when we receive a positionUpdate event
-      // The backend ensures that only one positionUpdate is sent per pair per cycle
-      const positionTimestamp = new Date(data.timestamp).getTime();
-
-      console.log('[Frontend] Received positionUpdate for pairId:', data.pairId, 'timestamp:', data.timestamp);
-
+      const ts = new Date(data.timestamp).getTime();
       setPairsState((prev) => {
-        // Check if pair exists in state, if not, we need to add it
-        // This happens when user just logged in and positionUpdate arrives before API data
-        const existingPair = prev.find((p) => p.id === data.pairId);
-
-        if (!existingPair) {
-          // Pair doesn't exist in state yet - create a minimal pair object
-          // The API will merge the full data later
-          const newPosition = {
-            lat: data.lat,
-            lon: data.lon,
-            timestamp: data.timestamp,
-          };
-
-          console.log('[Frontend] Adding new pair with position from positionUpdate. pairId:', data.pairId, 'timestamp:', data.timestamp);
-
-          // Create minimal pair object - API will fill in the rest
+        const existing = prev.find((p) => p.id === data.pairId);
+        if (!existing) {
           return [...prev, {
-            id: data.pairId,
-            assignedNumber: 0, // Will be updated by API
-            name: null, // Will be updated by API
-            active: true,
-            captured: false,
-            mostWanted: false,
-            hasActiveDevice: true,
-            lastPosition: newPosition,
+            id: data.pairId, assignedNumber: 0, name: null, active: true, captured: false, mostWanted: false, hasActiveDevice: true,
+            lastPosition: { lat: data.lat, lon: data.lon, timestamp: data.timestamp },
             distanceToNearestOfficer: data.distanceToNearestOfficer,
           }];
         }
-
-        // Pair exists in state - update it
         return prev.map((pair) => {
           if (pair.id !== data.pairId) return pair;
-
-          // CRITICAL: Always update if we receive a positionUpdate event
-          // The backend ensures that only one positionUpdate is sent per pair per cycle
-          // We check if the timestamp is different to avoid unnecessary re-renders
-          if (pair.lastPosition) {
-            const existingTimestamp = new Date(pair.lastPosition.timestamp).getTime();
-            // If it's the same timestamp, don't update (avoid unnecessary re-renders)
-            if (existingTimestamp === positionTimestamp) {
-              console.log('[Frontend] Already have lastPosition with same timestamp, not updating. pairId:', data.pairId, 'timestamp:', data.timestamp);
-              return pair;
-            }
-          }
-
-          const newPosition = {
-            lat: data.lat,
-            lon: data.lon,
-            timestamp: data.timestamp,
-          };
-
-          console.log('[Frontend] Updating lastPosition for pairId:', data.pairId, 'timestamp:', data.timestamp, 'lat:', data.lat, 'lon:', data.lon);
-
+          if (pair.lastPosition && new Date(pair.lastPosition.timestamp).getTime() === ts) return pair;
           return {
             ...pair,
-            lastPosition: newPosition, // Update position for map display (only once per cycle)
+            lastPosition: { lat: data.lat, lon: data.lon, timestamp: data.timestamp },
             distanceToNearestOfficer: data.distanceToNearestOfficer || pair.distanceToNearestOfficer,
           };
         });
       });
     };
-
     socket.on('distanceUpdate', handleDistanceUpdate);
     socket.on('positionUpdate', handlePositionUpdate);
-
     socket.on('capture', (data: any) => {
-      setPairsState((prev) =>
-        prev.map((pair) =>
-          pair.id === data.pairId ? { ...pair, captured: true } : pair,
-        ),
-      );
+      setPairsState((prev) => prev.map((p) => p.id === data.pairId ? { ...p, captured: true } : p));
       refetch();
     });
-
     socket.on('mwHighlight', (data: any) => {
-      setPairsState((prev) =>
-        prev.map((pair) =>
-          pair.id === data.pairId ? { ...pair, mostWanted: data.active } : pair,
-        ),
-      );
+      setPairsState((prev) => prev.map((p) => p.id === data.pairId ? { ...p, mostWanted: data.active } : p));
       refetch();
     });
-
-    socket.on('gameAreaUpdate', () => {
-      fetchGeofences();
-    });
-
+    socket.on('gameAreaUpdate', () => fetchGeofences());
     return () => {
       socket.off('distanceUpdate', handleDistanceUpdate);
       socket.off('positionUpdate', handlePositionUpdate);
@@ -450,817 +699,390 @@ function MapView() {
       socket.off('mwHighlight');
       socket.off('gameAreaUpdate');
     };
-  }, [socket, gameSettings, refetch]); // gameSettings needed for handlePositionUpdate
+  }, [socket, gameSettings, refetch]);
 
-  const getGeofenceTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      'game_area': 'Játékterület',
-      'scenario': 'Scenarió',
-      'crossing_point': 'Átkelési pont',
-    };
-    return labels[type] || type;
-  };
-
-  // Calculate distance between two coordinates using Haversine formula
-  // Returns distance in meters
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371000; // Earth radius in meters
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Return in meters
+    return R * c;
   };
 
-  // Format distance for display
-  const formatDistance = (distanceMeters: number): string => {
-    if (distanceMeters < 1000) {
-      return `${Math.round(distanceMeters)} m`;
-    }
-    return `${(distanceMeters / 1000).toFixed(1)} km`;
-  };
-
-  const toRad = (degrees: number): number => {
-    return (degrees * Math.PI) / 180;
-  };
+  const formatDistance = (d: number): string => d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`;
 
   const fetchGeofences = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/geofence', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      const data = await response.json();
-      console.log('Fetched geofences:', data);
-      setGeofences(data);
-    } catch (error) {
-      console.error('Error fetching geofences:', error);
-    }
+      const res = await fetch('http://localhost:3000/api/geofence', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      setGeofences(await res.json());
+    } catch (e) { console.error(e); }
   };
 
+  // --- Handlers ---
   const handleCapture = async (pairId: number) => {
-    if (!confirm('Biztosan elfogod ezt a párt?')) return;
-
     try {
-      const response = await fetch('http://localhost:3000/api/capture', {
+      const res = await fetch('http://localhost:3000/api/capture', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          pairId,
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ pairId }),
       });
-      const data = await response.json();
-      if (data.success) {
-        refetch();
-        alert('Pár elfogva!');
-      } else {
-        alert(data.message || 'Hiba történt');
-      }
-    } catch (error) {
-      console.error('Capture error:', error);
-      alert('Hiba történt az elfogás során');
-    }
+      const data = await res.json();
+      if (data.success) refetch(); else addNotification('error', 'Hiba történt a pár elfogása során');
+    } catch (e) { addNotification('error', 'Hiba történt a pár elfogása során'); }
   };
 
   const handleMw = async (pairId: number) => {
     try {
-      const pair = pairsState.find((p) => p.id === pairId);
-      const isMw = pair?.mostWanted;
-
-      if (isMw) {
-        const response = await fetch(`http://localhost:3000/api/mw/${pairId}`, {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        if (response.ok) {
-          refetch();
-          alert('MW jelölés eltávolítva!');
-        }
-      } else {
-        const response = await fetch('http://localhost:3000/api/mw', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: JSON.stringify({
-            pairId,
-          }),
-        });
-        const data = await response.json();
-        if (data.success) {
-          refetch();
-          alert('MW jelölés hozzáadva!');
-        }
-      }
-    } catch (error) {
-      console.error('MW error:', error);
-      alert('Hiba történt a MW jelölés során');
-    }
+      const p = pairsState.find((p) => p.id === pairId);
+      const url = p?.mostWanted ? `http://localhost:3000/api/mw/${pairId}` : 'http://localhost:3000/api/mw';
+      const method = p?.mostWanted ? 'DELETE' : 'POST';
+      const body = p?.mostWanted ? undefined : JSON.stringify({ pairId });
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body,
+      });
+      if (res.ok) refetch();
+    } catch (e) { console.error(e); }
   };
 
-  const handleAssignName = async (pairId: number) => {
-    const currentPair = pairsState.find((p) => p.id === pairId);
-    const currentName = currentPair?.name || '';
-    const name = prompt('Add meg a pár nevét (hagyd üresen a törléshez):', currentName);
-
-    // If user cancels (null), do nothing
-    if (name === null) return;
-
-    // If user enters empty string or only whitespace, delete the name
-    const nameToSet = name.trim() === '' ? null : name.trim();
-
+  const handleAssignName = async (pairId: number, newName?: string) => {
+    const p = pairsState.find((p) => p.id === pairId);
+    let n = newName;
+    if (n === undefined) {
+      n = prompt('Add meg a pár nevét:', p?.name || '') || undefined;
+      if (n === undefined) return; // User cancelled prompt
+    }
+    if (n === null) return;
+    const nameToSet = n.trim() === '' ? null : n.trim();
     try {
-      const response = await fetch(`http://localhost:3000/api/pairs/${pairId}/name`, {
+      const res = await fetch(`http://localhost:3000/api/pairs/${pairId}/name`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ name: nameToSet }),
       });
-      const data = await response.json();
+      const data = await res.json();
       if (data.success) {
         refetch();
-        if (nameToSet === null) {
-          alert('Név törölve!');
-        } else {
-          alert('Név hozzárendelve!');
-        }
-      } else {
-        alert(data.message || 'Hiba történt');
-      }
-    } catch (error) {
-      console.error('Assign name error:', error);
-      alert('Hiba történt a név hozzárendelése során');
-    }
+        // Removed alerts as requested - notification is handled by UI context if available or just update
+      } else console.error(data.message || 'Hiba');
+    } catch (e) { console.error('Hiba történt', e); }
   };
 
   const handleSendMessage = async (pairId: number | null, title: string, body: string) => {
     try {
-      const response = await fetch('http://localhost:3000/api/messages/send', {
+      const res = await fetch('http://localhost:3000/api/messages/send', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          pairId: pairId || undefined,
-          title,
-          body,
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ pairId: pairId || undefined, title, body }),
       });
-      const data = await response.json();
+      const data = await res.json();
       if (data.success) {
-        alert(`Üzenet elküldve! (${data.successCount || 0} sikeres, ${data.failureCount || 0} sikertelen)`);
+        addNotification('success', 'Üzenet sikeresen elküldve');
       } else {
-        alert(data.message || 'Hiba történt az üzenet küldése során');
+        addNotification('error', data.message || 'Hiba történt az üzenet küldésekor');
       }
-    } catch (error) {
-      console.error('Send message error:', error);
-      alert('Hiba történt az üzenet küldése során');
+    } catch (e) {
+      addNotification('error', 'Hálózati hiba történt az üzenet küldésekor');
     }
   };
 
-  const handlePairClick = (pair: Pair) => {
-    setSelectedPair(pair);
-    setShowPairDetails(true);
-  };
 
-  const handleLogout = () => {
-    authService.logout();
-    window.location.href = '/login';
-  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-        <div className="text-center">
-          <div className="text-4xl font-bold gradient-text mb-3">Betöltés...</div>
-          <div className="text-gray-400">Párok adatainak lekérése</div>
-          <div className="mt-4 flex justify-center">
-            <div className="w-12 h-12 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
-          </div>
+      <div className="flex items-center justify-center h-screen bg-[#0a0a0a]">
+        <div className="loader-container">
+          <div className="loader-spinner"></div>
+          <div className="text-white mt-4">Betöltés...</div>
         </div>
       </div>
     );
   }
 
-  const activeGeofences = geofences.filter((g) => g.active);
-  const activePairsCount = allActivePairs.filter((p) => p.active && !p.captured).length;
+
 
   return (
-    <div className="flex h-screen flex-col bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-      {/* Header */}
-      <div className="glass-effect text-white shadow-2xl border-b border-orange-500/20">
-        <div className="px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-6">
-              <img
-                src={logoImage}
-                alt="Most Wanted - A hajsza"
-                className="h-14 object-contain drop-shadow-lg"
-              />
-              <div className={`px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 shadow-lg ${connected
-                ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white'
-                : 'bg-gradient-to-r from-red-500 to-rose-600 text-white'
-                }`}>
-                <div className={`w-2 h-2 rounded-full ${connected ? 'bg-white animate-pulse' : 'bg-white'}`}></div>
-                {connected ? <FiWifi className="w-4 h-4" /> : <FiWifiOff className="w-4 h-4" />}
-                <span>{connected ? 'Csatlakozva' : 'Nincs kapcsolat'}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="px-4 py-2 rounded-lg bg-gray-800/50 border border-gray-700 text-gray-200 font-medium flex items-center gap-2 hover:bg-gray-800/70 transition-colors">
-                <FiUser className="w-4 h-4 text-orange-400" />
-                <span>Bejelentkezve: {authService.getCurrentUser()?.username}</span>
-              </div>
-              {authService.getCurrentUser()?.role === 'admin' && (
-                <a
-                  href="/admin"
-                  className="modern-button p-2.5 bg-gradient-to-r from-orange-600 to-orange-500 rounded-lg font-semibold shadow-lg flex items-center justify-center text-white hover:from-orange-500 hover:to-orange-400 hover:shadow-xl hover:scale-105 transition-all"
-                  title="Admin Panel"
-                >
-                  <FiSettings className="w-5 h-5" />
-                </a>
-              )}
-              <button
-                onClick={() => {
-                  setMessagePairId(null);
-                  setShowMessageModal(true);
-                }}
-                className="modern-button p-2.5 bg-gradient-to-r from-orange-600 to-orange-500 rounded-lg font-semibold shadow-lg flex items-center justify-center text-white hover:from-orange-500 hover:to-orange-400 hover:shadow-xl hover:scale-105 transition-all"
-                title="Üzenet küldése"
-              >
-                <FiSend className="w-5 h-5" />
-              </button>
-              <button
-                onClick={handleLogout}
-                className="modern-button p-2.5 bg-gradient-to-r from-red-600 to-red-500 rounded-lg font-semibold shadow-lg flex items-center justify-center text-white hover:from-red-500 hover:to-red-400 hover:shadow-xl hover:scale-105 transition-all"
-                title="Kijelentkezés"
-              >
-                <FiLogOut className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+    <div className="flex h-screen w-full overflow-hidden bg-[#0f0f0f] relative font-sans">
+      {/* 1. Fullscreen Map Background */}
+      <div className="absolute inset-0 z-0">
+        <MapContainer
+          center={[47.58, 18.60]}
+          zoom={8}
+          className="h-full w-full bg-[#1a1a1a]"
+          zoomControl={false}
+          ref={mapRef}
+        >
+          {/* Round 3: Conditional Tile Layer Logic */}
+          {activeMapLayer === 'standard' && <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="" />}
+          {activeMapLayer === 'satellite' && <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="" />}
+          {activeMapLayer === 'dark' && <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="" />}
 
-          {/* Game Info Bar */}
-          <div className="mt-5 grid grid-cols-5 gap-4">
-            <div className="glass-card rounded-xl p-4 hover:bg-white/10 hover:shadow-lg transition-all cursor-default">
-              <div className="text-gray-400 text-xs mb-2 flex items-center gap-1.5 font-medium uppercase tracking-wide">
-                <FiActivity className="w-3.5 h-3.5" />
-                <span>Játék állapot</span>
-              </div>
-              <div className={`text-xl font-bold flex items-center gap-2 ${gameInfo.isGameActive
-                ? 'text-orange-400'
-                : 'text-red-400'
-                }`}>
-                <div className={`w-2.5 h-2.5 rounded-full ${gameInfo.isGameActive
-                  ? 'bg-orange-400 pulse-orange'
-                  : 'bg-red-400'
-                  }`}></div>
-                <span>{gameInfo.isGameActive ? 'FOLYAMATBAN' : 'SZÜNETEL'}</span>
-              </div>
-            </div>
-            <div className="glass-card rounded-xl p-4 hover:bg-white/10 hover:shadow-lg transition-all cursor-default">
-              <div className="text-gray-400 text-xs mb-2 flex items-center gap-1.5 font-medium uppercase tracking-wide">
-                <FiClock className="w-3.5 h-3.5" />
-                <span>Idő</span>
-              </div>
-              <div className="text-xl font-bold text-orange-400">{gameInfo.currentTime}</div>
-              {gameInfo.gameStartTime && gameInfo.gameEndTime && (
-                <div className="text-xs text-gray-400 mt-1.5">
-                  {gameInfo.gameStartTime} - {gameInfo.gameEndTime}
+          <ZoomControl position="bottomright" />
+          <MapResizeHandler />
+
+          {/* User Location Marker - Round 3: No white border, use Image */}
+          {browserLocation && (
+            <Marker
+              key={`user-loc-${activeMapLayer}`}
+              position={[browserLocation.lat, browserLocation.lon]}
+              icon={L.divIcon({
+                className: 'custom-browser-location-marker',
+                html: `<div style="width:32px;height:32px;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,0.4);background-image:url(${mwOrangeImage});background-size:cover;background-position:center;overflow:hidden;"></div>`,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+              })}
+            >
+              <Popup className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}>
+                <div className="p-3 min-w-[200px]">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <FiMapPin className="w-4 h-4 text-orange-500" />
+                      <strong className={`text-sm ${activeMapLayer === 'dark' ? 'text-white' : 'text-gray-900'}`}>Saját pozíció</strong>
+                    </div>
+                    <button
+                      onClick={() => mapRef.current?.closePopup()}
+                      className={`transition-colors p-0.5 -mr-1 -mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black'}`}
+                    >
+                      <FiX className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className={`p-2 rounded-lg border ${activeMapLayer === 'dark' ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                    <div className={`text-[10px] flex items-center justify-between uppercase tracking-wider font-semibold ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <span>Szélesség</span>
+                      <span className={`font-mono normal-case ${activeMapLayer === 'dark' ? 'text-white' : 'text-gray-900'}`}>{browserLocation.lat.toFixed(5)}</span>
+                    </div>
+                    <div className={`text-[10px] flex items-center justify-between mt-1 uppercase tracking-wider font-semibold ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                      <span>Hosszúság</span>
+                      <span className={`font-mono normal-case ${activeMapLayer === 'dark' ? 'text-white' : 'text-gray-900'}`}>{browserLocation.lon.toFixed(5)}</span>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-            <div className="glass-card rounded-xl p-4 hover:bg-white/10 hover:shadow-lg transition-all cursor-default">
-              <div className="text-gray-400 text-xs mb-2 flex items-center gap-1.5 font-medium uppercase tracking-wide">
-                <FiUsers className="w-3.5 h-3.5" />
-                <span>Aktív párok</span>
-              </div>
-              <div className="text-xl font-bold text-orange-400">{activePairsCount}</div>
-            </div>
-            <div className="glass-card rounded-xl p-4 hover:bg-white/10 hover:shadow-lg transition-all cursor-default">
-              <div className="text-gray-400 text-xs mb-2 flex items-center gap-1.5 font-medium uppercase tracking-wide">
-                <FiMap className="w-3.5 h-3.5" />
-                <span>Játékterület</span>
-              </div>
-              <div className="text-xl font-bold truncate text-orange-400">
-                {gameInfo.activeGameArea || 'Nincs beállítva'}
-              </div>
-            </div>
-            <div className="glass-card rounded-xl p-4 hover:bg-white/10 hover:shadow-lg transition-all cursor-default">
-              <div className="text-gray-400 text-xs mb-2 flex items-center gap-1.5 font-medium uppercase tracking-wide">
-                <FiClock className="w-3.5 h-3.5" />
-                <span>Lokációfrissítés</span>
-              </div>
-              <div className="text-xl font-bold text-orange-400">
-                {locationUpdateCountdown ? (
-                  `${locationUpdateCountdown.minutes}:${locationUpdateCountdown.seconds.toString().padStart(2, '0')}`
-                ) : (
-                  gameSettings?.isTimerRunning ? 'Betöltés...' : 'Nincs aktív számláló'
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+              </Popup>
+            </Marker>
+          )}
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Map */}
-        <div className="flex-1 relative">
-          <MapContainer
-            center={[47.4979, 19.0402]}
-            zoom={7}
-            style={{ height: '100%', width: '100%' }}
-          >
-            {/* Helper to handle map resize */}
-            <MapResizeHandler />
-            <LayersControl position="topright">
-              <LayersControl.BaseLayer checked name="Térkép nézet">
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-              </LayersControl.BaseLayer>
-              <LayersControl.BaseLayer name="Műholdas nézet">
-                <TileLayer
-                  attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                />
-              </LayersControl.BaseLayer>
-              <LayersControl.BaseLayer name="Sötét mód">
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                />
-              </LayersControl.BaseLayer>
-            </LayersControl>
-
-            {/* Sidebar toggle button - positioned on right side below LayersControl */}
-            <div className="leaflet-top leaflet-right sidebar-toggle-control">
-              <div className="leaflet-control">
-                <button
-                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                  className="sidebar-toggle-button"
-                  title={sidebarCollapsed ? 'Párok lista megjelenítése' : 'Párok lista elrejtése'}
-                >
-                  {sidebarCollapsed ? (
-                    <FiChevronRight className="w-5 h-5" />
-                  ) : (
-                    <FiChevronLeft className="w-5 h-5" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Geofences */}
-            {activeGeofences.map((geofence) => {
-              if (!geofence.active) return null;
-
-              if (geofence.metadataJson?.polygon && geofence.metadataJson?.type === 'polygon') {
-                const polygonCoords = geofence.metadataJson.polygon.map(([lon, lat]) => [lat, lon] as [number, number]);
-                return (
-                  <Polygon
-                    key={geofence.id}
-                    positions={polygonCoords}
-                    pathOptions={{
-                      color: geofence.geofenceType === 'game_area' ? '#2563EB' : geofence.geofenceType === 'scenario' ? '#10B981' : '#F59E0B',
-                      fillColor: geofence.geofenceType === 'game_area' ? '#3B82F6' : geofence.geofenceType === 'scenario' ? '#10B981' : '#F59E0B',
-                      fillOpacity: geofence.geofenceType === 'game_area' ? 0.2 : 0.3,
-                      weight: 3,
-                    }}
-                  >
-                    <Popup>
-                      <div>
-                        <strong className="text-lg">{geofence.name}</strong>
-                        <div className="text-sm text-gray-600 mt-1">{getGeofenceTypeLabel(geofence.geofenceType)}</div>
-                        {geofence.metadataJson.countyName && (
-                          <div className="text-xs text-gray-500 mt-1">{geofence.metadataJson.countyName}</div>
-                        )}
-                      </div>
-                    </Popup>
-                  </Polygon>
-                );
-              }
-
-              // Only show circle if it's NOT a game_area (game_area should always be polygon)
-              if (geofence.geofenceType === 'game_area') {
-                console.warn(`Game area geofence "${geofence.name}" has no polygon data!`, geofence);
-                return null; // Don't show game_area as circle
-              }
-
-              return (
-                <Circle
-                  key={geofence.id}
-                  center={[geofence.centerLat, geofence.centerLon]}
-                  radius={geofence.radiusM}
-                  pathOptions={{
-                    color: geofence.geofenceType === 'scenario' ? '#10B981' : '#F59E0B',
-                    fillColor: geofence.geofenceType === 'scenario' ? '#10B981' : '#F59E0B',
-                    fillOpacity: 0.3,
-                    weight: 3,
-                  }}
-                >
-                  <Popup>
-                    <div>
-                      <strong className="text-lg">{geofence.name}</strong>
-                      <div className="text-sm text-gray-600 mt-1">{getGeofenceTypeLabel(geofence.geofenceType)}</div>
-                      <div className="text-xs text-gray-500 mt-1">{(geofence.radiusM / 1000).toFixed(1)} km</div>
-                    </div>
-                  </Popup>
-                </Circle>
-              );
-            })}
-
-            {/* Browser location (user's own location) */}
-            {browserLocation && (
+          {/* Pair Markers */}
+          {displayPairsOnMap.map((pair) => (
+            pair.lastPosition && (
               <Marker
-                key="browser-location"
-                position={[browserLocation.lat, browserLocation.lon]}
+                key={`${pair.id}-${activeMapLayer}`}
+                position={[pair.lastPosition.lat, pair.lastPosition.lon]}
+                // Round 3: Larger size (32px), Larger Font (18px), Thicker Border (3px) -> Matches Sidebar/Details
                 icon={L.divIcon({
-                  className: 'custom-browser-location-marker',
-                  html: `
-                    <div style="
-                      width: 32px;
-                      height: 32px;
-                      border-radius: 50%;
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                      background-image: url(${mwOrangeImage});
-                      background-size: cover;
-                      background-position: center;
-                    ">
-                    </div>
-                  `,
+                  className: 'custom-pair-marker',
+                  html: `<div style="background-color:${pair.mostWanted ? '#f97316' : '#2a2a2a'};width:32px;height:32px;border-radius:50%;border:3px solid #f97316;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${pair.assignedNumber}</div>`,
                   iconSize: [32, 32],
                   iconAnchor: [16, 16],
                 })}
-              >
-                <Popup>
-                  <div className="text-center min-w-[150px]">
-                    <strong className="text-xl flex items-center justify-center gap-2">
-                      <FiMapPin className="w-5 h-5" />
-                      <span>Saját pozíció</span>
-                    </strong>
-                    <div className="text-xs text-gray-500 mt-2">
-                      {browserLocation.lat.toFixed(6)}, {browserLocation.lon.toFixed(6)}
-                    </div>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
+                eventHandlers={{
+                  click: () => {
+                    setSelectedPair(pair);
+                    setShowPairDetails(true);
+                  },
+                }}
+              />
+            )
+          ))}
 
-            {/* Pairs */}
-            {displayPairsOnMap.map((pair) => {
-              if (!pair.lastPosition || !pair.active) return null;
-
-              // Force re-render by using forceRender in key
-              const pairKey = `pair-${pair.id}-${forceRender}`;
-
-              // Determine background color and border color based on status
-              const getBackgroundColor = () => {
-                if (pair.mostWanted) return '#f36f26'; // Orange for Most Wanted (same as border)
-                return '#2a2a2a'; // Dark gray/black for others
-              };
-
-              const getBorderColor = () => {
-                return '#f36f26'; // Always use orange border
-              };
-
-              const backgroundColor = getBackgroundColor();
-              const borderColor = getBorderColor();
-
-              // Create custom icon with pair number
-              // Most Wanted: orange background (#f36f26), others: dark gray/black background
-              // Border is always orange and thicker, number is white and larger
-              const icon = L.divIcon({
-                className: 'custom-pair-marker',
-                html: `
-                  <div style="
-                    background-color: ${backgroundColor};
-                    width: 32px;
-                    height: 32px;
-                    border-radius: 50%;
-                    border: 3px solid ${borderColor};
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                    font-weight: bold;
-                    font-size: 18px;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                  ">
-                    ${pair.assignedNumber}
-                  </div>
-                `,
-                iconSize: [32, 32],
-                iconAnchor: [16, 16],
-              });
-
+          {/* Geofences - Round 3: "Kidolgozott" Popups */}
+          {geofences.filter(g => g.active).map(g => {
+            // Game Area Polygon
+            if (g.geofenceType === 'game_area' && g.metadataJson?.polygon) {
               return (
-                <Marker
-                  key={pairKey}
-                  position={[pair.lastPosition.lat, pair.lastPosition.lon]}
-                  icon={icon}
-                  eventHandlers={{
-                    click: () => handlePairClick(pair),
+                <Polygon
+                  key={`${g.id}-${activeMapLayer}`}
+                  positions={g.metadataJson.polygon.map(([lon, lat]) => [lat, lon] as [number, number])}
+                  pathOptions={{
+                    // Use Blue for Game Area if NOT in Dark Mode, otherwise Orange
+                    color: activeMapLayer === 'dark' ? '#f97316' : '#3b82f6',
+                    fillColor: activeMapLayer === 'dark' ? '#f97316' : '#3b82f6',
+                    fillOpacity: 0.1,
+                    weight: 2
                   }}
                 >
-                  <Popup>
-                    <div className="text-center min-w-[150px]">
-                      <strong className="text-xl flex items-center justify-center gap-2">
-                        <FiUser className="w-5 h-5" />
-                        <span>Pár #{pair.assignedNumber}</span>
-                      </strong>
-                      {pair.name && <div className="text-sm text-gray-700 mt-1 font-medium">{pair.name}</div>}
-                      {pair.mostWanted && (
-                        <div className="text-orange-600 font-bold mt-2 text-lg flex items-center justify-center gap-1">
-                          <FiNavigation className="w-4 h-4" />
-                          <span>MOST WANTED</span>
+                  <Popup className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}>
+                    <div className="flex flex-col gap-3 p-4 min-w-[240px] font-sans">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_12px] bg-green-500 shadow-green-500`} />
+                          <span className={`font-bold text-base leading-none ${activeMapLayer === 'dark' ? 'text-white' : 'text-gray-900'}`}>{g.name}</span>
                         </div>
-                      )}
-                      {pair.captured && (
-                        <div className="text-red-600 font-bold mt-2 text-lg">Elfogva</div>
-                      )}
-                      {pair.lastPosition && (
-                        <div className="text-xs text-gray-500 mt-2 flex items-center justify-center gap-1">
-                          <FiClock className="w-3 h-3" />
-                          <span>{new Date(pair.lastPosition.timestamp).toLocaleString('hu-HU')}</span>
-                        </div>
-                      )}
-                      {browserLocation && (pair.distancePosition || pair.lastPosition) && (
-                        <div className="text-xs text-blue-600 font-semibold mt-1 flex items-center justify-center gap-1" key={`popup-distance-${pair.id}-${forceRender}`}>
-                          <FiMapPin className="w-3 h-3" />
-                          <span>Légvonalbeli távolság: {formatDistance(
-                            calculateDistance(
-                              browserLocation.lat,
-                              browserLocation.lon,
-                              (pair.distancePosition || pair.lastPosition)!.lat,
-                              (pair.distancePosition || pair.lastPosition)!.lon
-                            )
-                          )}</span>
-                        </div>
+                        <button
+                          onClick={() => mapRef.current?.closePopup()}
+                          className={`transition-colors p-0.5 -mr-1 -mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black'}`}
+                        >
+                          <FiX className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className={`h-px w-full ${activeMapLayer === 'dark' ? 'bg-white/10' : 'bg-black/10'}`} />
+                      <div className="flex items-center justify-between gap-3">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Státusz</span>
+                        <span className="text-xs font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded">AKTÍV</span>
+                      </div>
+                      {g.metadataJson?.description && (
+                        <div className={`text-xs italic mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>{g.metadataJson.description}</div>
                       )}
                     </div>
                   </Popup>
-                </Marker>
+                </Polygon>
               );
-            })}
-          </MapContainer>
-        </div>
-
-        {/* Sidebar */}
-        <div
-          className={`glass-effect border-l border-orange-500/20 overflow-y-auto shadow-2xl transition-all duration-300 ${sidebarCollapsed ? 'w-0 opacity-0 -translate-x-full overflow-hidden pointer-events-none' : 'w-96 opacity-100 translate-x-0'
-            }`}
-          style={{ minWidth: sidebarCollapsed ? '0' : '384px', maxWidth: sidebarCollapsed ? '0' : '384px', flexShrink: 0 }}
-        >
-          <div className="p-5 border-b border-orange-500/20 sticky top-0 z-10 glass-effect">
-            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-              <FiUsers className="w-6 h-6 text-orange-400" />
-              <span>Párok</span>
-            </h2>
-            <p className="text-sm text-gray-400 mt-2">
-              {activePairsCount} aktív pár
-            </p>
-          </div>
-          <div className="divide-y divide-gray-700/30">
-            {allActivePairs.length === 0 ? (
-              <div className="p-8 text-center text-gray-400">
-                <FiUsers className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-                <div className="text-lg mb-2 font-bold text-gray-300">Nincs aktív pár</div>
-                <div className="text-sm text-gray-500">A párok csak akkor jelennek meg, ha be vannak jelentkezve a telefonokon.</div>
-              </div>
-            ) : (
-              allActivePairs.map((pair) => {
-                // Determine background color and border color based on status (same as map markers)
-                const getBackgroundColor = () => {
-                  if (pair.mostWanted) return '#f36f26';
-                  return '#2a2a2a';
-                };
-
-                const backgroundColor = getBackgroundColor();
-                const borderColor = '#f36f26';
-
-                return (
-                  <div
-                    key={pair.id}
-                    className={`p-4 transition-all duration-200 ${selectedPair?.id === pair.id
-                      ? 'bg-orange-500/20 border-l-4 border-orange-500'
-                      : 'hover:bg-gray-800/50 border-l-4 border-transparent'
-                      } ${pair.captured && selectedPair?.id !== pair.id ? 'bg-red-500/10 opacity-75' : ''} ${pair.mostWanted && selectedPair?.id !== pair.id ? 'bg-orange-500/10' : ''
-                      } ${!pair.active ? 'opacity-50' : ''} cursor-pointer`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div
-                        className="flex-1 cursor-pointer"
-                        onClick={() => pair.active && handlePairClick(pair)}
-                      >
-                        <div className="flex items-center gap-3">
-                          {/* Circle number badge (same style as map markers) */}
-                          <div
-                            className="flex-shrink-0"
-                            style={{
-                              width: '36px',
-                              height: '36px',
-                              borderRadius: '50%',
-                              backgroundColor: backgroundColor,
-                              border: `3px solid ${borderColor}`,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'white',
-                              fontWeight: 'bold',
-                              fontSize: '18px',
-                              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                            }}
-                          >
-                            {pair.assignedNumber}
-                          </div>
-                          <div className="flex-1 min-w-0 flex items-center">
-                            {pair.name ? (
-                              <div className="w-full">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <div className="text-base text-white font-semibold">{pair.name}</div>
-                                  {pair.mostWanted && (
-                                    <span className="px-2.5 py-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs rounded-full font-bold shadow-lg">
-                                      MW
-                                    </span>
-                                  )}
-                                  {pair.captured && (
-                                    <span className="px-2.5 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full font-bold shadow-lg">
-                                      Elfogva
-                                    </span>
-                                  )}
-                                  {!pair.active && (
-                                    <span className="px-2.5 py-1 bg-gray-600 text-white text-xs rounded-full">
-                                      Inaktív
-                                    </span>
-                                  )}
-                                </div>
-                                {pair.lastPosition && (
-                                  <div className="text-xs text-gray-500 flex items-center gap-1 mt-1.5">
-                                    <FiClock className="w-3 h-3" />
-                                    {new Date(pair.lastPosition.timestamp).toLocaleString('hu-HU')}
-                                  </div>
-                                )}
-                                {browserLocation && (pair.distancePosition || pair.lastPosition) && (
-                                  <div className="text-xs text-orange-400 font-semibold flex items-center gap-1 mt-1" key={`distance-${pair.id}-${forceRender}`}>
-                                    <FiMapPin className="w-3 h-3" />
-                                    Légvonalbeli távolság: {formatDistance(
-                                      calculateDistance(
-                                        browserLocation.lat,
-                                        browserLocation.lon,
-                                        (pair.distancePosition || pair.lastPosition)!.lat,
-                                        (pair.distancePosition || pair.lastPosition)!.lon
-                                      )
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="w-full flex flex-col justify-center">
-                                {(pair.mostWanted || pair.captured || !pair.active) && (
-                                  <div className="flex items-center gap-2 mb-1.5">
-                                    {pair.mostWanted && (
-                                      <span className="px-2.5 py-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-xs rounded-full font-bold shadow-lg">
-                                        MW
-                                      </span>
-                                    )}
-                                    {pair.captured && (
-                                      <span className="px-2.5 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full font-bold shadow-lg">
-                                        Elfogva
-                                      </span>
-                                    )}
-                                    {!pair.active && (
-                                      <span className="px-2.5 py-1 bg-gray-600 text-white text-xs rounded-full">
-                                        Inaktív
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                                <div className="flex flex-col gap-1">
-                                  {pair.lastPosition && (
-                                    <div className="text-xs text-gray-500 flex items-center gap-1">
-                                      <FiClock className="w-3 h-3" />
-                                      {new Date(pair.lastPosition.timestamp).toLocaleString('hu-HU')}
-                                    </div>
-                                  )}
-                                  {browserLocation && (pair.distancePosition || pair.lastPosition) && (
-                                    <div className="text-xs text-orange-400 font-semibold flex items-center gap-1 mt-0.5" key={`distance-${pair.id}-${forceRender}`}>
-                                      <FiMapPin className="w-3 h-3" />
-                                      Légvonalbeli távolság: {formatDistance(
-                                        calculateDistance(
-                                          browserLocation.lat,
-                                          browserLocation.lon,
-                                          (pair.distancePosition || pair.lastPosition)!.lat,
-                                          (pair.distancePosition || pair.lastPosition)!.lon
-                                        )
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      {/* Quick actions */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
+            }
+            // Standard Polygon (Custom/Scenario)
+            if (g.metadataJson?.polygon && g.metadataJson?.type === 'polygon') {
+              return (
+                <Polygon
+                  key={`${g.id}-${activeMapLayer}`}
+                  positions={g.metadataJson.polygon.map(([lon, lat]) => [lat, lon] as [number, number])}
+                  pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2, weight: 2 }}
+                >
+                  <Popup className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}>
+                    <div className="p-3 min-w-[200px] font-sans">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className={`font-bold ${activeMapLayer === 'dark' ? 'text-white' : 'text-gray-900'}`}>{g.name}</div>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!pair.captured) {
-                              handleCapture(pair.id);
-                            }
-                          }}
-                          disabled={pair.captured}
-                          className="p-2 rounded-lg bg-gray-700/50 hover:bg-gray-700 border border-gray-600 hover:border-orange-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={pair.captured ? 'Már elfogva' : 'Elfogás'}
+                          onClick={() => mapRef.current?.closePopup()}
+                          className={`transition-colors p-0.5 -mr-1 -mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black'}`}
                         >
-                          <FaHandcuffs className={`w-5 h-5 ${pair.captured ? 'text-gray-500' : 'text-orange-400'}`} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAssignName(pair.id);
-                          }}
-                          className="p-2 rounded-lg bg-gray-700/50 hover:bg-gray-700 border border-gray-600 hover:border-orange-500/50 transition-all"
-                          title="Név szerkesztése"
-                        >
-                          <HiPencil className="w-5 h-5 text-orange-400" />
+                          <FiX className="w-4 h-4" />
                         </button>
                       </div>
+                      <div className={`text-xs ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{g.geofenceType}</div>
                     </div>
+                  </Popup>
+                </Polygon>
+              );
+            }
+            // Circle (Default)
+            return (
+              <Circle
+                key={`${g.id}-${activeMapLayer}`}
+                center={[g.centerLat, g.centerLon]}
+                radius={g.radiusM}
+                pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2, weight: 2 }}
+              >
+                <Popup className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}>
+                  <div className="p-3 min-w-[200px] font-sans">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className={`font-bold ${activeMapLayer === 'dark' ? 'text-white' : 'text-gray-900'}`}>{g.name}</div>
+                      <button
+                        onClick={() => mapRef.current?.closePopup()}
+                        className={`transition-colors p-0.5 -mr-1 -mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black'}`}
+                      >
+                        <FiX className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className={`text-xs ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{g.geofenceType}</div>
                   </div>
-                );
-              })
-            )}
-          </div>
-          {allActivePairs.length > 0 && (
-            <div className="border-t border-gray-700/30"></div>
-          )}
-        </div>
+                </Popup>
+              </Circle>
+            );
+          })}
+        </MapContainer>
       </div>
+
+      {/* 2. Floating Header Overlay */}
+      <FloatingHeader
+        connected={connected}
+        gameInfo={gameInfo}
+        activePairsCount={allActivePairs.length}
+        locationUpdateCountdown={locationUpdateCountdown}
+        gameSettings={gameSettings}
+        authService={authService}
+        handleLogout={() => { authService.logout(); window.location.href = '/login'; }}
+        onSendMessageClick={() => { setMessagePairId(null); setShowMessageModal(true); }}
+        isExpanded={isHeaderExpanded}
+        setIsExpanded={setIsHeaderExpanded}
+        // Round 3: New Props
+        activeMapLayer={activeMapLayer}
+        onMapLayerChange={setActiveMapLayer}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+
+      {/* 3. Floating Sidebar Overlay */}
+      <ModernSidebar
+        isVisible={!sidebarCollapsed}
+        activePairs={allActivePairs}
+        selectedPairId={isClosingPairDetails ? undefined : selectedPair?.id}
+        onPairClick={(pair) => { setSelectedPair(pair); setShowPairDetails(true); }}
+        onCapture={(id) => setCapturePairId(id)}
+        onEditName={(id) => {
+          const p = allActivePairs.find(p => p.id === id);
+          if (p) setRenamingPair({ id: p.id, name: p.name || '' });
+        }}
+        browserLocation={browserLocation}
+        calculateDistance={calculateDistance}
+        formatDistance={formatDistance}
+        forceRender={forceRender}
+        isHeaderExpanded={isHeaderExpanded}
+      />
 
       {/* Modals */}
       {showPairDetails && selectedPair && (
         <PairDetails
-          pair={selectedPair}
+          pair={pairsState.find(p => p.id === selectedPair.id) || selectedPair}
           browserLocation={browserLocation}
           calculateDistance={calculateDistance}
-          onClose={() => {
-            setShowPairDetails(false);
-            setSelectedPair(null);
-          }}
+          onClose={() => { setShowPairDetails(false); setSelectedPair(null); setIsClosingPairDetails(false); }}
+          onClosingStart={() => setIsClosingPairDetails(true)}
           onCapture={handleCapture}
           onMw={handleMw}
-          onAssignName={handleAssignName}
-          onSendMessage={(pairId) => {
-            setMessagePairId(pairId);
+          onRename={handleAssignName}
+          /* Round 3: Fix Message Logic - Keep details open */
+          onSendMessage={(id) => {
+            setMessagePairId(id); // Set the specific pair ID
             setShowMessageModal(true);
-            setShowPairDetails(false);
           }}
         />
       )}
 
-      {showMessageModal && (
-        <SendMessageModal
-          pairId={messagePairId}
-          pairAssignedNumber={messagePairId ? allActivePairs.find((p) => p.id === messagePairId)?.assignedNumber || null : null}
-          pairName={messagePairId ? allActivePairs.find((p) => p.id === messagePairId)?.name || null : null}
-          pairMostWanted={messagePairId ? allActivePairs.find((p) => p.id === messagePairId)?.mostWanted || false : false}
-          onClose={() => {
-            setShowMessageModal(false);
-            setMessagePairId(null);
-            setSelectedPair(null);
-          }}
-          onSend={handleSendMessage}
-        />
-      )}
+      {/* Modals - Render AFTER PairDetails to be on top */}
+      <SendMessageModal
+        isOpen={showMessageModal}
+        pairId={messagePairId}
+        pairAssignedNumber={allActivePairs.find(p => p.id === messagePairId)?.assignedNumber}
+        pairName={allActivePairs.find(p => p.id === messagePairId)?.name}
+        onClose={() => setShowMessageModal(false)}
+        onSend={handleSendMessage}
+      />
+
+      <EditNameModal
+        isOpen={!!renamingPair}
+        initialName={renamingPair?.name || ''}
+        onClose={() => setRenamingPair(null)}
+        onSave={async (newName: string | null) => {
+          if (renamingPair) {
+            await handleAssignName(renamingPair.id, newName || '');
+            addNotification('success', 'Pár neve sikeresen módosítva');
+            setRenamingPair(null);
+          }
+        }}
+      />
+
+      <ConfirmationModal
+        isOpen={!!capturePairId}
+        title="Pár elfogása"
+        message={`Biztosan elfogottnak jelöli a(z) ${allActivePairs.find(p => p.id === capturePairId)?.assignedNumber || '?'}. számú párt?`}
+        confirmLabel="Elfogás"
+        cancelLabel="Mégse"
+        isDangerous={true}
+        onConfirm={() => {
+          if (capturePairId) {
+            handleCapture(capturePairId);
+            setCapturePairId(null);
+          }
+        }}
+        onCancel={() => setCapturePairId(null)}
+      />
     </div>
   );
 }
 
+// ... ProtectedRoute & App ...
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  if (!authService.isAuthenticated()) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!authService.isAuthenticated()) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
@@ -1269,22 +1091,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <MapView />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute>
-              <Admin />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   );

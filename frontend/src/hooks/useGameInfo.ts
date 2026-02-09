@@ -24,98 +24,111 @@ export function useGameInfo() {
   });
 
   const fetchGameInfo = async () => {
+    try {
+      // Fetch game day info
+      let gameDay = null;
       try {
-        // Fetch game day info
-        let gameDay = null;
-        try {
-          const gameDayResponse = await fetch('http://localhost:3000/api/game-days/today', {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-          if (gameDayResponse.ok) {
-            const text = await gameDayResponse.text();
-            if (text && text.trim()) {
-              gameDay = JSON.parse(text);
-            }
+        const gameDayResponse = await fetch('http://localhost:3000/api/game-days/today', {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (gameDayResponse.ok) {
+          const text = await gameDayResponse.text();
+          if (text && text.trim()) {
+            gameDay = JSON.parse(text);
           }
-        } catch (error) {
-          console.error('Error fetching game day:', error);
         }
+      } catch (error) {
+        console.error('Error fetching game day:', error);
+      }
 
-        // Fetch game area
-        let gameArea = null;
-        try {
-          const gameAreaResponse = await fetch('http://localhost:3000/api/game-area', {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-          if (gameAreaResponse.ok) {
-            const text = await gameAreaResponse.text();
-            if (text && text.trim()) {
-              gameArea = JSON.parse(text);
-            }
+      // Fetch game area
+      let gameArea = null;
+      try {
+        const gameAreaResponse = await fetch('http://localhost:3000/api/game-area', {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (gameAreaResponse.ok) {
+          const text = await gameAreaResponse.text();
+          if (text && text.trim()) {
+            gameArea = JSON.parse(text);
           }
-        } catch (error) {
-          console.error('Error fetching game area:', error);
         }
+      } catch (error) {
+        console.error('Error fetching game area:', error);
+      }
 
-        // Fetch pairs
-        let pairsData = { pairs: [] };
-        try {
-          const pairsResponse = await fetch('http://localhost:3000/api/pairs?active=true', {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-          if (pairsResponse.ok) {
-            const text = await pairsResponse.text();
-            if (text && text.trim()) {
-              pairsData = JSON.parse(text);
-            }
+      // Fetch pairs
+      let pairsData = { pairs: [] };
+      try {
+        const pairsResponse = await fetch('http://localhost:3000/api/pairs?active=true', {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (pairsResponse.ok) {
+          const text = await pairsResponse.text();
+          if (text && text.trim()) {
+            pairsData = JSON.parse(text);
           }
-        } catch (error) {
-          console.error('Error fetching pairs:', error);
         }
+      } catch (error) {
+        console.error('Error fetching pairs:', error);
+      }
 
-        const now = new Date();
-        const currentTime = now.toLocaleTimeString('hu-HU');
-        const isGameActive = gameDay
-          ? (() => {
-              const [startHour, startMin] = gameDay.startTime.split(':').map(Number);
-              const [endHour, endMin] = gameDay.endTime.split(':').map(Number);
-              const currentMinutes = now.getHours() * 60 + now.getMinutes();
-              const startMinutes = startHour * 60 + startMin;
-              const endMinutes = endHour * 60 + endMin;
-              return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
-            })()
-          : false;
+      const now = new Date();
+      const currentTime = now.toLocaleTimeString('hu-HU');
+      const isGameActive = gameDay
+        ? (() => {
+          const [startHour, startMin] = gameDay.startTime.split(':').map(Number);
+          const [endHour, endMin] = gameDay.endTime.split(':').map(Number);
+          const currentMinutes = now.getHours() * 60 + now.getMinutes();
+          const startMinutes = startHour * 60 + startMin;
+          const endMinutes = endHour * 60 + endMin;
+          return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+        })()
+        : false;
 
-        // Get active game area - use the activeGameArea from API if available, otherwise find active geofences
-        let activeGameArea: string | null = null;
-        if (gameArea?.activeGameArea) {
-          activeGameArea = gameArea.activeGameArea;
-        } else if (gameArea?.geofences) {
-          const activeGeofences = gameArea.geofences.filter((g: any) => g.active && g.geofenceType === 'game_area');
+      // Get active game area - use the activeGameArea from API if available, otherwise find all active geofences
+      let activeGameArea: string | null = null;
+      if (gameArea?.activeGameArea) {
+        activeGameArea = gameArea.activeGameArea;
+      }
+
+      // Also check for active custom zones (scenario, crossing_point) via direct geofence fetch
+      try {
+        const geofenceResponse = await fetch('http://localhost:3000/api/geofence', {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (geofenceResponse.ok) {
+          const allGeofences = await geofenceResponse.json();
+          const activeGeofences = allGeofences.filter((g: any) => g.active);
           if (activeGeofences.length > 0) {
             activeGameArea = activeGeofences.map((g: any) => g.name).join(', ');
           }
         }
-
-        setGameInfo({
-          isGameActive,
-          currentTime,
-          gameStartTime: gameDay?.startTime || null,
-          gameEndTime: gameDay?.endTime || null,
-          activeGameArea: activeGameArea,
-          activePairs: pairsData.pairs?.length || 0,
-          totalPairs: pairsData.pairs?.length || 0,
-        });
       } catch (error) {
-        console.error('Error fetching game info:', error);
+        console.error('Error fetching geofences for game info:', error);
       }
-    };
+
+      setGameInfo({
+        isGameActive,
+        currentTime,
+        gameStartTime: gameDay?.startTime || null,
+        gameEndTime: gameDay?.endTime || null,
+        activeGameArea: activeGameArea,
+        activePairs: pairsData.pairs?.length || 0,
+        totalPairs: pairsData.pairs?.length || 0,
+      });
+    } catch (error) {
+      console.error('Error fetching game info:', error);
+    }
+  };
 
   useEffect(() => {
     fetchGameInfo();

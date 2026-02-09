@@ -27,7 +27,7 @@ export default function DashboardHome({
                         <FiActivity className="w-24 h-24 text-orange-500" />
                     </div>
                     <div className="relative z-10">
-                        <div className="text-gray-400 text-sm font-semibold uppercase tracking-wider mb-2">Játék Státusz</div>
+                        <div className="text-gray-400 text-sm font-semibold uppercase tracking-wider mb-2">Játék státusz</div>
                         <div className="flex items-center gap-3 mb-4">
                             <div className={`w-3 h-3 rounded-full ${gameSettings?.isTimerRunning ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
                             <span className={`text-2xl font-bold ${gameSettings?.isTimerRunning ? 'text-white' : 'text-gray-400'}`}>
@@ -58,7 +58,7 @@ export default function DashboardHome({
                         <FiUsers className="w-24 h-24 text-blue-500" />
                     </div>
                     <div className="relative z-10">
-                        <div className="text-gray-400 text-sm font-semibold uppercase tracking-wider mb-2">Aktív Párok</div>
+                        <div className="text-gray-400 text-sm font-semibold uppercase tracking-wider mb-2">Aktív párok</div>
                         <div className="text-4xl font-bold text-white mb-2">{activePairsCount}</div>
                         <div className="text-gray-500 text-sm">Jelenleg a pályán</div>
                     </div>
@@ -96,7 +96,7 @@ export default function DashboardHome({
                     <div className="text-center relative z-10">
                         <div className="text-orange-500 font-semibold uppercase tracking-[0.2em] mb-4 flex items-center justify-center gap-2">
                             <FiClock className="w-5 h-5" />
-                            Következő Lokáció Frissítés
+                            Következő lokációfrissítés
                         </div>
                         <div className="text-7xl md:text-9xl font-bold text-white font-mono tracking-tighter tabular-nums drop-shadow-2xl">
                             {gameSettings.countdown.minutes}:{gameSettings.countdown.seconds.toString().padStart(2, '0')}

@@ -16,8 +16,32 @@ body {
   height: 100vh;
 }
 
+/* Remove focus outline from interactive elements */
+button:focus,
+button:focus-visible,
+input:focus,
+input:focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+button:active,
+input:active,
+select:active,
+textarea:active {
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-color: transparent !important;
+  --tw-ring-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
 
+/* Reset default focus styling */
+*:focus {
+  outline: none !important;
+}
 
-
-
-
+*:focus-visible {
+  outline: none !important;
+}

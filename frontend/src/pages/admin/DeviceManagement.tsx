@@ -1,8 +1,11 @@
-import { FiSmartphone, FiWifi, FiWifiOff, FiTrash2, FiLogOut } from 'react-icons/fi';
+import { useState } from 'react';
+import { FiSmartphone, FiTrash2, FiLogOut, FiSearch, FiWifi, FiWifiOff } from 'react-icons/fi';
+import { FaSortUp, FaSortDown } from 'react-icons/fa6';
 
 interface DeviceManagementProps {
     devices: any[];
     activeDevices: any[];
+    pairsList: any[];
     handleForceLogout: (deviceId: string) => void;
     handleDeleteDevice: (id: number) => void;
 }
@@ -10,28 +13,130 @@ interface DeviceManagementProps {
 export default function DeviceManagement({
     devices,
     activeDevices,
+    pairsList,
     handleForceLogout,
     handleDeleteDevice
 }: DeviceManagementProps) {
+
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
+    const [sortConfig, setSortConfig] = useState<{ key: 'imei' | 'pair' | 'lastSeen' | 'status' | 'fcm', direction: 'asc' | 'desc' }>({ key: 'imei', direction: 'asc' });
+
+    const filteredDevices = devices.filter(device => {
+        const isActive = activeDevices.some(d => d.imeiOrDeviceId === device.imeiOrDeviceId);
+        const matchesSearch =
+            device.imeiOrDeviceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (device.pairName && device.pairName.toLowerCase().includes(searchTerm.toLowerCase()));
+
+        const matchesStatus =
+            filterStatus === 'all' ? true :
+                filterStatus === 'online' ? isActive :
+                    !isActive;
+
+        return matchesSearch && matchesStatus;
+    }).sort((a, b) => {
+        const direction = sortConfig.direction === 'asc' ? 1 : -1;
+        const isActiveA = activeDevices.some(d => d.imeiOrDeviceId === a.imeiOrDeviceId);
+        const isActiveB = activeDevices.some(d => d.imeiOrDeviceId === b.imeiOrDeviceId);
+
+        switch (sortConfig.key) {
+            case 'imei':
+                return a.imeiOrDeviceId.localeCompare(b.imeiOrDeviceId) * direction;
+            case 'pair':
+                // Find pair for device
+                const getPairNumber = (dev: any) => {
+                    const pair = pairsList.find((p: any) => p.id === dev.pairId) || pairsList.find((p: any) => p.name === dev.pairName);
+                    return pair ? pair.assignedNumber : 0;
+                };
+                return (getPairNumber(a) - getPairNumber(b)) * direction;
+            case 'lastSeen':
+                const timeA = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
+                const timeB = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
+                return (timeA - timeB) * direction;
+            case 'status':
+                const statusA = isActiveA ? 1 : 0;
+                const statusB = isActiveB ? 1 : 0;
+                return (statusA - statusB) * direction;
+            case 'fcm':
+                const fcmA = a.hasFcmToken ? 1 : 0;
+                const fcmB = b.hasFcmToken ? 1 : 0;
+                return (fcmA - fcmB) * direction;
+            default:
+                return 0;
+        }
+    });
+
+    const handleSort = (key: any) => {
+        setSortConfig(current => ({
+            key,
+            direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
+    const getSortIcon = (key: string) => {
+        const isActive = sortConfig.key === key;
+        return (
+            <div className="flex flex-col ml-1">
+                <FaSortUp className={`w-3 h-3 -mb-3 ${isActive && sortConfig.direction === 'asc' ? 'text-orange-500' : 'text-gray-500 opacity-60'}`} />
+                <FaSortDown className={`w-3 h-3 ${isActive && sortConfig.direction === 'desc' ? 'text-orange-500' : 'text-gray-500 opacity-60'}`} />
+            </div>
+        );
+    };
+
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Stats Card */}
                 <div className="mw-card">
-                    <h3 className="text-gray-400 text-sm font-bold uppercase mb-2">Összes Eszköz</h3>
+                    <h3 className="text-gray-400 text-sm font-bold uppercase mb-2">Összes eszköz</h3>
                     <div className="text-3xl font-bold text-white">{devices.length} db</div>
                 </div>
                 <div className="mw-card">
-                    <h3 className="text-gray-400 text-sm font-bold uppercase mb-2">Aktív Eszközök</h3>
+                    <h3 className="text-gray-400 text-sm font-bold uppercase mb-2">Aktív eszközök</h3>
                     <div className="text-3xl font-bold text-green-500">{activeDevices.length} db</div>
                 </div>
             </div>
 
+            {/* Top Bar with Search & Filters */}
+            <div className="mw-card p-4">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="relative w-full md:w-96 group">
+                        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-orange-500 transition-colors" />
+                        <input
+                            type="text"
+                            placeholder="Keresés IMEI vagy Pár alapján..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 bg-black/20 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/50 focus:bg-white/5 transition-all"
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        {[
+                            { id: 'all', label: 'Összes', icon: null },
+                            { id: 'online', label: 'Online', icon: FiWifi },
+                            { id: 'offline', label: 'Offline', icon: FiWifiOff },
+                        ].map(filter => (
+                            <button
+                                key={filter.id}
+                                onClick={() => setFilterStatus(filter.id as any)}
+                                onMouseUp={(e) => e.currentTarget.blur()}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all focus:outline-none focus:ring-0 shadow-none ${filterStatus === filter.id
+                                    ? 'bg-orange-500 text-white'
+                                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                    }`}
+                            >
+                                {filter.icon && <filter.icon className="w-3.5 h-3.5" />}
+                                {filter.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
             <div className="mw-card overflow-hidden p-0">
-                <div className="p-6 border-b border-white/5">
+                <div className="p-6 border-b border-white/5 bg-white/5 flex justify-between items-center">
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
                         <FiSmartphone className="w-6 h-6 text-orange-500" />
-                        Eszközök Listája
+                        Eszközök listája
                     </h3>
                 </div>
 
@@ -39,78 +144,117 @@ export default function DeviceManagement({
                     <table className="mw-table">
                         <thead>
                             <tr>
-                                <th className="text-left">IMEI / ID</th>
-                                <th className="text-left">Pár</th>
-                                <th className="text-left">Utoljára látva</th>
-                                <th className="text-center">Státusz</th>
-                                <th className="text-center">FCM</th>
-                                <th className="text-right">Műveletek</th>
+
+                                <th className="text-left py-4 pl-6 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('imei')}>
+                                    <div className="flex items-center gap-1 text-gray-400 group-hover:text-white">
+                                        Eszköz (IMEI) {getSortIcon('imei')}
+                                    </div>
+                                </th>
+                                <th className="text-left py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('pair')}>
+                                    <div className="flex items-center gap-1 text-gray-400 group-hover:text-white">
+                                        Hozzárendelt Pár {getSortIcon('pair')}
+                                    </div>
+                                </th>
+                                <th className="text-left py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('lastSeen')}>
+                                    <div className="flex items-center gap-1 text-gray-400 group-hover:text-white">
+                                        Utoljára látva {getSortIcon('lastSeen')}
+                                    </div>
+                                </th>
+                                <th className="text-center py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('status')}>
+                                    <div className="flex items-center justify-center gap-1 text-gray-400 group-hover:text-white">
+                                        Státusz {getSortIcon('status')}
+                                    </div>
+                                </th>
+                                <th className="text-center py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('fcm')}>
+                                    <div className="flex items-center justify-center gap-1 text-gray-400 group-hover:text-white">
+                                        FCM {getSortIcon('fcm')}
+                                    </div>
+                                </th>
+                                <th className="text-right py-4 pr-6">Műveletek</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {devices.map((device) => {
-                                const isActive = activeDevices.some(d => d.imeiOrDeviceId === device.imeiOrDeviceId);
-                                // Fix for "No pair assigned" bug: check pairNumber as fallback even if name is missing
-                                const hasPair = device.pairId || device.pairNumber;
-
-                                return (
-                                    <tr key={device.id}>
-                                        <td className="font-mono text-sm text-gray-300">{device.imeiOrDeviceId}</td>
-                                        <td>
-                                            {hasPair ? (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="w-6 h-6 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center text-xs font-bold text-orange-500">
-                                                        {device.pairNumber}
-                                                    </span>
-                                                    <span className="text-white">{device.pairName || `Pár #${device.pairNumber}`}</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-gray-600 italic">Nincs hozzárendelve</span>
-                                            )}
-                                        </td>
-                                        <td className="text-gray-400 text-sm">
-                                            {device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : '-'}
-                                        </td>
-                                        <td className="text-center">
-                                            <span className={`mw-badge ${isActive ? 'active' : 'inactive'}`}>
-                                                {isActive ? <FiWifi /> : <FiWifiOff />}
-                                                {isActive ? 'Online' : 'Offline'}
-                                            </span>
-                                        </td>
-                                        <td className="text-center">
-                                            <span className={`mw-badge ${device.hasFcmToken ? 'active' : 'warning'}`}>
-                                                {device.hasFcmToken ? 'Aktív' : 'Hiányzik'}
-                                            </span>
-                                        </td>
-                                        <td className="text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {isActive && (
-                                                    <button
-                                                        onClick={() => handleForceLogout(device.imeiOrDeviceId)}
-                                                        className="p-2 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 rounded-lg transition-colors"
-                                                        title="Kijelentkeztetés"
-                                                    >
-                                                        <FiLogOut className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                                <button
-                                                    onClick={() => handleDeleteDevice(device.id)}
-                                                    className="p-2 text-gray-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                                                    title="Eszköz törlése"
-                                                >
-                                                    <FiTrash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                            {devices.length === 0 && (
+                        <tbody className="divide-y divide-white/5">
+                            {filteredDevices.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="text-center py-8 text-gray-500 italic">
-                                        Nincsenek regisztrált eszközök.
+                                    <td colSpan={6} className="text-center py-12 text-gray-500">
+                                        Nem található eszköz a keresési feltételekkel.
                                     </td>
                                 </tr>
+                            ) : (
+                                filteredDevices.map((device) => {
+                                    const isActive = activeDevices.some(d => d.imeiOrDeviceId === device.imeiOrDeviceId);
+                                    const hasPair = device.pairId || device.pairNumber;
+
+                                    return (
+                                        <tr key={device.id} className="group hover:bg-white/5 transition-colors">
+                                            <td className="pl-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 group-hover:text-white transition-colors">
+                                                        <FiSmartphone className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-mono font-bold text-white text-sm tracking-wider">{device.imeiOrDeviceId}</div>
+                                                        <div className="text-xs text-gray-500">ID: #{device.id}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="py-4">
+                                                {hasPair ? (
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="w-8 h-8 rounded-full bg-[#2a2a2a] border-[3px] border-orange-500 flex items-center justify-center font-bold text-white text-xs">
+                                                            {device.pairNumber}
+                                                        </span>
+                                                        <span className="text-gray-300 group-hover:text-white transition-colors">
+                                                            {device.pairName || <span className="text-gray-500 italic">Névtelen</span>}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-600 italic text-sm">Nincs hozzárendelve</span>
+                                                )}
+                                            </td>
+                                            <td className="py-4 text-sm text-gray-400 font-mono">
+                                                {device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : '-'}
+                                            </td>
+                                            <td className="text-center py-4">
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${isActive
+                                                    ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                                                    : 'bg-gray-500/10 text-gray-500 border border-gray-500/20'
+                                                    }`}>
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></div>
+                                                    {isActive ? 'Online' : 'Offline'}
+                                                </span>
+                                            </td>
+                                            <td className="text-center py-4">
+                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${device.hasFcmToken
+                                                    ? 'text-blue-400 bg-blue-500/10 border border-blue-500/20'
+                                                    : 'text-yellow-500 bg-yellow-500/10 border border-yellow-500/20'
+                                                    }`}>
+                                                    {device.hasFcmToken ? 'Aktív' : 'Hiányzik'}
+                                                </span>
+                                            </td>
+                                            <td className="text-right pr-6 py-4">
+                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
+                                                    {isActive && (
+                                                        <button
+                                                            onClick={() => handleForceLogout(device.imeiOrDeviceId)}
+                                                            className="p-2 text-orange-400 hover:text-white hover:bg-orange-500 rounded-lg transition-colors"
+                                                            title="Kényszerített kijelentkeztetés"
+                                                        >
+                                                            <FiLogOut className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => handleDeleteDevice(device.id)}
+                                                        className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                                                        title="Eszköz törlése"
+                                                    >
+                                                        <FiTrash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>

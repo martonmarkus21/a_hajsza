@@ -1,5 +1,11 @@
+import { useState, useEffect, useRef } from 'react';
 import { Pair } from '../types';
-import { FiMap, FiNavigation, FiExternalLink, FiX, FiLock, FiEdit, FiSend, FiStar } from 'react-icons/fi';
+import { FiNavigation, FiLock, FiShield, FiInfo, FiCheckCircle, FiXCircle, FiCrosshair, FiSend, FiX, FiExternalLink } from 'react-icons/fi';
+import { FaMapMarkerAlt, FaWaze } from 'react-icons/fa';
+import { HiPencil } from 'react-icons/hi2';
+import Modal from './Modal';
+import ConfirmationModal from './ConfirmationModal';
+import { useNotification } from '../contexts/NotificationContext';
 
 interface PairDetailsProps {
   pair: Pair | null;
@@ -8,8 +14,9 @@ interface PairDetailsProps {
   onClose: () => void;
   onCapture: (pairId: number) => void;
   onMw: (pairId: number) => void;
-  onAssignName: (pairId: number) => void;
+  onRename: (pairId: number, name: string) => void;
   onSendMessage: (pairId: number) => void;
+  onClosingStart?: () => void;
 }
 
 export default function PairDetails({
@@ -19,182 +26,290 @@ export default function PairDetails({
   onClose,
   onCapture,
   onMw,
-  onAssignName,
+  onRename,
   onSendMessage,
+  onClosingStart,
 }: PairDetailsProps) {
+  const { addNotification } = useNotification();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Track previous pair ID to detect actual pair switch vs just data update
+  const prevPairIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (pair) {
+      // Only reset edit name if we switched to a DIFFERENT pair
+      if (pair.id !== prevPairIdRef.current) {
+        setEditName(pair.name || '');
+        setIsEditing(false);
+        prevPairIdRef.current = pair.id;
+      } else if (!isEditing) {
+        // If staying on same pair and NOT editing, update name to reflect external changes
+        setEditName(pair.name || '');
+      }
+    }
+  }, [pair, isEditing]);
+
   if (!pair) return null;
 
-  // Determine background color and border color based on status (same as map markers)
-  const getBackgroundColor = () => {
-    if (pair.mostWanted) return '#f36f26';
-    return '#2a2a2a';
+  const isMw = pair.mostWanted;
+
+  const handleClose = () => {
+    if (onClosingStart) onClosingStart();
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+      setIsClosing(false); // Reset for next time if component mounts again
+    }, 300); // Match Modal animation duration
   };
-  
-  const backgroundColor = getBackgroundColor();
-  const borderColor = '#f36f26';
+
+  const handleSaveName = () => {
+    if (editName !== pair.name) {
+      onRename(pair.id, editName);
+      addNotification('success', 'Pár neve sikeresen módosítva');
+    }
+    setIsEditing(false);
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]" onClick={onClose}>
-      <div className="glass-effect rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl border border-orange-500/30" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-start mb-6">
-          <div className="flex items-center gap-4">
-            {/* Circle number badge (same style as map markers) */}
-            <div 
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                backgroundColor: backgroundColor,
-                border: `3px solid ${borderColor}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontWeight: 'bold',
-                fontSize: '24px',
-                boxShadow: '0 4px 12px rgba(243, 111, 38, 0.3)',
-              }}
-            >
-              {pair.assignedNumber}
+    <>
+      <Modal
+        isOpen={!!pair && !isClosing}
+        onClose={handleClose}
+        title={
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg bg-orange-500/20`}>
+              <FiInfo className="w-5 h-5 text-orange-400" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">Pár #{pair.assignedNumber}</h2>
-              {pair.name && (
-                <div className="text-lg text-gray-300 font-medium mt-1">{pair.name}</div>
-              )}
+              <h3 className="text-xl font-bold text-white">Pár részletei</h3>
+              <p className="text-xs text-gray-500 font-normal flex items-center gap-1.5">
+                Szám: <span className="font-mono text-gray-300 pt-0.5">{pair.assignedNumber}</span>
+              </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-800/50 text-gray-400 hover:text-white transition-colors"
-          >
-            <FiX className="w-6 h-6" />
-          </button>
+        }
+        variant="orange"
+      >
+        <div className="p-6 space-y-6">
+          {/* Alapadatok Section */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">Alapadatok</h4>
+            <div className="flex items-center gap-5 p-4 bg-white/5 rounded-2xl border border-white/5 relative group">
+              {/* Status Badge */}
+              {/* Status Badge - Updated style to match sidebar */}
+              <div className={`flex items-center justify-center w-20 h-20 rounded-full text-white font-bold text-4xl shadow-lg transition-all duration-300 border-[4px] border-orange-500 pb-1 ${isMw ? 'bg-orange-500' : 'bg-[#222]'}`}>
+                {pair.assignedNumber}
+              </div>
+
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2 min-h-[32px]">
+                  {isEditing ? (
+                    <div className="flex items-center gap-2 w-full max-w-xs relative bg-black/40 rounded-lg p-1 border border-orange-500/50">
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onBlur={handleSaveName}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveName();
+                          if (e.key === 'Escape') {
+                            setEditName(pair.name || '');
+                            setIsEditing(false);
+                          }
+                        }}
+                        autoFocus
+                        className="w-full bg-transparent px-2 py-0.5 text-white text-xl font-bold focus:outline-none placeholder-white/20"
+                        placeholder="Pár neve"
+                      />
+                      <button
+                        onMouseDown={(e) => {
+                          e.preventDefault(); // Prevent blur
+                          setEditName(pair.name || '');
+                          setIsEditing(false);
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1 hover:bg-white/10 rounded"
+                        title="Mégse"
+                      >
+                        <FiX className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <h2 className="text-2xl font-bold text-white leading-none">
+                        {pair.name || <span className="text-gray-500 italic">Névtelen pár</span>}
+                      </h2>
+                      <button
+                        onClick={() => {
+                          setEditName(pair.name || '');
+                          setIsEditing(true);
+                        }}
+                        className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                        title="Név szerkesztése"
+                      >
+                        <HiPencil className="w-5 h-5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {pair.captured && (
+                    <span className="px-2.5 py-1 bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <FiXCircle className="w-3.5 h-3.5" /> Elfogva
+                    </span>
+                  )}
+                  {isMw && (
+                    <span className="px-2.5 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/20 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <FiShield className="w-3.5 h-3.5 fill-current" /> Most Wanted
+                    </span>
+                  )}
+                  {pair.active && !pair.captured && (
+                    <span className="px-2.5 py-1 bg-green-500/20 text-green-400 border border-green-500/20 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                      <FiCheckCircle className="w-3.5 h-3.5" /> Aktív
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Helyzet Section */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">Helyzet és Navigáció</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Location */}
+              <div className="p-4 bg-black/20 rounded-xl border border-white/5 relative">
+                <div className="absolute top-4 right-4 text-blue-500/20">
+                  <FiCrosshair className="w-8 h-8" />
+                </div>
+                <label className="block text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Utolsó pozíció</label>
+                {pair.lastPosition && pair.lastPosition.lat != null && pair.lastPosition.lon != null ? (
+                  <>
+                    <div className="text-white font-medium mb-1">
+                      {new Date(pair.lastPosition.timestamp).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </div>
+                    <div className="text-xs text-blue-400 font-mono bg-blue-500/10 px-2 py-1 rounded w-fit">
+                      {pair.lastPosition.lat.toFixed(5)}, {pair.lastPosition.lon.toFixed(5)}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-gray-500 italic text-sm">Nincs adat</div>
+                )}
+              </div>
+
+              {/* Distance */}
+              <div className="p-4 bg-black/20 rounded-xl border border-white/5 relative">
+                <div className="absolute top-4 right-4 text-orange-500/20">
+                  <FiNavigation className="w-8 h-8" />
+                </div>
+                <label className="block text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Légvonalbeli távolság</label>
+                <div className="text-2xl font-bold gradient-text">
+                  {(() => {
+                    if (!browserLocation) return 'N/A';
+                    const pos = pair.distancePosition || pair.lastPosition;
+                    if (!pos || pos.lat == null || pos.lon == null) return 'N/A';
+                    const dist = calculateDistance(browserLocation.lat, browserLocation.lon, pos.lat, pos.lon);
+                    return dist < 1000 ? `${Math.round(dist)} m` : `${(dist / 1000).toFixed(1)} km`;
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation Actions */}
+            {pair.lastPosition && pair.lastPosition.lat != null && pair.lastPosition.lon != null && (
+              <div className="flex gap-3 mt-2">
+                <a
+                  href={`https://www.google.com/maps?q=${pair.lastPosition.lat},${pair.lastPosition.lon}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm relative group"
+                >
+                  <FaMapMarkerAlt className="w-4 h-4" />
+                  <span>Google Maps</span>
+                  <FiExternalLink className="w-3.5 h-3.5 opacity-50" />
+                </a>
+                <a
+                  href={`https://waze.com/ul?ll=${pair.lastPosition.lat},${pair.lastPosition.lon}&navigate=yes`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-3 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm relative group"
+                >
+                  <FaWaze className="w-5 h-5" />
+                  <span>Waze</span>
+                  <FiExternalLink className="w-3.5 h-3.5 opacity-50" />
+                </a>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="mb-6">
-          <div className="flex gap-2 flex-wrap">
-            {pair.captured && (
-              <span className="px-3 py-1.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-full text-sm font-bold shadow-lg">
-                Elfogva
-              </span>
-            )}
-            {pair.mostWanted && (
-              <span className="px-3 py-1.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-full text-sm font-bold shadow-lg flex items-center gap-1">
-                <FiStar className="w-3 h-3" />
-                MOST WANTED
-              </span>
-            )}
-            {pair.active && !pair.captured && (
-              <span className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-full text-sm font-bold shadow-lg">
-                Aktív
-              </span>
-            )}
+        {/* Footer Actions */}
+        <div className="p-6 border-t border-white/5 bg-black/20">
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowConfirmModal(true)}
+              disabled={pair.captured}
+              className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold transition-all flex items-center justify-center gap-2 focus:outline-none"
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <FiLock className="w-4 h-4" />
+              Bilincs
+            </button>
+            <div
+              id="mw-toggle-div"
+              onClick={() => {
+                onMw(pair.id);
+                addNotification('success', isMw ? 'Most Wanted státusz eltávolítva' : 'Most Wanted státusz beállítva');
+              }}
+              className={`flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer select-none ${isMw
+                ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
+                : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                }`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              style={{
+                border: 'none',
+                outline: 'none',
+                boxShadow: isMw ? 'inset 0 0 0 1px rgba(249, 115, 22, 0.2)' : 'none', // Simulated border
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              tabIndex={-1}
+            >
+              <FiShield className={`w-4 h-4 pointer-events-none ${isMw ? 'fill-current' : ''}`} />
+              <span className="pointer-events-none">{isMw ? 'MW' : 'MW'}</span>
+            </div>
+            {/* Send Message - Subtler Button */}
+            <button
+              onClick={() => onSendMessage(pair.id)}
+              className="flex-[1.2] py-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/20 rounded-xl font-bold transition-all flex items-center justify-center gap-2 focus:outline-none"
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <FiSend className="w-4 h-4" />
+              Üzenet
+            </button>
           </div>
         </div>
+      </Modal>
 
-        {pair.lastPosition && (
-          <div className="mb-6 glass-card rounded-xl p-4">
-            <div className="text-xs text-gray-400 mb-3 uppercase tracking-wide font-semibold">Utolsó pozíció</div>
-            <div className="text-sm font-medium text-gray-300 mb-2">
-              {new Date(pair.lastPosition.timestamp).toLocaleString('hu-HU')}
-            </div>
-            <div className="text-xs text-gray-500 mb-4 font-mono bg-gray-800/50 p-2 rounded border border-gray-700">
-              {pair.lastPosition.lat.toFixed(6)}, {pair.lastPosition.lon.toFixed(6)}
-            </div>
-            <div className="flex gap-2">
-              <a
-                href={`https://www.google.com/maps?q=${pair.lastPosition.lat},${pair.lastPosition.lon}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="modern-button flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm rounded-lg font-semibold shadow-lg"
-              >
-                <FiMap className="w-4 h-4" />
-                <span>Google Maps</span>
-                <FiExternalLink className="w-3 h-3" />
-              </a>
-              <a
-                href={`https://waze.com/ul?ll=${pair.lastPosition.lat},${pair.lastPosition.lon}&navigate=yes`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="modern-button flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm rounded-lg font-semibold shadow-lg"
-              >
-                <FiNavigation className="w-4 h-4" />
-                <span>Waze</span>
-                <FiExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-          </div>
-        )}
-
-        {browserLocation && (pair.distancePosition || pair.lastPosition) && (
-          <div className="mb-6 glass-card rounded-xl p-4">
-            <div className="text-xs text-gray-400 mb-2 uppercase tracking-wide font-semibold">Légvonalbeli távolság</div>
-            <div className="text-2xl font-bold text-orange-400">
-              {(() => {
-                const position = pair.distancePosition || pair.lastPosition;
-                if (!position) return 'N/A';
-                
-                const distanceMeters = calculateDistance(
-                  browserLocation.lat,
-                  browserLocation.lon,
-                  position.lat,
-                  position.lon
-                );
-                return distanceMeters < 1000 
-                  ? `${Math.round(distanceMeters)} m`
-                  : `${(distanceMeters / 1000).toFixed(1)} km`;
-              })()}
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3 mt-6">
-          <button
-            onClick={() => {
-              onCapture(pair.id);
-              onClose();
-            }}
-            disabled={pair.captured}
-            className="modern-button flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold shadow-lg disabled:from-gray-600 disabled:to-gray-500 disabled:cursor-not-allowed"
-          >
-            <FiLock className="w-4 h-4" />
-            <span>Bilincs</span>
-          </button>
-          <button
-            onClick={() => {
-              onMw(pair.id);
-            }}
-            className={`modern-button flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold shadow-lg ${
-              pair.mostWanted
-                ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            <FiStar className="w-4 h-4" />
-            <span>{pair.mostWanted ? 'MW eltávolítása' : 'MW jelölés'}</span>
-          </button>
-          <button
-            onClick={() => {
-              onAssignName(pair.id);
-            }}
-            className="modern-button flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold shadow-lg"
-          >
-            <FiEdit className="w-4 h-4" />
-            <span>Név szerkesztése</span>
-          </button>
-          <button
-            onClick={() => {
-              onSendMessage(pair.id);
-            }}
-            className="modern-button flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg font-semibold shadow-lg"
-          >
-            <FiSend className="w-4 h-4" />
-            <span>Üzenet</span>
-          </button>
-        </div>
-      </div>
-    </div>
+      {/* Confirmation Modal for Capture */}
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        title="Pár elfogása"
+        message={`Biztosan elfogottnak jelöli a(z) ${pair.assignedNumber}. számú párt?`}
+        onConfirm={async () => {
+          onCapture(pair.id);
+          setShowConfirmModal(false);
+          handleClose();
+        }}
+        onCancel={() => setShowConfirmModal(false)}
+        confirmLabel="Elfogás"
+        isDangerous={true}
+      />
+    </>
   );
 }
-

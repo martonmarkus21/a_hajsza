@@ -1,125 +1,113 @@
-import { useState } from 'react';
-import { FiX, FiSend } from 'react-icons/fi';
+import { useState, useEffect } from 'react';
+import { FiSend, FiMessageSquare } from 'react-icons/fi';
+import Modal from './Modal';
 
 interface SendMessageModalProps {
+  isOpen: boolean;
   pairId: number | null;
   pairAssignedNumber?: number | null;
   pairName?: string | null;
-  pairMostWanted?: boolean;
   onClose: () => void;
   onSend: (pairId: number | null, title: string, body: string) => void;
 }
 
 export default function SendMessageModal({
+  isOpen,
   pairId,
   pairAssignedNumber,
   pairName,
-  pairMostWanted,
   onClose,
   onSend,
 }: SendMessageModalProps) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
 
+  // Reset fields when opening
+  useEffect(() => {
+    if (isOpen) {
+      setTitle('');
+      setBody('');
+    }
+  }, [isOpen]);
+
   const handleSend = () => {
     if (title.trim() && body.trim()) {
       onSend(pairId, title.trim(), body.trim());
-      setTitle('');
-      setBody('');
       onClose();
     }
   };
 
-  // Determine background color and border color based on status (same as map markers)
-  const getBackgroundColor = () => {
-    if (pairMostWanted) return '#f36f26';
-    return '#2a2a2a';
-  };
-  
-  const backgroundColor = getBackgroundColor();
-  const borderColor = '#f36f26';
+  const modalTitle = (
+    <div className="flex items-start gap-4">
+      <div className="mt-1 p-2 rounded-lg bg-blue-500/20 flex items-center justify-center">
+        <FiMessageSquare className="w-5 h-5 text-blue-400" />
+      </div>
+      <div className="flex flex-col">
+        <span className="text-xl font-bold leading-tight text-white">
+          Üzenetküldés
+        </span>
+        <span className="text-sm font-normal text-gray-400">
+          {pairAssignedNumber
+            ? `${pairAssignedNumber}. pár részére${pairName ? ` (${pairName})` : ''}`
+            : 'Összes pár részére'}
+        </span>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]" onClick={onClose}>
-      <div className="glass-effect rounded-2xl p-8 max-w-lg w-full mx-4 shadow-2xl border border-orange-500/30" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center gap-3">
-            {pairAssignedNumber && (
-              <div 
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  backgroundColor: backgroundColor,
-                  border: `3px solid ${borderColor}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'white',
-                  fontWeight: 'bold',
-                  fontSize: '20px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                }}
-              >
-                {pairAssignedNumber}
-              </div>
-            )}
-            <h2 className="text-2xl font-bold text-white">
-              Üzenet küldése {pairAssignedNumber ? `párhoz #${pairAssignedNumber}${pairName ? ` (${pairName})` : ''}` : 'minden párnak'}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-800/50 text-gray-400 hover:text-white transition-colors"
-          >
-            <FiX className="w-6 h-6" />
-          </button>
-        </div>
-
-        <div className="mb-5">
-          <label className="block text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wide">
-            Cím
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={modalTitle}
+      variant="blue"
+      maxWidth="max-w-lg"
+    >
+      <div className="px-6 py-6 space-y-4">
+        <div>
+          <label className="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">
+            Üzenet tárgya
           </label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Üzenet címe"
-            className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+            placeholder="Adja meg az üzenet tárgyát..."
+            className="w-full h-[54px] px-5 bg-black/20 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50 focus:bg-white/5 transition-colors appearance-none text-base"
+            autoFocus
           />
         </div>
 
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wide">
-            Üzenet
+        <div>
+          <label className="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">
+            Üzenet szövege
           </label>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Üzenet szövege"
-            rows={5}
-            className="w-full px-4 py-3 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all resize-none"
+            placeholder="Írja be az üzenet tartalmát..."
+            rows={6}
+            className="w-full p-5 bg-black/20 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50 focus:bg-white/5 transition-colors resize-none text-base leading-relaxed"
           />
         </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={handleSend}
-            disabled={!title.trim() || !body.trim()}
-            className="modern-button flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-lg font-semibold shadow-lg disabled:from-gray-600 disabled:to-gray-500 disabled:cursor-not-allowed"
-          >
-            <FiSend className="w-4 h-4" />
-            <span>Küldés</span>
-          </button>
-          <button
-            onClick={onClose}
-            className="px-6 py-3 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 font-semibold transition-colors"
-          >
-            Mégse
-          </button>
-        </div>
       </div>
-    </div>
+
+      <div className="p-6 border-t border-white/5 bg-black/20 flex gap-4">
+        <button
+          onClick={onClose}
+          className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl font-bold transition-all text-base"
+        >
+          Mégse
+        </button>
+        <button
+          onClick={handleSend}
+          disabled={!title.trim() || !body.trim()}
+          className="flex-1 py-3.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-xl font-bold shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2 text-base disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <FiSend className="w-5 h-5" />
+          Küldés
+        </button>
+      </div>
+    </Modal>
   );
 }
-

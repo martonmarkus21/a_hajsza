@@ -1,26 +1,55 @@
+/* Global Scrollbar Theme */
+html {
+  color-scheme: dark;
+}
+
 .leaflet-container {
   height: 100%;
   width: 100%;
 }
 
 /* Modern Most Wanted Design */
-/* Custom Scrollbar */
+/* Custom Scrollbar For Webkit */
 ::-webkit-scrollbar {
   width: 8px;
+  /* Slightly wider for better usability */
   height: 8px;
+  background-color: #0f0f0f;
+  /* Dark background matches theme */
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: #0f0f0f;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #333;
   border-radius: 4px;
+  border: 2px solid #0f0f0f;
+  /* Creates padding effect */
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #f36f26;
+  /* Orange on hover */
+}
+
+/* Class-specific override if needed */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(243, 111, 38, 0.8);
 }
 
 .mw-card {
@@ -178,6 +207,173 @@
   background-clip: text;
 }
 
+/* Premium Loader Animations */
+.loader-container {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Content fade-in after loader */
+.content-fade-in {
+  animation: contentFadeIn 0.6s ease-out;
+}
+
+@keyframes contentFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.loader-logo {
+  animation: logoFloat 3s ease-in-out infinite;
+}
+
+@keyframes logoFloat {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.loader-spinner {
+  position: relative;
+}
+
+.loader-spinner::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(243, 111, 38, 0.3) 0%, transparent 50%);
+  animation: spinnerGlow 2s linear infinite;
+}
+
+@keyframes spinnerGlow {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loader-text {
+  animation: textPulse 2s ease-in-out infinite;
+}
+
+@keyframes textPulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.loader-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.loader-dot {
+  width: 8px;
+  height: 8px;
+  background: #f36f26;
+  border-radius: 50%;
+  animation: dotBounce 1.4s ease-in-out infinite;
+}
+
+.loader-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.loader-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loader-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes dotBounce {
+
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.loader-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  animation: ringPulse 2s ease-out infinite;
+}
+
+.loader-ring-1 {
+  width: 80px;
+  height: 80px;
+  border-color: rgba(243, 111, 38, 0.2);
+  animation-delay: 0s;
+}
+
+.loader-ring-2 {
+  width: 100px;
+  height: 100px;
+  border-color: rgba(243, 111, 38, 0.15);
+  animation-delay: 0.3s;
+}
+
+.loader-ring-3 {
+  width: 120px;
+  height: 120px;
+  border-color: rgba(243, 111, 38, 0.1);
+  animation-delay: 0.6s;
+}
+
+@keyframes ringPulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
 /* Modern Leaflet Controls */
 .leaflet-control-layers {
   background: rgba(26, 26, 26, 0.85) !important;
@@ -281,8 +477,8 @@
 /* Modern Leaflet Zoom Controls */
 .leaflet-control-zoom {
   border: none !important;
-  margin-top: 20px !important;
-  margin-left: 20px !important;
+  margin-bottom: 16px !important;
+  margin-right: 16px !important;
   box-shadow: none !important;
   /* Remove container shadow */
   background: none !important;
@@ -294,7 +490,7 @@
   background: rgba(26, 26, 26, 0.85) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(243, 111, 38, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   color: #f36f26 !important;
   transition: all 0.2s ease !important;
   width: 36px !important;
@@ -323,12 +519,20 @@
   /* Bring to front on hover */
 }
 
+.leaflet-control-zoom-in:hover {
+  border-bottom: 1px solid rgba(243, 111, 38, 0.4) !important;
+}
+
+.leaflet-control-zoom-out:hover {
+  border-top: 1px solid rgba(243, 111, 38, 0.4) !important;
+}
+
 .leaflet-control-zoom-in {
   border-top-left-radius: 12px !important;
   border-top-right-radius: 12px !important;
   border-bottom-left-radius: 0 !important;
   border-bottom-right-radius: 0 !important;
-  border-bottom: 1px solid rgba(243, 111, 38, 0.2) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
   margin-bottom: 0 !important;
 }
 
@@ -339,8 +543,7 @@
   border-top-right-radius: 0 !important;
   margin-top: -1px !important;
   /* Merge borders */
-  border-top: none !important;
-  /* Let the top button's border handle the divider */
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
 .sidebar-toggle-control .leaflet-control {
@@ -373,11 +576,514 @@
   border-color: rgba(243, 111, 38, 0.4) !important;
   transform: scale(1.05) !important;
 }
+
 /* Toast Animations */
 @keyframes slideInRight {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
+
 .animate-slide-in-right {
   animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-out-right {
+  animation: slideOutRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Toggle Switch */
+.mw-toggle {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.mw-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mw-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 9999px;
+  transition: all 0.3s ease;
+}
+
+.mw-toggle-slider::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  background: #ef4444;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.mw-toggle input:checked+.mw-toggle-slider {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.mw-toggle input:checked+.mw-toggle-slider::before {
+  left: calc(100% - 23px);
+  background: #10b981;
+}
+
+/* Role Selector */
+.mw-role-selector {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mw-role-btn {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.3);
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.mw-role-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.mw-role-btn.active {
+  background: linear-gradient(135deg, rgba(243, 111, 38, 0.2), rgba(243, 111, 38, 0.1));
+  border-color: #f36f26;
+  color: #f36f26;
+  box-shadow: 0 0 12px rgba(243, 111, 38, 0.2);
+}
+
+.mw-role-btn.officer.active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1));
+  border-color: #3b82f6;
+  color: #3b82f6;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+}
+
+/* Modal Sections */
+.mw-modal-section {
+  padding: 1rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mw-modal-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.mw-modal-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+/* Custom Dark Popup (Scoped to GeofenceManager) */
+.geofence-manager .leaflet-popup-content-wrapper,
+.geofence-manager .leaflet-popup-tip {
+  background: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  border-radius: 16px;
+}
+
+.geofence-manager .leaflet-popup-content {
+  margin: 0 !important;
+  width: 240px !important;
+  line-height: 1.5;
+}
+
+.geofence-manager .leaflet-popup-close-button {
+  display: none !important;
+}
+
+/* Hide Leaflet Attribution completely */
+.leaflet-control-attribution {
+  display: none !important;
+}
+
+
+/* Global Font Size Bump */
+:root {
+  font-size: 16px;
+}
+
+html,
+body {
+  font-size: 16px !important;
+  /* Force base size */
+}
+
+/* ... existing scrollbar ... */
+
+/* Notification Readability - Force Contrast */
+.Toastify__toast-theme--dark {
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 165, 0, 0.2) !important;
+}
+
+.Toastify__toast-body {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.Toastify__toast-theme--light {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ... existing styles ... */
+
+/* Popups */
+/* Custom Dark Popup */
+.custom-popup-dark .leaflet-popup-content-wrapper,
+.custom-popup-dark .leaflet-popup-tip {
+  background: rgba(20, 20, 20, 0.95) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 16px !important;
+}
+
+.custom-popup-dark .leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.5;
+  font-size: 14px;
+  color: white !important;
+  width: auto !important;
+  min-width: 200px;
+}
+
+/* Hide Default Leaflet Close Button */
+.custom-popup-dark .leaflet-popup-close-button {
+  display: none !important;
+}
+
+/* Floating Blob Animation (Complex Wander) */
+@keyframes blob-wander {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  25% {
+    transform: translate(20vw, -15vh) scale(1.2);
+  }
+
+  50% {
+    transform: translate(-15vw, 20vh) scale(0.9);
+  }
+
+  75% {
+    transform: translate(10vw, 5vh) scale(1.1);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes blob-wander-reverse {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  25% {
+    transform: translate(-20vw, 15vh) scale(0.9);
+  }
+
+  50% {
+    transform: translate(15vw, -20vh) scale(1.1);
+  }
+
+  75% {
+    transform: translate(-5vw, -10vh) scale(0.95);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob-wander 60s infinite ease-in-out;
+}
+
+.animate-blob-reverse {
+  animation: blob-wander-reverse 50s infinite ease-in-out;
+}
+
+@keyframes zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-zoom-in {
+  animation: zoom-in 0.5s ease-out forwards;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+
+/* Custom Light Popup */
+.custom-popup-light .leaflet-popup-content-wrapper,
+.custom-popup-light .leaflet-popup-tip {
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #1a1a1a !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2) !important;
+  border-radius: 16px !important;
+}
+
+.custom-popup-light .leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.5;
+  font-size: 14px;
+  color: #1a1a1a !important;
+  width: auto !important;
+  min-width: 200px;
+}
+
+.custom-popup-light .leaflet-popup-close-button {
+  display: none !important;
+}
+
+/* Header divider flash fix */
+.header-divider {
+  transition: opacity 0.3s ease;
+}
+
+/* Restore Zoom Control Visibility */
+.leaflet-bottom.leaflet-right {
+  display: block !important;
+  /* Was hidden by mistake */
+}
+
+
+
+/* ============================================
+   Custom Map Layer Selector Styles
+   ============================================ */
+
+.map-layer-selector-container {
+  margin-top: 70px !important;
+  margin-right: 10px !important;
+  z-index: 1000 !important;
+}
+
+.map-layer-selector {
+  position: relative;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.map-layer-main-btn {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(26, 26, 26, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(243, 111, 38, 0.2);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+.map-layer-main-btn:hover,
+.map-layer-main-btn:active {
+  background: rgba(26, 26, 26, 0.95);
+  border-color: rgba(243, 111, 38, 0.4);
+}
+
+.map-layer-main-btn:focus,
+.map-layer-main-btn:active {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+.map-layer-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  border-radius: 6px;
+  color: white;
+}
+
+.map-layer-label {
+  min-width: 48px;
+}
+
+.map-layer-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.map-layer-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.map-layer-options {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  background: rgba(30, 30, 30, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 6px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px) scale(0.95);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.map-layer-options.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+.map-layer-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.map-layer-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.map-layer-option.active {
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+}
+
+.map-layer-option-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  transition: all 0.15s ease;
+}
+
+.map-layer-option:hover .map-layer-option-icon {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.map-layer-option.active .map-layer-option-icon {
+  background: rgba(249, 115, 22, 0.2);
+}
+
+.map-layer-check {
+  margin-left: auto;
+  color: #f97316;
+  display: flex;
+  align-items: center;
+}
+
+/* Sidebar toggle button positioning - ensure it's below the layer selector */
+.sidebar-toggle-control {
+  margin-top: 10px !important;
+  margin-right: 10px !important;
+}
+
+.map-layer-options.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }

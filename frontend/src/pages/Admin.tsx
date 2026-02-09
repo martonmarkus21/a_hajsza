@@ -1,14 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FiEdit, FiCheckCircle, FiUser, FiShield, FiPlus, FiMail } from 'react-icons/fi';
 
 // New Components
+import { usePairs } from '../hooks/usePairs';
+import { useSocket } from '../hooks/useSocket';
 import AdminLayout from './admin/AdminLayout';
 import DashboardHome from './admin/DashboardHome';
 import GameControl from './admin/GameControl';
+import Modal from '../components/Modal';
 import PairsManagement from './admin/PairsManagement';
 import DeviceManagement from './admin/DeviceManagement';
 import UserManagement from './admin/UserManagement';
 import GeofenceManager from './admin/GeofenceManager';
+import PairDetails from '../components/PairDetails';
 
 // Shared Components
 import SendMessageModal from '../components/SendMessageModal';
@@ -18,6 +23,10 @@ import { NotificationProvider, useNotification } from '../contexts/NotificationC
 // Styles
 import 'leaflet/dist/leaflet.css';
 
+
+// Import Pair from types
+import { Pair } from '../types';
+
 interface Geofence {
   id: number;
   name: string;
@@ -26,22 +35,16 @@ interface Geofence {
   radiusM: number;
   active: boolean;
   geofenceType: string;
+  metadataJson?: {
+    polygon?: number[][];
+    type?: string;
+    countyCode?: string;
+    countyName?: string;
+  };
 }
 
-interface Pair {
-  id: number;
-  assignedNumber: number;
-  name: string | null;
-  active: boolean;
-  lastPosition?: {
-    lat: number;
-    lon: number;
-    timestamp: string;
-  } | null;
-  captured?: boolean;
-  mostWanted?: boolean;
-  hasActiveDevice?: boolean;
-}
+// Local Pair interface removed to use global Pair type
+
 
 interface Device {
   id: number;
@@ -68,6 +71,8 @@ function AdminContent() {
   const navigate = useNavigate();
   const { addNotification } = useNotification();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedPair, setSelectedPair] = useState<Pair | null>(null);
+  const [browserLocation, setBrowserLocation] = useState<{ lat: number; lon: number } | null>(null);
 
   // Generic Confirmation State
   const [confirmation, setConfirmation] = useState<{
@@ -86,9 +91,182 @@ function AdminContent() {
     confirmLabel: 'Igen'
   });
 
-  // Data States
   const [geofences, setGeofences] = useState<Geofence[]>([]);
+  /* Real-time Pairs Logic */
+  const { pairs: initialPairs, refetch: fetchPairs } = usePairs();
   const [pairs, setPairs] = useState<Pair[]>([]);
+  const { socket } = useSocket();
+
+  // Sync pairs from hook BUT preserve socket-updated distancePosition
+  // This prevents the jumping issue where API data overwrites socket data
+  useEffect(() => {
+    if (initialPairs.length > 0) {
+      setPairs(prevPairs => {
+        // Merge API data with existing socket-updated data
+        return initialPairs.map(apiPair => {
+          const existing = prevPairs.find(p => p.id === apiPair.id);
+          if (existing) {
+            // Preserve distancePosition from socket (distanceUpdate events)
+            // Preserve lastPosition from socket (positionUpdate events)
+            return {
+              ...apiPair,
+              lastPosition: existing.lastPosition || apiPair.lastPosition,
+              distancePosition: existing.distancePosition, // Keep socket-updated distance position
+            };
+          }
+          return apiPair;
+        });
+      });
+    }
+  }, [initialPairs]);
+
+  // Listen for real-time position updates
+  useEffect(() => {
+    if (!socket) return;
+
+    // Handle distance updates - sent continuously (every second) for distance calculation
+    // This updates `distancePosition` which is used for distance calculation in PairDetails
+    const handleDistanceUpdate = (data: { pairId: number; lat: number; lon: number; timestamp: string }) => {
+      if (data.lat == null || data.lon == null) {
+        console.warn('Received invalid distance data:', data);
+        return;
+      }
+
+      setPairs(prevPairs => prevPairs.map(p => {
+        if (p.id !== data.pairId) return p;
+
+        return {
+          ...p,
+          distancePosition: {
+            lat: data.lat,
+            lon: data.lon,
+            timestamp: data.timestamp || new Date().toISOString()
+          }
+        };
+      }));
+    };
+
+    // Handle position updates - only sent when timer allows (for map display)
+    // Data structure: { pairId, lat, lon, timestamp } - NOT nested under 'position'
+    const handlePositionUpdate = (data: { pairId: number; lat: number; lon: number; timestamp: string }) => {
+      if (data.lat == null || data.lon == null) {
+        console.warn('Received invalid position data:', data);
+        return;
+      }
+
+      setPairs(prevPairs => prevPairs.map(p => {
+        if (p.id === data.pairId) {
+          return {
+            ...p,
+            lastPosition: {
+              lat: data.lat,
+              lon: data.lon,
+              timestamp: data.timestamp || new Date().toISOString()
+            }
+          };
+        }
+        return p;
+      }));
+    };
+
+    socket.on('distanceUpdate', handleDistanceUpdate);
+    socket.on('positionUpdate', handlePositionUpdate);
+
+    return () => {
+      socket.off('distanceUpdate', handleDistanceUpdate);
+      socket.off('positionUpdate', handlePositionUpdate);
+    };
+  }, [socket]);
+
+
+
+  // Calculate distance helper
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; // metres
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) *
+      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  };
+
+  // Browser location - same logic as App.tsx for continuous updates
+  const watchIdRef = useRef<number | null>(null);
+  const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      // Clean up any existing watch/interval first
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      if (locationIntervalRef.current !== null) {
+        clearInterval(locationIntervalRef.current);
+        locationIntervalRef.current = null;
+      }
+
+      // Helper function to save location
+      const saveLocation = (lat: number, lon: number) => {
+        setBrowserLocation({ lat, lon });
+      };
+
+      // Get initial position immediately
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          saveLocation(position.coords.latitude, position.coords.longitude);
+        },
+        (error) => {
+          console.error('Error getting browser location:', error);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+
+      // Watch position for continuous updates
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          saveLocation(position.coords.latitude, position.coords.longitude);
+        },
+        (error) => {
+          console.error('Error watching browser location:', error);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+      watchIdRef.current = watchId;
+
+      // Also update browser location every second using interval as fallback
+      const locationInterval = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            saveLocation(position.coords.latitude, position.coords.longitude);
+          },
+          (error) => {
+            console.error('Error getting browser location:', error);
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      }, 1000); // Update every second
+      locationIntervalRef.current = locationInterval;
+
+      return () => {
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+        }
+        if (locationIntervalRef.current !== null) {
+          clearInterval(locationIntervalRef.current);
+          locationIntervalRef.current = null;
+        }
+      };
+    }
+  }, []);
   const [devices, setDevices] = useState<Device[]>([]);
   const [activeDevices, setActiveDevices] = useState<Device[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -129,6 +307,7 @@ function AdminContent() {
   const [isEditingInterval, setIsEditingInterval] = useState(false);
   const [mapClickMode, setMapClickMode] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
+  const [showCreatePairModal, setShowCreatePairModal] = useState(false);
   const [selectedMessagePair, setSelectedMessagePair] = useState<Pair | null>(null);
 
   // Helper to check admin role
@@ -200,17 +379,7 @@ function AdminContent() {
     } catch (error) { console.error(error); }
   };
 
-  const fetchPairs = async () => {
-    try {
-      const response = await fetch('http://localhost:3000/api/pairs', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setPairs(data.pairs || []);
-      }
-    } catch (error) { console.error(error); }
-  };
+  // fetchPairs removed, handled by usePairs hook
 
   const fetchDevices = async () => {
     try {
@@ -297,15 +466,18 @@ function AdminContent() {
       setNewPair({ assignedNumber: 1, name: '' });
       addNotification('success', 'Pár létrehozva');
     } else {
-      addNotification('error', 'Hiba a pár létrehozásakor');
+      const errorMessage = data.message === 'Pair with this number already exists'
+        ? 'Ezzel a számmal már létezik pár'
+        : (data.message || 'Hiba a pár létrehozásakor');
+      addNotification('error', errorMessage);
     }
   };
 
   const deletePair = async (id: number) => {
     setConfirmation({
       isOpen: true,
-      title: 'Pár Törlése',
-      message: 'Biztosan törölni szeretnéd ezt a párt? A művelet végleges.',
+      title: 'Pár törlése',
+      message: 'Biztosan törli a kiválasztott párt? A művelet nem vonható vissza.',
       isDangerous: true,
       confirmLabel: 'Törlés',
       action: async () => {
@@ -320,9 +492,12 @@ function AdminContent() {
     });
   };
 
-  const handleEditPairName = async (pair: Pair) => {
-    const name = prompt('Adj meg új nevet:', pair.name || '');
-    if (name === null) return;
+  const handleEditPairName = async (pair: Partial<Pair>) => {
+    // If name is not provided in the object, we don't do anything (or could throw error)
+    // The UI handles the input now.
+    const name = pair.name;
+    if (name === undefined || name === null) return;
+
     await fetch(`http://localhost:3000/api/pairs/${pair.id}/name`, {
       method: 'PUT',
       headers: {
@@ -354,24 +529,39 @@ function AdminContent() {
     fetchPairs();
   };
 
+  // Direct capture for PairDetails modal (which has its own confirmation)
+  const handleCaptureDirect = async (pairId: number) => {
+    try {
+      const response = await fetch('http://localhost:3000/api/capture', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ pairId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Hiba az elfogás során');
+      }
+
+      fetchPairs();
+      addNotification('success', 'Elfogás rögzítve');
+    } catch (error) {
+      console.error('Capture error:', error);
+      addNotification('error', 'Hiba történt az elfogás során');
+    }
+  };
+
   const handleCapture = async (pairId: number) => {
     setConfirmation({
       isOpen: true,
-      title: 'Pár Elfogása',
-      message: 'Megerősíted az elfogást?',
+      title: 'Pár elfogása',
+      message: 'Megerősíti a páros elfogását?',
       isDangerous: false,
       confirmLabel: 'Elfogás',
       action: async () => {
-        await fetch('http://localhost:3000/api/capture', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({ pairId }),
-        });
-        fetchPairs();
-        addNotification('success', 'Elfogás rögzítve');
+        await handleCaptureDirect(pairId);
         setConfirmation(prev => ({ ...prev, isOpen: false }));
       }
     });
@@ -380,8 +570,8 @@ function AdminContent() {
   const handleForceLogout = async (deviceId: string) => {
     setConfirmation({
       isOpen: true,
-      title: 'Kényszerített Kijelentkeztetés',
-      message: 'Biztosan kijelentkezteted az eszközt távolról?',
+      title: 'Kényszerített kijelentkeztetés',
+      message: 'Biztosan kijelentkezteti a kiválasztott eszközt? A munkamenet azonnal megszakad.',
       isDangerous: true,
       confirmLabel: 'Kijelentkeztetés',
       action: async () => {
@@ -410,8 +600,8 @@ function AdminContent() {
   const handleDeleteDevice = async (deviceId: number) => {
     setConfirmation({
       isOpen: true,
-      title: 'Eszköz Törlése',
-      message: 'Biztosan törölni szeretnéd ezt az eszközt? A művelet végleges.',
+      title: 'Eszköz törlése',
+      message: 'Biztosan törli a kiválasztott eszközt? A művelet nem vonható vissza.',
       isDangerous: true,
       confirmLabel: 'Törlés',
       action: async () => {
@@ -476,8 +666,8 @@ function AdminContent() {
   const deleteUser = (id: number, username: string) => {
     setConfirmation({
       isOpen: true,
-      title: 'Felhasználó Törlése',
-      message: `Biztosan törölni szeretnéd a következő felhasználót: ${username}? Ez a művelet nem vonható vissza.`,
+      title: 'Felhasználó törlése',
+      message: `Biztosan törli a felhasználót (${username})? A művelet nem vonható vissza.`,
       isDangerous: true,
       confirmLabel: 'Törlés',
       action: async () => {
@@ -522,17 +712,29 @@ function AdminContent() {
     };
     if (editUserForm.password) updateData.password = editUserForm.password;
 
-    await fetch(`http://localhost:3000/api/users/${editingUser.id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify(updateData),
-    });
-    setShowUserModal(false);
-    fetchUsers();
+    try {
+      const res = await fetch(`http://localhost:3000/api/users/${editingUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      if (res.ok) {
+        setShowUserModal(false);
+        fetchUsers();
+        addNotification('success', 'Felhasználó sikeresen frissítve');
+      } else {
+        const err = await res.json();
+        addNotification('error', `Hiba: ${err.message || 'Ismeretlen hiba'}`);
+      }
+    } catch (error) {
+      addNotification('error', 'Hálózati hiba történt');
+    }
   };
+
 
   const createGeofence = async () => {
     if (!newGeofence.name) {
@@ -565,8 +767,8 @@ function AdminContent() {
   const handleDeleteGeofence = async (id: number, name: string) => {
     setConfirmation({
       isOpen: true,
-      title: 'Geofence Törlése',
-      message: `Törlöd a zónát: ${name}?`,
+      title: 'Geofence törlése',
+      message: `Biztosan törli a zónát (${name})? A művelet nem vonható vissza.`,
       isDangerous: true,
       confirmLabel: 'Törlés',
       action: async () => {
@@ -575,21 +777,63 @@ function AdminContent() {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
         fetchGeofences();
+        addNotification('success', 'Zóna törölve');
         setConfirmation(prev => ({ ...prev, isOpen: false }));
       }
     });
   };
 
+  const handleActivateHungary = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/api/game-area', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ activeCounties: [], activeRegions: [] }),
+      });
+      if (res.ok) {
+        fetchGeofences();
+        addNotification('success', 'Magyarország aktiválva');
+      } else {
+        addNotification('error', 'Hiba történt');
+      }
+    } catch (error) {
+      addNotification('error', 'Hálózati hiba');
+    }
+  };
+
+  const handleToggleHungary = async (active: boolean) => {
+    // Find Hungary geofence
+    const hungaryGeofence = geofences.find(g => g.name === 'Magyarország' && g.geofenceType === 'game_area');
+    if (hungaryGeofence) {
+      await handleToggleGeofence(hungaryGeofence.id, active);
+      if (!active) {
+        addNotification('info', 'Magyarország deaktiválva');
+      }
+    }
+  };
+
   const handleSendMessage = async (pairId: number | null, title: string, body: string) => {
-    await fetch('http://localhost:3000/api/messages/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({ pairId, title, body }),
-    });
-    addNotification('success', 'Üzenet elküldve');
+    try {
+      const res = await fetch('http://localhost:3000/api/messages/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ pairId, title, body }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        addNotification('success', 'Üzenet sikeresen elküldve');
+      } else {
+        addNotification('error', data.message || 'Hiba történt az üzenet küldésekor');
+      }
+    } catch (error) {
+      addNotification('error', 'Hálózati hiba történt az üzenet küldésekor');
+    }
   };
 
   const handleLogout = () => {
@@ -597,8 +841,30 @@ function AdminContent() {
     navigate('/login');
   };
 
+  const headerActions = activeTab === 'pairs' ? (
+    <>
+      <button
+        onClick={() => {
+          setSelectedMessagePair(null);
+          setShowMessageModal(true);
+        }}
+        className="flex-none px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-xl font-bold shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2"
+      >
+        <FiMail className="w-5 h-5" />
+        Üzenet mindenkinek
+      </button>
+      <button
+        onClick={() => setShowCreatePairModal(true)}
+        className="flex-none px-6 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white rounded-xl font-bold shadow-lg shadow-orange-900/20 transition-all flex items-center justify-center gap-2"
+      >
+        <FiPlus className="w-5 h-5" />
+        Új pár
+      </button>
+    </>
+  ) : null;
+
   // Render Content based on active Tab
-  const renderContent = () => {
+  const renderContent = (_sidebarOpen: boolean = true) => {
     switch (activeTab) {
       case 'dashboard':
         return (
@@ -637,6 +903,8 @@ function AdminContent() {
             }}
             handleMw={handleMw}
             handleCapture={handleCapture}
+            showCreateModal={showCreatePairModal}
+            setShowCreateModal={setShowCreatePairModal}
           />
         );
       case 'devices':
@@ -644,6 +912,7 @@ function AdminContent() {
           <DeviceManagement
             devices={devices}
             activeDevices={activeDevices}
+            pairsList={pairs}
             handleForceLogout={handleForceLogout}
             handleDeleteDevice={handleDeleteDevice}
           />
@@ -676,12 +945,18 @@ function AdminContent() {
             }}
             getGeofenceTypeLabel={(type: string) => {
               const types: Record<string, string> = {
+                game_area: 'Játékterület',
+                scenario: 'Scenarió',
+                crossing_point: 'Átkelési pont',
                 safe_zone: 'Biztonsági Zóna',
                 danger_zone: 'Veszélyzóna'
               };
               return types[type] || type;
             }}
             pairs={pairs}
+            onActivateHungary={handleActivateHungary}
+            onToggleHungary={handleToggleHungary}
+            onPairSelect={setSelectedPair}
           />
         );
       default:
@@ -695,75 +970,190 @@ function AdminContent() {
       setActiveTab={setActiveTab}
       loading={loading}
       onLogout={handleLogout}
+      headerActions={headerActions}
     >
-      {renderContent()}
+      {(sidebarOpen: boolean) => (
+        <>
+          {renderContent(sidebarOpen)}
 
-      {/* Global Modals */}
-      {showMessageModal && (
-        <SendMessageModal
-          pairId={selectedMessagePair?.id || null}
-          pairAssignedNumber={selectedMessagePair?.assignedNumber}
-          pairName={selectedMessagePair?.name}
-          pairMostWanted={selectedMessagePair?.mostWanted}
-          onClose={() => {
-            setShowMessageModal(false);
-            setSelectedMessagePair(null);
-          }}
-          onSend={handleSendMessage}
-        />
-      )}
+          {/* Global Modals */}
+          <SendMessageModal
+            isOpen={showMessageModal}
+            pairId={selectedMessagePair?.id || null}
+            pairAssignedNumber={selectedMessagePair?.assignedNumber}
+            pairName={selectedMessagePair?.name}
+            onClose={() => setShowMessageModal(false)}
+            onSend={handleSendMessage}
+          />
 
-      {/* User Edit Modal */}
-      {showUserModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999]">
-          <div className="mw-card w-full max-w-md">
-            <h3 className="text-xl font-bold text-white mb-4">Felhasználó Szerkesztése</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-gray-400 text-xs font-bold mb-1">Felhasználónév</label>
-                <input
-                  className="mw-input"
-                  value={editUserForm.username}
-                  onChange={(e) => setEditUserForm({ ...editUserForm, username: e.target.value })}
-                />
+          {/* Pair Details Modal from Map Interaction */}
+          <PairDetails
+            pair={pairs.find(p => p.id === selectedPair?.id) || selectedPair}
+            browserLocation={browserLocation}
+
+            calculateDistance={calculateDistance}
+            onClose={() => setSelectedPair(null)}
+            onCapture={handleCaptureDirect}
+            onMw={handleMw}
+            onRename={(id, name) => handleEditPairName({ id, name })}
+            onSendMessage={(id) => {
+              setSelectedPair(null);
+              setSelectedMessagePair(pairs.find(p => p.id === id) || null);
+              setShowMessageModal(true);
+            }}
+          />
+
+          {/* User Edit Modal */}
+          <Modal
+            isOpen={showUserModal}
+            onClose={() => setShowUserModal(false)}
+            title={
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-500/20 rounded-lg">
+                  <FiEdit className="w-5 h-5 text-orange-500" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">
+                    {editingUser?.username}
+                  </h3>
+                  <div className="flex items-center gap-3 text-xs text-gray-500 font-normal">
+                    <span>Létrehozva: {editingUser && new Date(editingUser.createdAt).toLocaleDateString()}</span>
+                    {editingUser?.updatedAt && (
+                      <>
+                        <span className="w-1 h-1 bg-gray-500 rounded-full"></span>
+                        <span>Módosítva: {new Date(editingUser.updatedAt).toLocaleDateString()}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-gray-400 text-xs font-bold mb-1">Email</label>
-                <input
-                  className="mw-input"
-                  value={editUserForm.email}
-                  onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
-                />
+            }
+          >
+
+            <div className="p-6 space-y-6">
+              {/* Alapadatok */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 pb-2">Alapadatok</h4>
+                <div>
+                  <label className="block text-gray-400 text-xs font-bold mb-1.5 uppercase tracking-wider">Felhasználónév</label>
+                  <input
+                    type="text"
+                    value={editUserForm.username}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, username: e.target.value })}
+                    className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/50 focus:bg-white/5 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-xs font-bold mb-1.5 uppercase tracking-wider">Email cím</label>
+                  <input
+                    type="email"
+                    value={editUserForm.email}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, email: e.target.value })}
+                    className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/50 focus:bg-white/5 transition-all"
+                    placeholder="Nem kötelező"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-gray-400 text-xs font-bold mb-1">Jelszó (üresen hagyva nem változik)</label>
-                <input
-                  type="password"
-                  className="mw-input"
-                  value={editUserForm.password}
-                  onChange={(e) => setEditUserForm({ ...editUserForm, password: e.target.value })}
-                />
+
+              {/* Biztonság */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 pb-2">Biztonság</h4>
+                <div>
+                  <label className="block text-gray-400 text-xs font-bold mb-1.5 uppercase tracking-wider">Jelszó</label>
+                  <input
+                    type="password"
+                    value={editUserForm.password}
+                    onChange={(e) => setEditUserForm({ ...editUserForm, password: e.target.value })}
+                    className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/50 focus:bg-white/5 transition-all text-sm font-mono tracking-widest"
+                    placeholder="••••••••"
+                  />
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mt-1.5 ml-1">
+                    Hagyja üresen, ha nem változtat
+                  </p>
+                </div>
               </div>
-              <div className="flex gap-4">
-                <button onClick={submitUserEdit} className="flex-1 py-2 bg-orange-500 rounded-lg font-bold text-white hover:bg-orange-600">Mentés</button>
-                <button onClick={() => setShowUserModal(false)} className="flex-1 py-2 bg-gray-700 rounded-lg text-gray-300 hover:bg-gray-600">Mégse</button>
+
+              {/* Beállítások */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-white/5 pb-2">Beállítások</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-400 text-xs font-bold mb-1.5 uppercase tracking-wider">Szerepkör</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setEditUserForm({ ...editUserForm, role: 'officer' })}
+                        className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${editUserForm.role === 'officer'
+                          ? 'bg-blue-500/20 border-blue-500 text-blue-400'
+                          : 'bg-white/5 border-transparent text-gray-500 hover:bg-white/10'
+                          }`}
+                      >
+                        <FiUser className="w-6 h-6" />
+                        <span className="font-bold text-sm">Officer</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditUserForm({ ...editUserForm, role: 'admin' })}
+                        className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all ${editUserForm.role === 'admin'
+                          ? 'bg-orange-500/20 border-orange-500 text-orange-500'
+                          : 'bg-white/5 border-transparent text-gray-500 hover:bg-white/10'
+                          }`}
+                      >
+                        <FiShield className="w-6 h-6" />
+                        <span className="font-bold text-sm">Admin</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs font-bold mb-1.5 uppercase tracking-wider">Státusz</label>
+                    <div className="flex items-center h-[74px] px-4 bg-black/20 border border-white/10 rounded-xl justify-center">
+                      <button
+                        onClick={() => setEditUserForm({ ...editUserForm, active: !editUserForm.active })}
+                        className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none ${editUserForm.active ? 'bg-green-500' : 'bg-red-500'
+                          }`}
+                      >
+                        <span
+                          className={`absolute left-1 top-1 w-6 h-6 bg-white rounded-full transition-transform duration-200 shadow-md ${editUserForm.active ? 'translate-x-6' : 'translate-x-0'
+                            }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Generic Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={confirmation.isOpen}
-        title={confirmation.title}
-        message={confirmation.message}
-        onConfirm={confirmation.action}
-        onCancel={() => setConfirmation(prev => ({ ...prev, isOpen: false }))}
-        isDangerous={confirmation.isDangerous}
-        confirmLabel={confirmation.confirmLabel}
-      />
-    </AdminLayout>
+            <div className="p-6 border-t border-white/5 bg-black/20 flex gap-3">
+              <button
+                onClick={() => setShowUserModal(false)}
+                className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl font-bold transition-all"
+              >
+                Mégse
+              </button>
+              <button
+                onClick={submitUserEdit}
+                className="flex-1 py-3 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white rounded-xl font-bold shadow-lg shadow-orange-900/20 transition-all flex items-center justify-center gap-2"
+              >
+                <FiCheckCircle className="w-5 h-5" />
+                Mentés
+              </button>
+            </div>
+          </Modal>
+
+
+          {/* Generic Confirmation Modal */}
+          <ConfirmationModal
+            isOpen={confirmation.isOpen}
+            title={confirmation.title}
+            message={confirmation.message}
+            onConfirm={confirmation.action}
+            onCancel={() => setConfirmation(prev => ({ ...prev, isOpen: false }))}
+            isDangerous={confirmation.isDangerous}
+            confirmLabel={confirmation.confirmLabel}
+          />
+        </>
+      )}
+    </AdminLayout >
   );
 }
 

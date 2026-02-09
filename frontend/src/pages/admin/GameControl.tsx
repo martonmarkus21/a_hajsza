@@ -27,7 +27,7 @@ export default function GameControl({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
-                    <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">Frissítési Intervallum (perc)</label>
+                    <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">Frissítési intervallum (perc)</label>
                     <div className="flex gap-2">
                         <input
                             type="number"
@@ -58,7 +58,7 @@ export default function GameControl({
                 </div>
 
                 <div>
-                    <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">Utolsó Frissítés</label>
+                    <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">Utolsó frissítés</label>
                     <div className="text-white font-mono text-lg bg-black/20 p-3 rounded-lg border border-white/5">
                         {gameSettings?.lastLocationUpdate
                             ? new Date(gameSettings.lastLocationUpdate).toLocaleTimeString()

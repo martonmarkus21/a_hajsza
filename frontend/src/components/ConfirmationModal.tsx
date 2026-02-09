@@ -1,4 +1,5 @@
-import { FiAlertTriangle } from 'react-icons/fi';
+import { FiAlertTriangle, FiX } from 'react-icons/fi';
+import { useEffect, useState } from 'react';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -21,36 +22,79 @@ export default function ConfirmationModal({
   onConfirm,
   onCancel
 }: ConfirmationModalProps) {
-  if (!isOpen) return null;
+  const [isVisible, setIsVisible] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsVisible(true);
+      setIsAnimating(false);
+    } else if (isVisible) {
+      setIsAnimating(true);
+      const timer = setTimeout(() => {
+        setIsVisible(false);
+        setIsAnimating(false);
+      }, 200); // Match animation duration
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  if (!isVisible && !isOpen) return null;
+
+  const theme = isDangerous ? {
+    iconWrapper: 'bg-red-500/20',
+    icon: 'text-red-500',
+    headerGradient: 'from-red-500/10',
+    button: 'bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 shadow-red-900/20'
+  } : {
+    iconWrapper: 'bg-orange-500/20',
+    icon: 'text-orange-500',
+    headerGradient: 'from-orange-500/10',
+    button: 'bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 shadow-orange-900/20'
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] animate-fade-in">
-      <div className="mw-card w-full max-w-sm p-6 transform transition-all scale-100">
-        <div className="flex items-center gap-3 mb-4">
-          <div className={`p-3 rounded-full ${isDangerous ? 'bg-red-500/10 text-red-500' : 'bg-orange-500/10 text-orange-500'}`}>
-            <FiAlertTriangle className="w-6 h-6" />
-          </div>
-          <h3 className="text-xl font-bold text-white">{title}</h3>
-        </div>
-        
-        <p className="text-gray-300 mb-6 leading-relaxed">
-          {message}
-        </p>
+    <div className={`fixed inset-0 z-[9999] flex items-center justify-center transition-all ${isAnimating || !isOpen ? 'pointer-events-none' : ''}`}>
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 bg-black/80 backdrop-blur-sm ${isAnimating || !isOpen ? 'animate-fade-out' : 'animate-fade-in'}`}
+        onClick={onCancel}
+      />
 
-        <div className="flex gap-3">
+      {/* Modal */}
+      <div className={`relative w-full max-w-sm bg-[#1a1a1a] rounded-2xl border border-white/10 shadow-2xl overflow-hidden ${isAnimating || !isOpen ? 'animate-scale-out' : 'animate-scale-in'}`}>
+
+        {/* Header */}
+        <div className={`p-5 border-b border-white/5 bg-gradient-to-r ${theme.headerGradient} to-transparent flex items-center justify-between`}>
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${theme.iconWrapper}`}>
+              <FiAlertTriangle className={`w-5 h-5 ${theme.icon}`} />
+            </div>
+            <h3 className="text-lg font-bold text-white">{title}</h3>
+          </div>
+          <button onClick={onCancel} className="text-white/40 hover:text-white transition-colors">
+            <FiX className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-7">
+          <p className="text-gray-300 leading-relaxed text-base">
+            {message}
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-white/5 bg-black/20 flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 py-2 rounded-lg bg-gray-800 text-gray-300 font-semibold hover:bg-gray-700 transition-colors"
+            className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl font-bold transition-all text-sm"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
-            className={`flex-1 py-2 rounded-lg font-bold text-white transition-colors ${
-              isDangerous 
-                ? 'bg-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.4)]' 
-                : 'bg-orange-500 hover:bg-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.4)]'
-            }`}
+            className={`flex-1 py-2.5 text-white rounded-xl font-bold shadow-lg transition-all text-sm ${theme.button}`}
           >
             {confirmLabel}
           </button>
