@@ -27,8 +27,8 @@ export default function GameControl({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div>
-                    <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">Frissítési intervallum (perc)</label>
-                    <div className="flex gap-2">
+                    <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase tracking-wide">Frissítési intervallum (perc)</label>
+                    <div className="flex gap-3">
                         <input
                             type="number"
                             min="1"
@@ -38,7 +38,7 @@ export default function GameControl({
                                 setIntervalInputValue(isNaN(val) ? 0 : val);
                                 setIsEditingInterval(true);
                             }}
-                            className="mw-input text-lg font-mono"
+                            className="mw-input text-lg font-mono flex-1"
                         />
                         {isEditingInterval && (
                             <button
@@ -46,20 +46,22 @@ export default function GameControl({
                                     updateInterval(intervalInputValue);
                                     setIsEditingInterval(false);
                                 }}
-                                className="px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                                className="mw-btn mw-btn-primary"
                             >
-                                <FiSave /> Mentés
+                                <FiSave className="w-5 h-5" /> Mentés
                             </button>
                         )}
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                        Jelenlegi beállítás: <span className="text-orange-400 font-mono">{gameSettings?.locationUpdateIntervalMinutes || 20} perc</span>
-                    </p>
+                    <div className="flex items-center gap-2 mt-3 text-xs text-gray-500">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                        Jelenlegi beállítás: <span className="text-orange-400 font-mono font-bold text-sm bg-orange-500/10 px-2 py-0.5 rounded">{gameSettings?.locationUpdateIntervalMinutes || 20} perc</span>
+                    </div>
                 </div>
 
                 <div>
-                    <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase">Utolsó frissítés</label>
-                    <div className="text-white font-mono text-lg bg-black/20 p-3 rounded-lg border border-white/5">
+                    <label className="block text-gray-400 text-sm font-semibold mb-2 uppercase tracking-wide">Utolsó frissítés</label>
+                    <div className="text-white font-mono text-lg bg-black/20 p-4 rounded-xl border border-white/5 flex items-center gap-3">
+                        <FiClock className="text-gray-500 w-5 h-5" />
                         {gameSettings?.lastLocationUpdate
                             ? new Date(gameSettings.lastLocationUpdate).toLocaleTimeString()
                             : 'Nincs adat'}

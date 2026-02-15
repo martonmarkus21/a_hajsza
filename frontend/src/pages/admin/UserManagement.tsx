@@ -2,13 +2,14 @@
 import { useState } from 'react';
 import { FiUser, FiTrash2, FiEdit, FiPlus, FiCheckCircle, FiXCircle, FiSearch, FiShield } from 'react-icons/fi';
 import { FaSortUp, FaSortDown } from 'react-icons/fa6';
+import { UserCog } from 'lucide-react';
 import Modal from '../../components/Modal';
 
 interface UserManagementProps {
     users: any[];
     newUser: any;
     setNewUser: (user: any) => void;
-    createUser: () => void;
+    createUser: () => Promise<boolean>;
     deleteUser: (id: number, username: string) => void;
     handleEditUser: (user: any) => void;
 }
@@ -67,28 +68,30 @@ export default function UserManagement({
         );
     };
 
-    const handleCreate = () => {
-        createUser();
-        setShowCreateModal(false);
+    const handleCreate = async () => {
+        const success = await createUser();
+        if (success) {
+            setShowCreateModal(false);
+        }
     };
 
     return (
         <div className="space-y-6">
             {/* Top Bar */}
-            <div className="mw-card p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="mw-card flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="relative w-full md:w-96 group">
-                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-orange-500 transition-colors" />
+                    <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none" />
                     <input
                         type="text"
                         placeholder="Keresés felhasználók között..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-black/20 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-orange-500/50 focus:bg-white/5 transition-all"
+                        className="mw-input pl-11"
                     />
                 </div>
                 <button
                     onClick={() => setShowCreateModal(true)}
-                    className="w-full md:w-auto px-6 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white rounded-xl font-bold shadow-lg shadow-orange-900/20 transition-all flex items-center justify-center gap-2"
+                    className="mw-btn mw-btn-primary w-full md:w-auto"
                 >
                     <FiPlus className="w-5 h-5" />
                     Új felhasználó
@@ -96,12 +99,14 @@ export default function UserManagement({
             </div>
 
             {/* Users List */}
-            <div className="mw-card overflow-hidden p-0">
-                <div className="p-6 border-b border-white/5 bg-white/5">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                        <FiUser className="w-6 h-6 text-orange-500" />
+            <div className="mw-card p-0 overflow-hidden flex flex-col">
+                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500">
+                            <UserCog className="w-6 h-6" />
+                        </div>
                         Felhasználók listája
-                        <span className="text-sm font-normal text-gray-500 ml-2">({filteredUsers.length} találat)</span>
+                        <span className="text-sm font-normal text-gray-500 ml-2 py-1 px-3 bg-white/5 rounded-full border border-white/5">{filteredUsers.length} felhasználó</span>
                     </h3>
                 </div>
 

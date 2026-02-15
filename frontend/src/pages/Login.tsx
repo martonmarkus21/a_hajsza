@@ -54,9 +54,9 @@ export default function Login() {
 
         {/* Ambient Background Effects (Fixed within container) */}
         <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-orange-500/10 rounded-full blur-[120px] animate-blob mix-blend-screen opacity-50" />
-          <div className="absolute top-[20%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 rounded-full blur-[120px] animate-blob-reverse animation-delay-2000 mix-blend-screen opacity-50" />
-          <div className="absolute bottom-[-20%] left-[20%] w-[45%] h-[45%] bg-purple-500/10 rounded-full blur-[120px] animate-blob animation-delay-4000 mix-blend-screen opacity-40" />
+          <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-orange-500/10 rounded-full blur-[120px] animate-slow-flow mix-blend-screen opacity-50" />
+          <div className="absolute top-[20%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 rounded-full blur-[120px] animate-slow-flow-reverse animation-delay-2000 mix-blend-screen opacity-50" />
+          <div className="absolute bottom-[-20%] left-[20%] w-[45%] h-[45%] bg-purple-500/10 rounded-full blur-[120px] animate-slow-flow animation-delay-4000 mix-blend-screen opacity-40" />
         </div>
 
         <div className="w-full max-w-[850px] relative z-20 animate-zoom-in my-auto">

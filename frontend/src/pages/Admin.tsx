@@ -628,11 +628,11 @@ function AdminContent() {
   const createUser = async () => {
     if (!newUser.username || !newUser.password) {
       addNotification('error', 'Felhasználónév és jelszó kötelező!');
-      return;
+      return false;
     }
     if (newUser.password.length < 6) {
       addNotification('error', 'A jelszónak legalább 6 karakternek kell lennie!');
-      return;
+      return false;
     }
 
     const payload = {
@@ -654,12 +654,15 @@ function AdminContent() {
         fetchUsers();
         setNewUser({ username: '', email: '', password: '', role: 'officer', active: true });
         addNotification('success', 'Felhasználó sikeresen létrehozva');
+        return true;
       } else {
         const err = await res.json();
         addNotification('error', `Hiba: ${err.message || 'Ismeretlen hiba'}`);
+        return false;
       }
     } catch (error) {
       addNotification('error', 'Hálózati hiba történt');
+      return false;
     }
   };
 
@@ -710,7 +713,13 @@ function AdminContent() {
       role: editUserForm.role,
       active: editUserForm.active
     };
-    if (editUserForm.password) updateData.password = editUserForm.password;
+    if (editUserForm.password) {
+      if (editUserForm.password.length < 6) {
+        addNotification('error', 'A jelszónak legalább 6 karakternek kell lennie!');
+        return;
+      }
+      updateData.password = editUserForm.password;
+    }
 
     try {
       const res = await fetch(`http://localhost:3000/api/users/${editingUser.id}`, {

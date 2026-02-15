@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Circle, Polygon, Popup, Marker, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { useSocket } from './hooks/useSocket';
@@ -10,7 +10,9 @@ import { authService } from './services/auth';
 import { useNotification } from './contexts/NotificationContext';
 import Login from './pages/Login';
 import Admin from './pages/Admin';
+import Profile from './pages/Profile';
 import PairDetails from './components/PairDetails';
+import MWLoader from './components/MWLoader';
 import SendMessageModal from './components/SendMessageModal';
 import EditNameModal from './components/EditNameModal';
 import ConfirmationModal from './components/ConfirmationModal';
@@ -184,6 +186,7 @@ function FloatingHeader({
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
 }) {
+  const navigate = useNavigate();
   return (
     <div className={`absolute top-0 left-0 right-0 z-[1000] flex flex-col transition-all duration-300 ease-in-out font-sans p-4`}>
       {/* Glassmorphism Container */}
@@ -243,7 +246,7 @@ function FloatingHeader({
             {/* User Profile */}
             <button
               className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-white/5 transition-all text-left group"
-              onClick={() => { /* Navigate to profile */ }}
+              onClick={() => navigate('/profile')}
             >
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white shadow-lg transition-all">
                 <FiUser className="w-4 h-4" />
@@ -493,6 +496,69 @@ function ModernSidebar({
         </div>
       </div>
     </div>
+  );
+}
+
+// --- Unified Popup Component (Refactored) ---
+function GeofencePopup({
+  geofence,
+  activeMapLayer,
+  onClose
+}: {
+  geofence: Geofence;
+  activeMapLayer: MapLayerType;
+  onClose: () => void;
+}) {
+  const g = geofence;
+  const isCounty = g.geofenceType === 'county' || !!g.metadataJson?.countyCode;
+
+  // Logic for Subtitle
+  let subtitle = 'EGYÉB ZÓNA';
+  if (isCounty) {
+    subtitle = g.name === 'Budapest' ? 'FŐVÁROS' : 'VÁRMEGYE';
+  } else if (g.geofenceType === 'restricted') {
+    subtitle = 'TILTOTT ZÓNA';
+  } else if (g.geofenceType === 'safe') {
+    subtitle = 'BIZTONSÁGOS ZÓNA';
+  } else if (g.geofenceType === 'game_area') {
+    // If name implies Hungary, we don't need a subtitle, or it's just 'MAGYARORSZÁG'
+    if (g.name.toLowerCase() === 'magyarország') subtitle = '';
+    else subtitle = 'MAGYARORSZÁG';
+  }
+
+  // Consistent Status Dot Style
+  const statusDotClass = `w-2.5 h-2.5 rounded-full shadow-[0_0_12px] ${activeMapLayer === 'dark' ? 'bg-green-500 shadow-green-500' : 'bg-green-600'}`;
+
+  return (
+    <Popup className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}>
+      <div className="flex flex-col gap-3 p-4 min-w-[240px] font-sans">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className={statusDotClass} />
+            <div>
+              <div className={`font-bold text-base leading-none mb-0.5 ${activeMapLayer === 'dark' ? 'text-white' : 'text-gray-900'}`}>{g.name}</div>
+              {subtitle && (
+                <div className={`text-[9px] uppercase tracking-wider font-bold ${activeMapLayer === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>{subtitle}</div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className={`transition-colors p-0.5 -mr-1 -mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black'}`}
+          >
+            <FiX className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Description line if exists */}
+        {g.metadataJson?.description && (
+          <>
+            <div className={`h-px w-full ${activeMapLayer === 'dark' ? 'bg-white/10' : 'bg-black/10'}`} />
+            <div className={`text-xs italic mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>{g.metadataJson.description}</div>
+          </>
+        )}
+      </div>
+    </Popup>
   );
 }
 
@@ -791,16 +857,8 @@ function MapView() {
 
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-[#0a0a0a]">
-        <div className="loader-container">
-          <div className="loader-spinner"></div>
-          <div className="text-white mt-4">Betöltés...</div>
-        </div>
-      </div>
-    );
+    return <MWLoader subtitle="Térkép betöltése..." />;
   }
-
 
 
   return (
@@ -886,75 +944,55 @@ function MapView() {
             )
           ))}
 
-          {/* Geofences - Round 3: "Kidolgozott" Popups */}
+          {/* New Geofence Logic - Unified */}
           {geofences.filter(g => g.active).map(g => {
-            // Game Area Polygon
+            const isCounty = g.geofenceType === 'county' || !!g.metadataJson?.countyCode;
+
+            // 1. Game Area (Polygon)
             if (g.geofenceType === 'game_area' && g.metadataJson?.polygon) {
               return (
                 <Polygon
                   key={`${g.id}-${activeMapLayer}`}
                   positions={g.metadataJson.polygon.map(([lon, lat]) => [lat, lon] as [number, number])}
                   pathOptions={{
-                    // Use Blue for Game Area if NOT in Dark Mode, otherwise Orange
                     color: activeMapLayer === 'dark' ? '#f97316' : '#3b82f6',
                     fillColor: activeMapLayer === 'dark' ? '#f97316' : '#3b82f6',
                     fillOpacity: 0.1,
                     weight: 2
                   }}
                 >
-                  <Popup className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}>
-                    <div className="flex flex-col gap-3 p-4 min-w-[240px] font-sans">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-2.5 h-2.5 rounded-full shadow-[0_0_12px] bg-green-500 shadow-green-500`} />
-                          <span className={`font-bold text-base leading-none ${activeMapLayer === 'dark' ? 'text-white' : 'text-gray-900'}`}>{g.name}</span>
-                        </div>
-                        <button
-                          onClick={() => mapRef.current?.closePopup()}
-                          className={`transition-colors p-0.5 -mr-1 -mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black'}`}
-                        >
-                          <FiX className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className={`h-px w-full ${activeMapLayer === 'dark' ? 'bg-white/10' : 'bg-black/10'}`} />
-                      <div className="flex items-center justify-between gap-3">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Státusz</span>
-                        <span className="text-xs font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded">AKTÍV</span>
-                      </div>
-                      {g.metadataJson?.description && (
-                        <div className={`text-xs italic mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>{g.metadataJson.description}</div>
-                      )}
-                    </div>
-                  </Popup>
+                  <GeofencePopup geofence={g} activeMapLayer={activeMapLayer} onClose={() => mapRef.current?.closePopup()} />
                 </Polygon>
               );
             }
-            // Standard Polygon (Custom/Scenario)
-            if (g.metadataJson?.polygon && g.metadataJson?.type === 'polygon') {
+
+            // 2. Standard Polygon (County / Custom)
+            if (g.metadataJson?.polygon && (g.metadataJson?.type === 'polygon' || isCounty)) {
+              let color = '#3b82f6'; // Blue default
+              if (activeMapLayer === 'dark') {
+                if (g.geofenceType === 'restricted') color = '#ef4444';
+                else if (g.geofenceType === 'safe') color = '#10b981';
+                else if (g.geofenceType === 'county') color = '#f97316';
+              }
+
               return (
                 <Polygon
                   key={`${g.id}-${activeMapLayer}`}
                   positions={g.metadataJson.polygon.map(([lon, lat]) => [lat, lon] as [number, number])}
-                  pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2, weight: 2 }}
+                  pathOptions={{
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: g.geofenceType === 'county' ? 0.05 : 0.2, // Counties fainter
+                    weight: 2,
+                    dashArray: isCounty ? '5, 10' : undefined
+                  }}
                 >
-                  <Popup className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}>
-                    <div className="p-3 min-w-[200px] font-sans">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className={`font-bold ${activeMapLayer === 'dark' ? 'text-white' : 'text-gray-900'}`}>{g.name}</div>
-                        <button
-                          onClick={() => mapRef.current?.closePopup()}
-                          className={`transition-colors p-0.5 -mr-1 -mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black'}`}
-                        >
-                          <FiX className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <div className={`text-xs ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{g.geofenceType}</div>
-                    </div>
-                  </Popup>
+                  <GeofencePopup geofence={g} activeMapLayer={activeMapLayer} onClose={() => mapRef.current?.closePopup()} />
                 </Polygon>
               );
             }
-            // Circle (Default)
+
+            // 3. Circle (Default)
             return (
               <Circle
                 key={`${g.id}-${activeMapLayer}`}
@@ -962,20 +1000,7 @@ function MapView() {
                 radius={g.radiusM}
                 pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2, weight: 2 }}
               >
-                <Popup className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}>
-                  <div className="p-3 min-w-[200px] font-sans">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className={`font-bold ${activeMapLayer === 'dark' ? 'text-white' : 'text-gray-900'}`}>{g.name}</div>
-                      <button
-                        onClick={() => mapRef.current?.closePopup()}
-                        className={`transition-colors p-0.5 -mr-1 -mt-1 ${activeMapLayer === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-black'}`}
-                      >
-                        <FiX className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className={`text-xs ${activeMapLayer === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{g.geofenceType}</div>
-                  </div>
-                </Popup>
+                <GeofencePopup geofence={g} activeMapLayer={activeMapLayer} onClose={() => mapRef.current?.closePopup()} />
               </Circle>
             );
           })}
@@ -1092,6 +1117,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>

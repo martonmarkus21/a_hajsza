@@ -12,6 +12,22 @@ export interface User {
   role: string;
 }
 
+export interface UserProfile {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateProfileData {
+  email?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}
+
 export interface AuthResponse {
   access_token: string;
   user: User;
@@ -40,7 +56,24 @@ export const authService = {
   isAuthenticated(): boolean {
     return !!localStorage.getItem('token');
   },
+
+  async getProfile(): Promise<UserProfile> {
+    const response = await api.get<UserProfile>('/api/auth/profile');
+    return response.data;
+  },
+
+  async updateProfile(data: UpdateProfileData): Promise<UserProfile> {
+    const response = await api.put<UserProfile>('/api/auth/profile', data);
+    // Update local storage with new user data
+    const currentUser = this.getCurrentUser();
+    if (currentUser) {
+      const updatedUser = { ...currentUser, email: response.data.email };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+    return response.data;
+  },
 };
+
 
 
 

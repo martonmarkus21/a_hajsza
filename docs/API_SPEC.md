@@ -21,6 +21,11 @@ Content-Type: application/json
   - Webes bejelentkezés Admin és Officer felhasználóknak.
   - **Body**: `{ "username": "admin", "password": "password" }`
   - **Response**: JWT token és user adatok.
+- **`GET /api/auth/profile`** - Bejelentkezett felhasználó profil adatainak lekérése.
+- **`PUT /api/auth/profile`**
+  - Profil módosítása (email és/vagy jelszó).
+  - **Body**: `{ "email": "uj@email.com", "currentPassword": "regi", "newPassword": "uj123" }`
+  - Jelszóváltoztatáshoz a `currentPassword` megadása kötelező.
 
 ### Devices (Android App)
 - **`POST /api/devices/login`**
