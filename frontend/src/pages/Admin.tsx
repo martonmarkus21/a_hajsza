@@ -18,7 +18,7 @@ import PairDetails from '../components/PairDetails';
 // Shared Components
 import SendMessageModal from '../components/SendMessageModal';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { NotificationProvider, useNotification } from '../contexts/NotificationContext';
+import { useNotification } from '../contexts/NotificationContext';
 
 // Styles
 import 'leaflet/dist/leaflet.css';
@@ -67,7 +67,7 @@ interface User {
   updatedAt: string;
 }
 
-function AdminContent() {
+export default function Admin() {
   const navigate = useNavigate();
   const { addNotification } = useNotification();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -914,6 +914,7 @@ function AdminContent() {
             handleCapture={handleCapture}
             showCreateModal={showCreatePairModal}
             setShowCreateModal={setShowCreatePairModal}
+            onPairSelect={setSelectedPair}
           />
         );
       case 'devices':
@@ -924,6 +925,7 @@ function AdminContent() {
             pairsList={pairs}
             handleForceLogout={handleForceLogout}
             handleDeleteDevice={handleDeleteDevice}
+            onPairSelect={setSelectedPair}
           />
         );
       case 'users':
@@ -952,20 +954,11 @@ function AdminContent() {
               setNewGeofence({ ...newGeofence, centerLat: lat, centerLon: lon });
               setMapClickMode(false);
             }}
-            getGeofenceTypeLabel={(type: string) => {
-              const types: Record<string, string> = {
-                game_area: 'Játékterület',
-                scenario: 'Scenarió',
-                crossing_point: 'Átkelési pont',
-                safe_zone: 'Biztonsági Zóna',
-                danger_zone: 'Veszélyzóna'
-              };
-              return types[type] || type;
-            }}
             pairs={pairs}
             onActivateHungary={handleActivateHungary}
             onToggleHungary={handleToggleHungary}
             onPairSelect={setSelectedPair}
+            onRefresh={fetchGeofences}
           />
         );
       default:
@@ -985,16 +978,6 @@ function AdminContent() {
         <>
           {renderContent(sidebarOpen)}
 
-          {/* Global Modals */}
-          <SendMessageModal
-            isOpen={showMessageModal}
-            pairId={selectedMessagePair?.id || null}
-            pairAssignedNumber={selectedMessagePair?.assignedNumber}
-            pairName={selectedMessagePair?.name}
-            onClose={() => setShowMessageModal(false)}
-            onSend={handleSendMessage}
-          />
-
           {/* Pair Details Modal from Map Interaction */}
           <PairDetails
             pair={pairs.find(p => p.id === selectedPair?.id) || selectedPair}
@@ -1006,10 +989,19 @@ function AdminContent() {
             onMw={handleMw}
             onRename={(id, name) => handleEditPairName({ id, name })}
             onSendMessage={(id) => {
-              setSelectedPair(null);
               setSelectedMessagePair(pairs.find(p => p.id === id) || null);
               setShowMessageModal(true);
             }}
+          />
+
+          {/* Global Modals (Rendered last to appear on top of PairDetails) */}
+          <SendMessageModal
+            isOpen={showMessageModal}
+            pairId={selectedMessagePair?.id || null}
+            pairAssignedNumber={selectedMessagePair?.assignedNumber}
+            pairName={selectedMessagePair?.name}
+            onClose={() => setShowMessageModal(false)}
+            onSend={handleSendMessage}
           />
 
           {/* User Edit Modal */}
@@ -1162,15 +1154,6 @@ function AdminContent() {
           />
         </>
       )}
-    </AdminLayout >
-  );
-}
-
-// Wrap with Provider
-export default function Admin() {
-  return (
-    <NotificationProvider>
-      <AdminContent />
-    </NotificationProvider>
+    </AdminLayout>
   );
 }

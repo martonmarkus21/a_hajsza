@@ -1,7 +1,16 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { FiCheckCircle, FiAlertCircle, FiInfo, FiX } from 'react-icons/fi';
 
-type NotificationType = 'success' | 'error' | 'info';
+export type NotificationType = 'success' | 'error' | 'info';
+
+export interface NotificationHistoryItem {
+    id: string;
+    type: NotificationType;
+    message: string;
+    timestamp: Date;
+    read: boolean;
+    isGlobal: boolean;
+}
 
 interface Notification {
     id: string;
@@ -11,13 +20,38 @@ interface Notification {
 }
 
 interface NotificationContextType {
-    addNotification: (type: NotificationType, message: string) => void;
+    addNotification: (type: NotificationType, message: string, isGlobal?: boolean) => void;
+    history: NotificationHistoryItem[];
+    markAsRead: (id: string) => void;
+    markAllAsRead: () => void;
+    clearHistory: () => void;
+    deleteNotification: (id: string) => void;
+    loadHistoryForUser: (username: string) => void;
+    unreadCount: number;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
     const [notifications, setNotifications] = useState<Notification[]>([]);
+    const [history, setHistory] = useState<NotificationHistoryItem[]>(() => {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                const stored = localStorage.getItem(`mw_notifications_${user.username}`);
+                if (stored) {
+                    return JSON.parse(stored).map((item: any) => ({
+                        ...item,
+                        timestamp: new Date(item.timestamp)
+                    }));
+                }
+            } catch (e) {
+                console.error('Hiba a history inicializálásakor:', e);
+            }
+        }
+        return [];
+    });
 
     const removeNotification = useCallback((id: string) => {
         // First mark as exiting for animation
@@ -29,18 +63,87 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }, 300);
     }, []);
 
-    const addNotification = useCallback((type: NotificationType, message: string) => {
+    const saveHistory = useCallback((action: (prev: NotificationHistoryItem[]) => NotificationHistoryItem[]) => {
+        setHistory((prev) => {
+            const newHistory = action(prev);
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+                try {
+                    const user = JSON.parse(userStr);
+                    localStorage.setItem(`mw_notifications_${user.username}`, JSON.stringify(newHistory));
+                } catch (e) {
+                    console.error('Hiba a history mentésekor:', e);
+                }
+            }
+            return newHistory;
+        });
+    }, []);
+
+    const loadHistoryForUser = useCallback((username: string) => {
+        const stored = localStorage.getItem(`mw_notifications_${username}`);
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored).map((item: any) => ({
+                    ...item,
+                    timestamp: new Date(item.timestamp)
+                }));
+                setHistory(parsed);
+            } catch (e) {
+                console.error('Hiba az értesítések betöltésekor:', e);
+                setHistory([]);
+            }
+        } else {
+            setHistory([]);
+        }
+    }, []);
+
+    const addNotification = useCallback((type: NotificationType, message: string, isGlobal: boolean = false) => {
         const id = Math.random().toString(36).substring(2, 9);
+        
+        // Add to active toasts
         setNotifications((prev) => [...prev, { id, type, message, exiting: false }]);
 
-        // Auto remove after 5 seconds
+        // Add to permanent history
+        saveHistory((prev) => [
+            { id, type, message, timestamp: new Date(), read: false, isGlobal },
+            ...prev
+        ].slice(0, 100));
+
+        // Auto remove from active toasts after 5 seconds
         setTimeout(() => {
             removeNotification(id);
         }, 5000);
-    }, [removeNotification]);
+    }, [removeNotification, saveHistory]);
+
+    const markAsRead = useCallback((id: string) => {
+        saveHistory((prev) => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    }, [saveHistory]);
+
+    const markAllAsRead = useCallback(() => {
+        saveHistory((prev) => prev.map(n => ({ ...n, read: true })));
+    }, [saveHistory]);
+
+    const deleteNotification = useCallback((id: string) => {
+        saveHistory((prev) => prev.filter(n => n.id !== id));
+    }, [saveHistory]);
+
+    const clearHistory = useCallback(() => {
+        saveHistory(() => []);
+    }, [saveHistory]);
+
+    const unreadCount = history.filter(n => !n.read).length;
 
     return (
-        <NotificationContext.Provider value={{ addNotification }}>
+        <NotificationContext.Provider value={{ 
+            addNotification, 
+            history, 
+            markAsRead, 
+            markAllAsRead, 
+            clearHistory,
+            deleteNotification,
+            loadHistoryForUser,
+            unreadCount 
+        }}>
             {children}
 
             {/* Toast Container */}
@@ -91,7 +194,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
                         {/* Close Button */}
                         <button
-                            onClick={() => removeNotification(notification.id)}
+                            onClick={() => {
+                                removeNotification(notification.id);
+                                markAsRead(notification.id);
+                            }}
                             className="absolute top-3 right-3 p-1 rounded-lg text-white/20 hover:text-white hover:bg-white/10 transition-all"
                         >
                             <FiX className="w-4 h-4" />

@@ -157,17 +157,17 @@ export default function PairDetails({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {pair.captured && (
-                    <span className="px-2.5 py-1 bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="mw-badge captured">
                       <FiXCircle className="w-3.5 h-3.5" /> Elfogva
                     </span>
                   )}
                   {isMw && (
-                    <span className="px-2.5 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/20 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="mw-badge mw">
                       <FiShield className="w-3.5 h-3.5 fill-current" /> Most Wanted
                     </span>
                   )}
                   {pair.active && !pair.captured && (
-                    <span className="px-2.5 py-1 bg-green-500/20 text-green-400 border border-green-500/20 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="mw-badge active">
                       <FiCheckCircle className="w-3.5 h-3.5" /> Aktív
                     </span>
                   )}

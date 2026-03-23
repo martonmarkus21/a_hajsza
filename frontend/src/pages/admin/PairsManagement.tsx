@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { FiUsers, FiPlus, FiTrash2, FiMail, FiShield, FiSearch, FiEdit3, FiMinus } from 'react-icons/fi';
+import { FiUsers, FiPlus, FiTrash2, FiMail, FiShield, FiSearch, FiEdit3, FiMinus, FiCheckCircle, FiXCircle } from 'react-icons/fi';
 import { FaHandcuffs, FaSortUp, FaSortDown } from 'react-icons/fa6';
 import Modal from '../../components/Modal';
 import EditNameModal from '../../components/EditNameModal';
@@ -18,6 +18,7 @@ interface PairsManagementProps {
     handleCapture: (pairId: number) => void;
     showCreateModal: boolean;
     setShowCreateModal: (show: boolean) => void;
+    onPairSelect?: (pair: any) => void;
 }
 
 export default function PairsManagement({
@@ -31,7 +32,8 @@ export default function PairsManagement({
     handleMw,
     handleCapture,
     showCreateModal,
-    setShowCreateModal
+    setShowCreateModal,
+    onPairSelect
 }: PairsManagementProps) {
     const { addNotification } = useNotification();
     const [searchTerm, setSearchTerm] = useState('');
@@ -194,16 +196,20 @@ export default function PairsManagement({
                                 filteredPairs.map((pair) => (
                                     <tr key={pair.id} className="group hover:bg-white/5 transition-colors">
                                         <td className="text-center py-4">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm transition-all ${pair.mostWanted
-                                                ? 'bg-orange-500 text-white shadow-orange-500/20'
-                                                : 'bg-[#2a2a2a] text-white border-[3px] border-orange-500'
-                                                }`}>
+                                            <div 
+                                                onClick={() => onPairSelect && onPairSelect(pair)}
+                                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] border-orange-500 text-white transition-colors duration-300 ${pair.mostWanted
+                                                ? 'bg-orange-500 hover:bg-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.6)]'
+                                                : 'bg-[#2a2a2a] hover:bg-[#383838]'
+                                                }`}
+                                                title="Pár részleteinek megtekintése"
+                                            >
                                                 {pair.assignedNumber}
                                             </div>
                                         </td>
                                         <td className="py-4">
-                                            <div className="font-bold text-white text-base group-hover:text-orange-400 transition-colors">
-                                                {pair.name || <span className="text-gray-600 italic font-normal">Névtelen</span>}
+                                            <div className={`text-left font-bold text-base transition-colors duration-200 ${pair.name ? 'text-white group-hover:text-orange-400' : 'text-gray-500 italic font-normal'}`}>
+                                                {pair.name || 'Névtelen'}
                                             </div>
                                             {pair.captured && (
                                                 <div className="flex items-center gap-1 text-xs text-red-500 font-bold uppercase tracking-wider mt-1">
@@ -212,25 +218,32 @@ export default function PairsManagement({
                                             )}
                                         </td>
                                         <td className="text-center py-4">
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${pair.active
-                                                ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-                                                : 'bg-gray-500/10 text-gray-500 border border-gray-500/20'
-                                                }`}>
-                                                <div className={`w-1.5 h-1.5 rounded-full ${pair.active ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></div>
-                                                {pair.active ? 'Aktív' : 'Inaktív'}
-                                            </span>
+                                            {pair.active ? (
+                                                <span className="inline-flex items-center gap-1 text-green-500 bg-green-500/10 px-2 py-1 rounded-lg text-xs font-bold">
+                                                    <FiCheckCircle className="w-3 h-3" /> Aktív
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 text-red-500 bg-red-500/10 px-2 py-1 rounded-lg text-xs font-bold">
+                                                    <FiXCircle className="w-3 h-3" /> Inaktív
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="text-center py-4">
                                             <button
-                                                onClick={() => handleMw(pair.id)}
-                                                onMouseUp={(e) => e.currentTarget.blur()}
-                                                className={`p-2 rounded-lg transition-all transform hover:scale-110 focus:outline-none focus:ring-0 border-0 outline-none ${pair.mostWanted
-                                                    ? 'bg-orange-500/20 text-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]'
-                                                    : 'text-gray-600 hover:text-gray-400 hover:bg-white/5 grayscale opacity-50 hover:grayscale-0 hover:opacity-100'
+                                                onClick={(e) => {
+                                                    e.currentTarget.blur();
+                                                    handleMw(pair.id);
+                                                    addNotification('success', `Most Wanted státusz ${pair.mostWanted ? 'eltávolítva' : 'beállítva'}`);
+                                                }}
+                                                className={`relative block mx-auto -translate-x-1.5 p-2 rounded-xl transition-all duration-300 outline-none border-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 bg-transparent ${pair.mostWanted
+                                                    ? 'text-orange-400'
+                                                    : 'text-gray-600 hover:text-gray-400 hover:bg-white/5 opacity-60 hover:opacity-100'
                                                     }`}
+                                                style={{ WebkitTapHighlightColor: 'transparent', outline: 'none', boxShadow: 'none' }}
                                                 title="Most Wanted státusz váltása"
                                             >
-                                                <FiShield className={`w-5 h-5 ${pair.mostWanted ? 'fill-current' : ''}`} />
+                                                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 transition-opacity duration-300 pointer-events-none bg-orange-500/20 blur-md rounded-full ${pair.mostWanted ? 'opacity-100' : 'opacity-0'}`} />
+                                                <FiShield className={`relative z-10 w-5 h-5 mx-auto transition-colors duration-300 ${pair.mostWanted ? 'fill-current' : ''}`} />
                                             </button>
                                         </td>
                                         <td className="text-center py-4">

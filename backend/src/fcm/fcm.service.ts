@@ -14,13 +14,13 @@ export class FcmService implements OnModuleInit {
     private deviceRepository: Repository<Device>,
     @InjectRepository(Pair)
     private pairRepository: Repository<Pair>,
-  ) {}
+  ) { }
 
   onModuleInit() {
     // Only initialize Firebase if credentials are provided
-    if (process.env.FIREBASE_PROJECT_ID && 
-        process.env.FIREBASE_PRIVATE_KEY && 
-        process.env.FIREBASE_CLIENT_EMAIL) {
+    if (process.env.FIREBASE_PROJECT_ID &&
+      process.env.FIREBASE_PRIVATE_KEY &&
+      process.env.FIREBASE_CLIENT_EMAIL) {
       try {
         if (!admin.apps.length) {
           this.firebaseApp = admin.initializeApp({
@@ -57,7 +57,7 @@ export class FcmService implements OnModuleInit {
       .filter((token) => token !== null && token !== undefined);
 
     if (tokens.length === 0) {
-      return { success: false, message: 'No FCM tokens found for pair' };
+      return { success: false, message: 'A párhoz nem tartozik aktív eszköz' };
     }
 
     const messagePayload: admin.messaging.MulticastMessage = {
@@ -90,7 +90,7 @@ export class FcmService implements OnModuleInit {
     // Get all devices with FCM tokens and filter to active ones
     // Active = seen within last 30 minutes
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-    
+
     // Get all active devices (seen within last 30 minutes) with FCM tokens
     // Use query builder to properly handle NULL checks
     const activeDevices = await this.deviceRepository
@@ -112,12 +112,12 @@ export class FcmService implements OnModuleInit {
       const activePairs = await this.pairRepository.find({
         where: { active: true },
       });
-      
+
       if (activePairs.length === 0) {
         console.warn(`[FCM] No active pairs found`);
         return { success: false, message: 'Nincs aktív pár. Nincs bejelentkezett eszköz.' };
       }
-      
+
       // Also check how many devices have tokens but are not active
       const allDevicesWithTokens = await this.deviceRepository
         .createQueryBuilder('device')

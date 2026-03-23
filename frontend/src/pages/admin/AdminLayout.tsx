@@ -63,7 +63,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab, loading
     ];
 
     return (
-        <div className="flex h-screen bg-gradient-to-br from-[#1a1a1a] via-[#0f0f0f] to-black overflow-hidden relative selection:bg-orange-500/30 selection:text-orange-200">
+        <div className="flex h-screen bg-gradient-to-br from-[#1a1a1a] via-[#0f0f0f] to-black overflow-hidden relative">
 
             {/* Ambient Background Effects (Global) - Matching Profile Page */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">

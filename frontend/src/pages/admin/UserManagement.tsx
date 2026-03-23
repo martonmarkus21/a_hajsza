@@ -163,9 +163,9 @@ export default function UserManagement({
                                         </td>
                                         <td className="text-gray-400 py-4">{user.email || <span className="text-gray-600 italic">-</span>}</td>
                                         <td className="py-4">
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${user.role === 'admin'
-                                                ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20'
-                                                : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                            <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg ${user.role === 'admin'
+                                                ? 'bg-orange-500/10 text-orange-500'
+                                                : 'bg-blue-500/10 text-blue-400'
                                                 }`}>
                                                 {user.role === 'admin' ? <FiShield className="w-3 h-3" /> : <FiUser className="w-3 h-3" />}
                                                 {user.role === 'admin' ? 'Admin' : 'Officer'}

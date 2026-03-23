@@ -22,7 +22,7 @@ export class GameAreaService {
     try {
       this.counties = loadCountiesFromGeoJSON();
       this.hungaryBoundary = loadHungaryBoundaryFromGeoJSON();
-      
+
       if (Object.keys(this.counties).length === 0) {
         console.warn('No counties loaded from GeoJSON, using fallback');
       } else {
@@ -43,7 +43,7 @@ export class GameAreaService {
 
     // Get active geofences
     const activeGeofences = gameAreaGeofences.filter((g) => g.active);
-    
+
     // Build game area description
     let activeGameArea: string | null = null;
     if (activeGeofences.length > 0) {
@@ -77,6 +77,7 @@ export class GameAreaService {
     const counties = Object.keys(this.counties).map((code) => ({
       code,
       name: this.counties[code].name,
+      polygon: this.counties[code].polygon,
     }));
     console.log(`Returning ${counties.length} available counties`);
     return counties;
@@ -89,13 +90,13 @@ export class GameAreaService {
       { geofenceType: 'game_area' },
       { active: false },
     );
-    
+
     // Also explicitly deactivate "Magyarország" by name
     await this.geofenceRepository.update(
       { geofenceType: 'game_area', name: 'Magyarország' },
       { active: false },
     );
-    
+
     console.log('Deactivated all game area geofences');
 
     // If counties are specified, create geofences for each county
@@ -152,7 +153,7 @@ export class GameAreaService {
       // First try to find "Magyarország" in counties (if it's loaded as a county)
       const hungaryCountyCode = 'magyarország';
       const hungaryCounty = this.counties[hungaryCountyCode];
-      
+
       let hungaryPolygon: number[][] | null = null;
       if (hungaryCounty) {
         // Use the "Magyarország" county polygon
@@ -163,7 +164,7 @@ export class GameAreaService {
         hungaryPolygon = this.hungaryBoundary || this.getFallbackHungaryBoundary();
         console.log('Using Hungary boundary from separate boundary data');
       }
-      
+
       if (!hungaryPolygon) {
         throw new Error('Hungary boundary not available');
       }
@@ -300,9 +301,9 @@ export class GameAreaService {
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(this.toRad(lat1)) *
-        Math.cos(this.toRad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+      Math.cos(this.toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }

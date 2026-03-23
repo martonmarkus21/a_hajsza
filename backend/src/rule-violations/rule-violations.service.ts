@@ -126,64 +126,6 @@ export class RuleViolationsService {
       }
     }
 
-    // Check crossing point violations (fordulónap)
-    const isFinalDay = await this.gameDaysService.isFinalDay();
-    if (isFinalDay) {
-      const allowedCrossingPoints = await this.gameDaysService.getAllowedCrossingPoints();
-      if (allowedCrossingPoints.length > 0) {
-        // Check if crossing the Danube (simplified: check if near Budapest bridges)
-        const isNearAllowedPoint = allowedCrossingPoints.some((point) => {
-          const distance = this.calculateDistance(
-            parseFloat(position.lat.toString()),
-            parseFloat(position.lon.toString()),
-            point.lat,
-            point.lon,
-          );
-          return distance <= 1000; // 1km tolerance
-        });
-
-        // If crossing but not near allowed point, check if crossing the Danube area
-        const danubeArea = { lat: 47.4979, lon: 19.0402 }; // Budapest center
-        const distanceFromDanube = this.calculateDistance(
-          parseFloat(position.lat.toString()),
-          parseFloat(position.lon.toString()),
-          danubeArea.lat,
-          danubeArea.lon,
-        );
-
-        if (distanceFromDanube < 5000 && !isNearAllowedPoint) {
-          // Possible crossing violation
-          const existingViolation = await this.ruleViolationRepository.findOne({
-            where: {
-              pairId,
-              violationType: 'crossing_point_violation',
-              resolved: false,
-            },
-          });
-
-          if (!existingViolation) {
-            const violation = this.ruleViolationRepository.create({
-              pairId,
-              violationType: 'crossing_point_violation',
-              description: 'Tiltott átkelési pont használata',
-              positionId: position.id,
-              resolved: false,
-            });
-
-            const savedViolation = await this.ruleViolationRepository.save(violation);
-            violations.push(savedViolation);
-
-            this.webSocketGateway.broadcastRuleViolation({
-              pairId,
-              violationType: 'crossing_point_violation',
-              description: 'Tiltott átkelési pont használata',
-              continuousMode: true,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        }
-      }
-    }
 
     // Check geofence completions (scenarios)
     await this.checkGeofenceCompletions(pairId, position);

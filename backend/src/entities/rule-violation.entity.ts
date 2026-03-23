@@ -24,7 +24,7 @@ export class RuleViolation {
   pairId: number;
 
   @Column({ name: 'violation_type' })
-  violationType: string; // 'game_area_exit', 'vehicle_time_exceeded', 'crossing_point_violation'
+  violationType: string; // 'game_area_exit', 'vehicle_time_exceeded'
 
   @Column({ type: 'text', nullable: true })
   description: string;

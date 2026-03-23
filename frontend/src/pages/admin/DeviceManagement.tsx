@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FiSmartphone, FiTrash2, FiLogOut, FiSearch, FiWifi, FiWifiOff } from 'react-icons/fi';
+import { FiSmartphone, FiTrash2, FiLogOut, FiSearch, FiWifi, FiWifiOff, FiCheckCircle, FiXCircle } from 'react-icons/fi';
 import { FaSortUp, FaSortDown } from 'react-icons/fa6';
 
 interface DeviceManagementProps {
@@ -8,6 +8,7 @@ interface DeviceManagementProps {
     pairsList: any[];
     handleForceLogout: (deviceId: string) => void;
     handleDeleteDevice: (id: number) => void;
+    onPairSelect?: (pair: any) => void;
 }
 
 export default function DeviceManagement({
@@ -15,7 +16,8 @@ export default function DeviceManagement({
     activeDevices,
     pairsList,
     handleForceLogout,
-    handleDeleteDevice
+    handleDeleteDevice,
+    onPairSelect
 }: DeviceManagementProps) {
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -193,7 +195,7 @@ export default function DeviceManagement({
                                                         <FiSmartphone className="w-5 h-5" />
                                                     </div>
                                                     <div>
-                                                        <div className="font-mono font-bold text-white text-sm tracking-wider">{device.imeiOrDeviceId}</div>
+                                                        <div className={`font-mono font-bold text-sm tracking-wider transition-colors duration-200 ${hasPair ? 'text-white group-hover:text-orange-400' : 'text-gray-500'}`}>{device.imeiOrDeviceId}</div>
                                                         <div className="text-xs text-gray-500">ID: #{device.id}</div>
                                                     </div>
                                                 </div>
@@ -201,9 +203,18 @@ export default function DeviceManagement({
                                             <td className="py-4">
                                                 {hasPair ? (
                                                     <div className="flex items-center gap-3">
-                                                        <span className="w-8 h-8 rounded-full bg-[#2a2a2a] border-[3px] border-orange-500 flex items-center justify-center font-bold text-white text-xs">
+                                                        <button 
+                                                            onClick={() => {
+                                                                if (onPairSelect) {
+                                                                    const pairObj = pairsList.find((p: any) => p.id === device.pairId) || pairsList.find((p: any) => p.name === device.pairName);
+                                                                    if (pairObj) onPairSelect(pairObj);
+                                                                }
+                                                            }}
+                                                            className="w-8 h-8 flex-shrink-0 cursor-pointer rounded-full bg-[#2a2a2a] hover:bg-[#383838] transition-colors border-[3px] border-orange-500 flex items-center justify-center font-bold text-white text-xs outline-none focus:outline-none"
+                                                            title="Pár részleteinek megtekintése"
+                                                        >
                                                             {device.pairNumber}
-                                                        </span>
+                                                        </button>
                                                         <span className="text-gray-300 group-hover:text-white transition-colors">
                                                             {device.pairName || <span className="text-gray-500 italic">Névtelen</span>}
                                                         </span>
@@ -216,21 +227,26 @@ export default function DeviceManagement({
                                                 {device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : '-'}
                                             </td>
                                             <td className="text-center py-4">
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${isActive
-                                                    ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-                                                    : 'bg-gray-500/10 text-gray-500 border border-gray-500/20'
-                                                    }`}>
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></div>
-                                                    {isActive ? 'Online' : 'Offline'}
-                                                </span>
+                                                {isActive ? (
+                                                    <span className="inline-flex items-center gap-1 text-green-500 bg-green-500/10 px-2 py-1 rounded-lg text-xs font-bold">
+                                                        <FiWifi className="w-3 h-3" /> Online
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 text-gray-400 bg-gray-500/10 px-2 py-1 rounded-lg text-xs font-bold">
+                                                        <FiWifiOff className="w-3 h-3" /> Offline
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="text-center py-4">
-                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${device.hasFcmToken
-                                                    ? 'text-blue-400 bg-blue-500/10 border border-blue-500/20'
-                                                    : 'text-yellow-500 bg-yellow-500/10 border border-yellow-500/20'
-                                                    }`}>
-                                                    {device.hasFcmToken ? 'Aktív' : 'Hiányzik'}
-                                                </span>
+                                                {device.hasFcmToken ? (
+                                                    <span className="inline-flex items-center gap-1 text-green-500 bg-green-500/10 px-2 py-1 rounded-lg text-xs font-bold">
+                                                        <FiCheckCircle className="w-3 h-3" /> Aktív
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 text-red-500 bg-red-500/10 px-2 py-1 rounded-lg text-xs font-bold">
+                                                        <FiXCircle className="w-3 h-3" /> Hiányzik
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="text-right pr-6 py-4">
                                                 <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">

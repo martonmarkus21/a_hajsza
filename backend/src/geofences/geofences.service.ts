@@ -18,7 +18,7 @@ export class GeofencesService {
     private auditLogsService: AuditLogsService,
     private pairsService: PairsService,
     private webSocketGateway: WebSocketGateway,
-  ) {}
+  ) { }
 
   async findAll() {
     const geofences = await this.geofenceRepository.find({
@@ -47,7 +47,7 @@ export class GeofencesService {
       activeUntil: createGeofenceDto.activeUntil ? new Date(createGeofenceDto.activeUntil) : null,
       geofenceType: createGeofenceDto.geofenceType || 'scenario',
       metadataJson: createGeofenceDto.metadataJson,
-      active: true,
+      active: createGeofenceDto.active !== undefined ? createGeofenceDto.active : true, // Default to true if not specified
     });
 
     const savedGeofence = await this.geofenceRepository.save(geofence);
@@ -62,6 +62,11 @@ export class GeofencesService {
         });
       }
     }
+
+    // Broadcast update to all clients (Main Map) active or not, to keep lists in sync
+    this.webSocketGateway.broadcastGameAreaUpdate({
+      timestamp: new Date().toISOString(),
+    });
 
     // Audit log
     await this.auditLogsService.log({
@@ -87,7 +92,7 @@ export class GeofencesService {
     // If this is the "Magyarország" game_area geofence, ensure it has polygon data
     if (geofence.name === 'Magyarország' && geofence.geofenceType === 'game_area') {
       const metadata = geofence.metadataJson as any || {};
-      
+
       // If polygon data is missing, load it from GeoJSON
       if (!metadata.polygon || !metadata.type || metadata.type !== 'polygon') {
         const hungaryPolygon = loadHungaryBoundaryFromGeoJSON();
@@ -95,7 +100,7 @@ export class GeofencesService {
           // Calculate center and radius for the polygon
           const center = this.calculatePolygonCenter(hungaryPolygon);
           const radius = this.calculatePolygonRadius(hungaryPolygon, center);
-          
+
           geofence.centerLat = center.lat;
           geofence.centerLon = center.lon;
           geofence.radiusM = radius;
@@ -104,7 +109,7 @@ export class GeofencesService {
             polygon: hungaryPolygon,
             type: 'polygon',
           } as any;
-          
+
           console.log('Updated Hungary geofence with polygon data on activation');
         }
       }
@@ -112,14 +117,12 @@ export class GeofencesService {
 
     geofence.active = true;
     await this.geofenceRepository.save(geofence);
-    
-    // If this is a game_area geofence, broadcast update
-    if (geofence.geofenceType === 'game_area') {
-      this.webSocketGateway.broadcastGameAreaUpdate({
-        timestamp: new Date().toISOString(),
-      });
-    }
-    
+
+    // Broadcast update for ALL geofence types
+    this.webSocketGateway.broadcastGameAreaUpdate({
+      timestamp: new Date().toISOString(),
+    });
+
     return { success: true, message: 'Geofence activated' };
   }
 
@@ -154,9 +157,9 @@ export class GeofencesService {
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(this.toRad(lat1)) *
-        Math.cos(this.toRad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+      Math.cos(this.toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
@@ -170,18 +173,66 @@ export class GeofencesService {
     if (!geofence) {
       throw new Error('Geofence not found');
     }
-    
+
     geofence.active = false;
     await this.geofenceRepository.save(geofence);
-    
-    // If this is a game_area geofence, broadcast update
-    if (geofence.geofenceType === 'game_area') {
-      this.webSocketGateway.broadcastGameAreaUpdate({
-        timestamp: new Date().toISOString(),
-      });
-    }
-    
+
+    // Broadcast update for ALL geofence types
+    this.webSocketGateway.broadcastGameAreaUpdate({
+      timestamp: new Date().toISOString(),
+    });
+
     return { success: true, message: 'Geofence deactivated' };
+  }
+
+  async bulkUpdateStatus(data: { activateIds: number[], deactivateIds: number[] }) {
+    const { activateIds, deactivateIds } = data;
+
+    if (activateIds.length > 0) {
+      await this.geofenceRepository
+        .createQueryBuilder()
+        .update(Geofence)
+        .set({ active: true })
+        .where("id IN (:...ids)", { ids: activateIds })
+        .execute();
+
+      // Special check: If activiating Hungary, ensure polygon data exists
+      const hungary = await this.geofenceRepository.findOne({ where: { name: 'Magyarország', geofenceType: 'game_area' } });
+      if (hungary && activateIds.includes(hungary.id)) {
+        // Reuse the logic from activate() to ensure polygon data is loaded
+        // We initiate a separate activate call internally or duplicate logic. 
+        // Duplicating logic for safety and speed to avoid broadcast loop.
+        const metadata = hungary.metadataJson as any || {};
+        if (!metadata.polygon || !metadata.type || metadata.type !== 'polygon') {
+          const hungaryPolygon = loadHungaryBoundaryFromGeoJSON();
+          if (hungaryPolygon) {
+            const center = this.calculatePolygonCenter(hungaryPolygon);
+            const radius = this.calculatePolygonRadius(hungaryPolygon, center);
+            hungary.centerLat = center.lat;
+            hungary.centerLon = center.lon;
+            hungary.radiusM = radius;
+            hungary.metadataJson = { ...metadata, polygon: hungaryPolygon, type: 'polygon' } as any;
+            await this.geofenceRepository.save(hungary);
+          }
+        }
+      }
+    }
+
+    if (deactivateIds.length > 0) {
+      await this.geofenceRepository
+        .createQueryBuilder()
+        .update(Geofence)
+        .set({ active: false })
+        .where("id IN (:...ids)", { ids: deactivateIds })
+        .execute();
+    }
+
+    // Broadcast SINGLE update after all operations
+    this.webSocketGateway.broadcastGameAreaUpdate({
+      timestamp: new Date().toISOString(),
+    });
+
+    return { success: true, message: 'Geofences updated atomically' };
   }
 
   async delete(id: number, userId: number) {
@@ -199,6 +250,10 @@ export class GeofencesService {
       entityType: 'geofence',
       entityId: id,
       dataJson: { name: geofence.name },
+    });
+
+    this.webSocketGateway.broadcastGameAreaUpdate({
+      timestamp: new Date().toISOString(),
     });
 
     return { success: true, message: 'Geofence deleted' };

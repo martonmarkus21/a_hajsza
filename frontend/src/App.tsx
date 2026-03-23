@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Circle, Polygon, Popup, Marker, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
@@ -30,7 +31,13 @@ import {
   FiMoon,
   FiGlobe,
   FiChevronRight,
-  FiX
+  FiX,
+  FiBell,
+  FiCheckCircle,
+  FiAlertCircle,
+  FiInfo,
+  FiTrash2,
+  FiShield
 } from 'react-icons/fi';
 import { HiPencil } from 'react-icons/hi2';
 import { FaHandcuffs } from 'react-icons/fa6';
@@ -155,6 +162,169 @@ function MapLayerSelector({
 
 // --- New Components for Redesign ---
 
+const formatRelativeTime = (timestamp: number | string | Date) => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  
+  const diffDays = Math.round((today.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
+  const timeStr = date.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
+  
+  if (diffDays === 0) return timeStr;
+  if (diffDays === 1) return `Tegnap ${timeStr}`;
+  
+  const dateStr = date.toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
+  return `${dateStr} ${timeStr}`;
+};
+
+function NotificationDropdown() {
+  const { history, markAsRead, markAllAsRead, clearHistory, unreadCount, loadHistoryForUser, deleteNotification } = useNotification();
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const user = authService.getCurrentUser();
+    if (user?.username) {
+      loadHistoryForUser(user.username);
+    }
+  }, [loadHistoryForUser]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        onClick={() => setIsOpen(!isOpen)}
+        className="relative p-2 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-white hover:bg-white/10 transition-all focus:outline-none"
+        title="Értesítések"
+      >
+        <FiBell className="w-5 h-5" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-lg shadow-red-500/50">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {/* Dropdown Panel - via portal to bypass backdrop-blur nesting limitations */}
+      {createPortal(
+        <div
+          ref={dropdownRef}
+          className={`fixed top-[84px] right-4 md:right-[150px] lg:right-[160px] w-[min(calc(100vw-32px),380px)] bg-[#050505]/85 backdrop-blur-xl border border-white/5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl overflow-hidden transition-all duration-300 z-[2000] flex flex-col ${isOpen ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-2 pointer-events-none"}`}
+        >
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-white/[0.03] to-transparent">
+            <h3 className="font-extrabold text-white flex items-center gap-2.5 text-lg tracking-tight">
+              <FiBell className="w-5 h-5 text-white/40" />
+              Értesítések
+              {unreadCount > 0 && (
+                <div className="flex items-center justify-center bg-white/10 text-white h-5 min-w-[20px] px-1.5 rounded-full text-[11px] font-bold ml-0.5">
+                  {unreadCount}
+                </div>
+              )}
+            </h3>
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && history.length > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 hover:scale-105 transition-all shadow-sm"
+                  title="Összes olvasottnak jelölése"
+                >
+                  <FiCheckCircle className="w-4 h-4" />
+                </button>
+              )}
+              {history.length > 0 && (
+                <button
+                  onClick={clearHistory}
+                  className="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:scale-105 transition-all shadow-sm"
+                  title="Összes törlése"
+                >
+                  <FiTrash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto max-h-[400px] custom-scrollbar">
+            {history.length === 0 ? (
+              <div className="p-6 flex items-center justify-center text-gray-500">
+                <p className="text-sm font-medium">Nincsenek új értesítések.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                {history.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => !item.read && markAsRead(item.id)}
+                    className={`group relative p-4 border-b border-white/5 flex gap-3 transition-colors cursor-pointer hover:bg-white/[0.02] ${!item.read ? 'bg-white/[0.04]' : ''}`}
+                  >
+                    {/* Unread indicator line */}
+                    {!item.read && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-blue-500" />}
+
+                    {/* Icon */}
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5
+                      ${item.type === 'success' ? 'bg-green-500/10 text-green-400' : ''}
+                      ${item.type === 'error' ? 'bg-red-500/10 text-red-400' : ''}
+                      ${item.type === 'info' ? 'bg-blue-500/10 text-blue-400' : ''}
+                  `}>
+                      {item.type === 'success' && <FiCheckCircle className="w-4 h-4" />}
+                      {item.type === 'error' && <FiAlertCircle className="w-4 h-4" />}
+                      {item.type === 'info' && <FiInfo className="w-4 h-4" />}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-1">
+                      <p className={`text-sm leading-snug break-words ${!item.read ? 'text-white font-medium' : 'text-gray-400'}`}>
+                        {item.message}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                          {formatRelativeTime(item.timestamp)}
+                        </span>
+                        {item.isGlobal ? (
+                          <span className="text-[9px] uppercase font-bold text-orange-500 bg-orange-500/10 px-1.5 py-0.5 rounded">Globális</span>
+                        ) : (
+                          <span className="text-[9px] uppercase font-bold text-blue-500 bg-blue-500/10 px-1.5 py-0.5 rounded">Személyes</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Delete Button */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteNotification(item.id); }}
+                      className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all self-start mt-0.5"
+                      title="Értesítés törlése"
+                    >
+                      <FiX className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 function FloatingHeader({
   connected,
   gameInfo,
@@ -259,6 +429,8 @@ function FloatingHeader({
 
             {/* Actions */}
             <div className="flex items-center gap-2 ml-2">
+              <NotificationDropdown />
+
               <button
                 onClick={onSendMessageClick}
                 className="p-2 rounded-xl bg-white/5 border border-white/5 text-gray-300 hover:text-blue-400 hover:bg-blue-500/10 hover:border-blue-500/30 transition-all"
@@ -416,7 +588,9 @@ function ModernSidebar({
                   onClick={() => pair.active && onPairClick(pair)}
                   className={`group relative p-3 rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden ${isSelected
                     ? 'bg-orange-500/10 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.1)]'
-                    : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06] hover:border-white/10'
+                    : isMw
+                      ? 'bg-orange-500/[0.03] border-orange-500/20 hover:bg-orange-500/[0.06] hover:border-orange-500/30'
+                      : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06] hover:border-white/10'
                     } ${pair.captured ? 'opacity-60 saturate-50' : ''}`}
                 >
                   {/* Selection Indicator */}
@@ -432,42 +606,50 @@ function ModernSidebar({
                     </div>
 
                     {/* Info */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 flex flex-col justify-center min-h-[40px]">
                       {pair.name && (
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`text-base font-bold truncate ${isSelected ? 'text-white' : 'text-gray-200 group-hover:text-white'}`}>
                             {pair.name}
                           </span>
-                          {isMw && <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-orange-500 text-white shadow-sm">MW</span>}
+                          {isMw && <span className="mw-badge mw !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]"><FiShield className="w-2.5 h-2.5 fill-current" /> MW</span>}
                         </div>
                       )}
 
-                      <div className="flex flex-col gap-1">
-                        {pair.lastPosition && (
-                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                            <FiClock className="w-3 h-3" />
-                            <span>
-                              {new Date(pair.lastPosition.timestamp).toLocaleString('hu-HU', {
-                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                              })}
-                            </span>
-                          </div>
-                        )}
+                      {(!pair.lastPosition && !pair.distancePosition && pair.active) && (
+                        <div className="flex items-center justify-center w-full">
+                          <div className="w-5 h-5 rounded-full border-2 border-gray-600/30 border-t-gray-500 animate-[spin_1.5s_linear_infinite]" />
+                        </div>
+                      )}
 
-                        {browserLocation && (pair.distancePosition || pair.lastPosition) && (
-                          <div className="flex items-center gap-1.5 text-xs font-medium text-orange-400" key={`dist-${pair.id}-${forceRender}`}>
-                            <FiMapPin className="w-3 h-3" />
-                            <span>
-                              Légvonal: {formatDistance(calculateDistance(
-                                browserLocation.lat,
-                                browserLocation.lon,
-                                (pair.distancePosition || pair.lastPosition)!.lat,
-                                (pair.distancePosition || pair.lastPosition)!.lon
-                              ))}
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                      {(pair.lastPosition || pair.distancePosition) && (
+                        <div className="flex flex-col gap-1">
+                          {pair.lastPosition && (
+                            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                              <FiClock className="w-3 h-3" />
+                              <span>
+                                {new Date(pair.lastPosition.timestamp).toLocaleString('hu-HU', {
+                                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                          )}
+
+                          {browserLocation && (pair.distancePosition || pair.lastPosition) && (
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-orange-400" key={`dist-${pair.id}-${forceRender}`}>
+                              <FiMapPin className="w-3 h-3" />
+                              <span>
+                                Légvonal: {formatDistance(calculateDistance(
+                                  browserLocation.lat,
+                                  browserLocation.lon,
+                                  (pair.distancePosition || pair.lastPosition)!.lat,
+                                  (pair.distancePosition || pair.lastPosition)!.lon
+                                ))}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions (Always Visible, Side-by-Side) */}
@@ -513,21 +695,21 @@ function GeofencePopup({
   const isCounty = g.geofenceType === 'county' || !!g.metadataJson?.countyCode;
 
   // Logic for Subtitle
-  let subtitle = 'EGYÉB ZÓNA';
+  let subtitle = '';
   if (isCounty) {
     subtitle = g.name === 'Budapest' ? 'FŐVÁROS' : 'VÁRMEGYE';
-  } else if (g.geofenceType === 'restricted') {
-    subtitle = 'TILTOTT ZÓNA';
-  } else if (g.geofenceType === 'safe') {
-    subtitle = 'BIZTONSÁGOS ZÓNA';
   } else if (g.geofenceType === 'game_area') {
     // If name implies Hungary, we don't need a subtitle, or it's just 'MAGYARORSZÁG'
     if (g.name.toLowerCase() === 'magyarország') subtitle = '';
     else subtitle = 'MAGYARORSZÁG';
+  } else {
+    // Dynamic subtitle for custom zones: calculate size in km
+    const radiusKm = parseFloat((g.radiusM / 1000).toFixed(3));
+    subtitle = `${radiusKm} km-es zóna`;
   }
 
   // Consistent Status Dot Style
-  const statusDotClass = `w-2.5 h-2.5 rounded-full shadow-[0_0_12px] ${activeMapLayer === 'dark' ? 'bg-green-500 shadow-green-500' : 'bg-green-600'}`;
+  const statusDotClass = `w-2.5 h-2.5 rounded-full shadow-[0_0_12px] ${activeMapLayer === 'dark' ? 'bg-green-500 shadow-green-500' : 'bg-green-500 shadow-green-500/40'}`;
 
   return (
     <Popup className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}>
@@ -944,21 +1126,100 @@ function MapView() {
             )
           ))}
 
-          {/* New Geofence Logic - Unified */}
+          {/* Unified Dimming Mask for ALL Active Zones (Game Area, Counties, Custom) */}
+          {(() => {
+            // Helper to approximate a circle as a polygon for the mask hole
+            const getCirclePolygon = (lat: number, lon: number, radiusM: number) => {
+              const points: [number, number][] = [];
+              const steps = 64; // Smoothness
+              const R = 6371000; // Earth radius in meters
+
+              for (let i = 0; i < steps; i++) {
+                const angle = (i * 360 / steps) * (Math.PI / 180);
+                // Simple flat-earth approximation for small radii is sufficient for visual mask
+                // dLat = (radius / R) * (180 / PI)
+                // dLon = (radius / R) * (180 / PI) / cos(lat)
+                const dLat = (radiusM / R) * (180 / Math.PI);
+                const dLon = dLat / Math.cos(lat * Math.PI / 180);
+
+                const pLat = lat + dLat * Math.sin(angle);
+                const pLon = lon + dLon * Math.cos(angle);
+                points.push([pLat, pLon]);
+              }
+              return points;
+            };
+
+            // Collect all "Active" areas that should be bright (Holes in the mask)
+            const holes: [number, number][][] = [];
+
+            geofences.filter(g => g.active).forEach(g => {
+              // 1. Polygons (Game Area, County, Custom Polygon)
+              if (g.metadataJson?.polygon && g.metadataJson.polygon.length > 0) {
+                holes.push(g.metadataJson.polygon.map(([lon, lat]) => [lat, lon] as [number, number]));
+              }
+              // 2. Circles (Custom Zones without polygon data)
+              else if (g.centerLat && g.centerLon && g.radiusM) {
+                holes.push(getCirclePolygon(g.centerLat, g.centerLon, g.radiusM));
+              }
+            });
+
+            if (holes.length > 0) {
+              const maskPositions = [
+                [ // Outer Ring (World)
+                  [90, -180], [90, 180], [-90, 180], [-90, -180]
+                ],
+                ...holes // All Holes
+              ];
+
+              return (
+                <Polygon
+                  positions={maskPositions as any}
+                  pathOptions={{
+                    color: 'transparent',
+                    fillColor: '#000000',
+                    fillOpacity: activeMapLayer === 'dark' ? 0.7 : 0.5, // Darker dimming in Dark Mode
+                    stroke: false
+                  }}
+                  eventHandlers={{ click: () => { } }} // Passthrough
+                />
+              );
+            } else {
+              // No active zones -> Dim the ENTIRE map
+              const maskPositions = [
+                [90, -180], [90, 180], [-90, 180], [-90, -180]
+              ];
+
+              return (
+                <Polygon
+                  positions={maskPositions as any}
+                  pathOptions={{
+                    color: 'transparent',
+                    fillColor: '#000000',
+                    fillOpacity: activeMapLayer === 'dark' ? 0.7 : 0.5,
+                    stroke: false
+                  }}
+                  eventHandlers={{ click: () => { } }} // Passthrough
+                />
+              );
+            }
+          })()}
+
+          {/* Render Active Geofences (Borders/Fills) */}
           {geofences.filter(g => g.active).map(g => {
             const isCounty = g.geofenceType === 'county' || !!g.metadataJson?.countyCode;
 
             // 1. Game Area (Polygon)
             if (g.geofenceType === 'game_area' && g.metadataJson?.polygon) {
+              const positions = g.metadataJson.polygon.map(([lon, lat]) => [lat, lon] as [number, number]);
               return (
                 <Polygon
                   key={`${g.id}-${activeMapLayer}`}
-                  positions={g.metadataJson.polygon.map(([lon, lat]) => [lat, lon] as [number, number])}
+                  positions={positions}
                   pathOptions={{
                     color: activeMapLayer === 'dark' ? '#f97316' : '#3b82f6',
-                    fillColor: activeMapLayer === 'dark' ? '#f97316' : '#3b82f6',
-                    fillOpacity: 0.1,
-                    weight: 2
+                    fillColor: 'transparent',
+                    fillOpacity: 0,
+                    weight: 3
                   }}
                 >
                   <GeofencePopup geofence={g} activeMapLayer={activeMapLayer} onClose={() => mapRef.current?.closePopup()} />
@@ -968,11 +1229,15 @@ function MapView() {
 
             // 2. Standard Polygon (County / Custom)
             if (g.metadataJson?.polygon && (g.metadataJson?.type === 'polygon' || isCounty)) {
-              let color = '#3b82f6'; // Blue default
+              let color = '#3b82f6'; // Default Blue
+
               if (activeMapLayer === 'dark') {
-                if (g.geofenceType === 'restricted') color = '#ef4444';
-                else if (g.geofenceType === 'safe') color = '#10b981';
-                else if (g.geofenceType === 'county') color = '#f97316';
+                if (g.geofenceType === 'county') color = '#f97316';
+                else color = '#3b82f6'; // Custom Zone -> Blue (on Dark)
+              } else {
+                // Standard / Satellite Logic
+                if (g.geofenceType === 'county') color = '#3b82f6'; // County -> Blue (on Light)
+                else color = '#f97316'; // Custom Zone -> Orange (on Light)
               }
 
               return (
@@ -982,7 +1247,7 @@ function MapView() {
                   pathOptions={{
                     color: color,
                     fillColor: color,
-                    fillOpacity: g.geofenceType === 'county' ? 0.05 : 0.2, // Counties fainter
+                    fillOpacity: g.geofenceType === 'county' ? 0.05 : 0, // No fill for custom zones (0.1 -> 0)
                     weight: 2,
                     dashArray: isCounty ? '5, 10' : undefined
                   }}
@@ -992,13 +1257,21 @@ function MapView() {
               );
             }
 
-            // 3. Circle (Default)
+            // 3. Circle (Default - usually Custom Zones/Points)
+            let circleColor = '#3b82f6'; // Default Blue
+            if (activeMapLayer === 'dark') {
+              circleColor = '#3b82f6'; // Custom Zone -> Blue (on Dark)
+            } else {
+              // Standard / Satellite Logic
+              circleColor = '#f97316'; // Custom Zone -> Orange (on Light)
+            }
+
             return (
               <Circle
                 key={`${g.id}-${activeMapLayer}`}
                 center={[g.centerLat, g.centerLon]}
                 radius={g.radiusM}
-                pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2, weight: 2 }}
+                pathOptions={{ color: circleColor, fillColor: circleColor, fillOpacity: 0, weight: 2 }} // No fill (0.1 -> 0)
               >
                 <GeofencePopup geofence={g} activeMapLayer={activeMapLayer} onClose={() => mapRef.current?.closePopup()} />
               </Circle>

@@ -209,7 +209,7 @@ export default function Profile() {
 
                         {/* LEFT COLUMN: Profile Summary (4 cols) */}
                         <div className="lg:col-span-4 space-y-5">
-                            <div className="bg-[#121212]/40 backdrop-blur-xl border border-white/5 rounded-[24px] overflow-hidden sticky top-6">
+                            <div className="mw-card p-0 overflow-hidden sticky top-6">
                                 {/* Header gradient - Extended height and clarity */}
                                 <div className="h-36 bg-gradient-to-b from-orange-500/15 via-orange-900/5 to-transparent relative">
                                     <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20 mix-blend-overlay" />
@@ -273,136 +273,154 @@ export default function Profile() {
                         <div className="lg:col-span-8 space-y-6">
 
                             {/* Email Settings */}
-                            <div className="bg-[#121212]/40 backdrop-blur-xl border border-white/5 rounded-[20px] p-8">
-                                <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                                        <FiMail className="w-5 h-5 text-blue-400" />
-                                    </div>
-                                    Email cím módosítása
-                                </h2>
+                            <div className="mw-card p-0 overflow-hidden flex flex-col">
+                                <div className="p-6 border-b border-white/10 flex items-center bg-white/[0.02]">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                                        <div className="p-2 rounded-xl bg-blue-500/20 text-blue-500">
+                                            <FiMail className="w-6 h-6" />
+                                        </div>
+                                        Email cím módosítása
+                                    </h3>
+                                </div>
 
-                                <div className="flex flex-col sm:flex-row gap-5 items-end">
-                                    <div className="flex-1 w-full">
+                                <div className="p-6">
+                                    <div className="max-w-md">
                                         <label className="block text-gray-500 text-xs font-bold mb-2 uppercase tracking-widest pl-1">
                                             Új email cím
                                         </label>
                                         <div className="relative group">
-                                            <FiMail className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
+                                            <FiMail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors pointer-events-none" />
                                             <input
                                                 type="email"
                                                 value={editEmail}
                                                 onChange={(e) => { setEditEmail(e.target.value); setEmailSuccess(''); setEmailError(''); }}
-                                                className="w-full pl-12 pr-4 py-3 bg-black/20 border border-white/5 rounded-xl text-white placeholder-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all text-sm hover:bg-black/30"
+                                                className="mw-input pl-11 focus:!border-blue-500/50 focus:!shadow-[0_0_0_4px_rgba(59,130,246,0.15)] bg-[#121212]/50"
                                                 placeholder="pelda@email.com"
                                             />
                                         </div>
                                     </div>
+                                </div>
+                                <div className={`px-6 py-4 border-t flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors duration-300 ${emailError ? 'bg-red-500/5 border-red-500/10' :
+                                    emailSuccess ? 'bg-emerald-500/5 border-emerald-500/10' :
+                                        'bg-white/[0.02] border-white/5'
+                                    }`}>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                        {emailError && <FiAlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                                        {emailSuccess && <FiCheck className="w-4 h-4 text-emerald-500 shrink-0" />}
+                                        <p className={`text-xs font-medium delay-75 duration-300 transition-colors ${emailError ? 'text-red-400' :
+                                            emailSuccess ? 'text-emerald-400' :
+                                                'text-gray-500'
+                                            }`}>
+                                            {emailError || emailSuccess || 'Az új e-mail címet a mentés gombbal véglegesítheti.'}
+                                        </p>
+                                    </div>
                                     <button
                                         onClick={handleEmailSave}
                                         disabled={emailSaving || editEmail === (profile.email || '')}
-                                        className="w-full sm:w-auto px-8 py-3 bg-blue-500/10 hover:bg-blue-500/20 disabled:bg-white/[0.02] disabled:text-gray-600 disabled:border-white/5 disabled:cursor-not-allowed text-blue-400 hover:text-blue-300 rounded-xl font-medium transition-all duration-300 border border-blue-500/20 hover:border-blue-500/30 text-sm flex items-center justify-center gap-2 min-w-[140px]"
+                                        className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white disabled:bg-blue-500/30 disabled:text-white/50 disabled:cursor-not-allowed rounded-lg transition-all duration-300 font-bold text-sm w-full sm:w-auto ml-auto shrink-0"
                                     >
-                                        {emailSaving ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <FiSave className="w-5 h-5" />}
+                                        {emailSaving ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <FiSave className="w-4 h-4" />}
                                         Mentés
                                     </button>
                                 </div>
-
-                                {(emailSuccess || emailError) && (
-                                    <div className={`mt-5 p-3 rounded-xl flex items-center gap-3 text-xs font-medium animate-fade-in border ${emailSuccess ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400' : 'bg-red-500/5 border-red-500/10 text-red-400'
-                                        }`}>
-                                        {emailSuccess ? <FiCheck className="w-4 h-4" /> : <FiAlertCircle className="w-4 h-4" />}
-                                        {emailSuccess || emailError}
-                                    </div>
-                                )}
                             </div>
 
                             {/* Password Settings */}
-                            <div className="bg-[#121212]/40 backdrop-blur-xl border border-white/5 rounded-[24px] p-8">
-                                <h2 className="text-lg font-bold text-white mb-6 flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-                                        <FiLock className="w-5 h-5 text-purple-400" />
-                                    </div>
-                                    Jelszó módosítása
-                                </h2>
-
-                                <form onSubmit={handlePasswordChange} className="space-y-5">
-                                    <div>
-                                        <label className="block text-gray-500 text-xs font-bold mb-2 uppercase tracking-widest pl-1">
-                                            Jelenlegi jelszó
-                                        </label>
-                                        <div className="relative group">
-                                            <FiLock className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-purple-400 transition-colors" />
-                                            <input
-                                                type="password"
-                                                value={currentPassword}
-                                                onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
-                                                className="w-full pl-11 pr-4 py-3 bg-black/20 border border-white/5 rounded-xl text-white placeholder-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all text-sm hover:bg-black/30"
-                                                placeholder="••••••••"
-                                            />
+                            <div className="mw-card p-0 overflow-hidden flex flex-col">
+                                <div className="p-6 border-b border-white/10 flex items-center bg-white/[0.02]">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                                        <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400">
+                                            <FiLock className="w-6 h-6" />
                                         </div>
-                                    </div>
+                                        Jelszó módosítása
+                                    </h3>
+                                </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                        <div>
+                                <div className="p-6">
+                                    <form id="password-form" onSubmit={handlePasswordChange} className="space-y-5">
+                                        <div className="max-w-md">
                                             <label className="block text-gray-500 text-xs font-bold mb-2 uppercase tracking-widest pl-1">
-                                                Új jelszó
+                                                Jelenlegi jelszó
                                             </label>
                                             <div className="relative group">
-                                                <FiLock className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-purple-400 transition-colors" />
+                                                <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-purple-500 transition-colors pointer-events-none" />
                                                 <input
                                                     type="password"
-                                                    value={newPassword}
-                                                    onChange={(e) => { setNewPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
-                                                    className="w-full pl-11 pr-4 py-3 bg-black/20 border border-white/5 rounded-xl text-white placeholder-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all text-sm hover:bg-black/30"
-                                                    placeholder="Új jelszó"
+                                                    value={currentPassword}
+                                                    onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
+                                                    className="mw-input pl-11 focus:!border-purple-500/50 focus:!shadow-[0_0_0_4px_rgba(168,85,247,0.15)] bg-[#121212]/50"
+                                                    placeholder="••••••••"
                                                 />
                                             </div>
                                         </div>
-                                        <div>
-                                            <label className="block text-gray-500 text-xs font-bold mb-2 uppercase tracking-widest pl-1">
-                                                Megerősítés
-                                            </label>
-                                            <div className="relative group">
-                                                <FiLock className="absolute left-4 top-3.5 w-5 h-5 text-gray-500 group-focus-within:text-purple-400 transition-colors" />
-                                                <input
-                                                    type="password"
-                                                    value={confirmPassword}
-                                                    onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
-                                                    className="w-full pl-11 pr-4 py-3 bg-black/20 border border-white/5 rounded-xl text-white placeholder-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all text-sm hover:bg-black/30"
-                                                    placeholder="Jelszó újra"
-                                                />
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                            <div>
+                                                <label className="block text-gray-500 text-xs font-bold mb-2 uppercase tracking-widest pl-1">
+                                                    Új jelszó
+                                                </label>
+                                                <div className="relative group">
+                                                    <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-purple-500 transition-colors pointer-events-none" />
+                                                    <input
+                                                        type="password"
+                                                        value={newPassword}
+                                                        onChange={(e) => { setNewPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
+                                                        className="mw-input pl-11 focus:!border-purple-500/50 focus:!shadow-[0_0_0_4px_rgba(168,85,247,0.15)] bg-[#121212]/50"
+                                                        placeholder="Új jelszó"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-gray-500 text-xs font-bold mb-2 uppercase tracking-widest pl-1">
+                                                    Megerősítés
+                                                </label>
+                                                <div className="relative group">
+                                                    <FiLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-purple-500 transition-colors pointer-events-none" />
+                                                    <input
+                                                        type="password"
+                                                        value={confirmPassword}
+                                                        onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
+                                                        className="mw-input pl-11 focus:!border-purple-500/50 focus:!shadow-[0_0_0_4px_rgba(168,85,247,0.15)] bg-[#121212]/50"
+                                                        placeholder="Jelszó újra"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-
-                                    {(passwordSuccess || passwordError) && (
-                                        <div className={`p-3 rounded-xl flex items-center gap-3 text-xs font-medium animate-fade-in border ${passwordSuccess ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400' : 'bg-red-500/5 border-red-500/10 text-red-400'
+                                    </form>
+                                </div>
+                                <div className={`px-6 py-4 border-t flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-colors duration-300 ${passwordError ? 'bg-red-500/5 border-red-500/10' :
+                                    passwordSuccess ? 'bg-emerald-500/5 border-emerald-500/10' :
+                                        'bg-white/[0.02] border-white/5'
+                                    }`}>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                        {passwordError && <FiAlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                                        {passwordSuccess && <FiCheck className="w-4 h-4 text-emerald-500 shrink-0" />}
+                                        <p className={`text-xs font-medium delay-75 duration-300 transition-colors ${passwordError ? 'text-red-400' :
+                                            passwordSuccess ? 'text-emerald-400' :
+                                                'text-gray-500'
                                             }`}>
-                                            {passwordSuccess ? <FiCheck className="w-5 h-5" /> : <FiAlertCircle className="w-5 h-5" />}
-                                            {passwordSuccess || passwordError}
-                                        </div>
-                                    )}
-
-                                    <div className="pt-2">
-                                        <button
-                                            type="submit"
-                                            disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword}
-                                            className="w-full bg-purple-500/10 hover:bg-purple-500/20 disabled:bg-white/[0.02] disabled:text-gray-600 disabled:border-white/5 disabled:cursor-not-allowed text-purple-400 hover:text-purple-300 py-3 px-6 rounded-xl font-medium transition-all duration-300 border border-purple-500/20 hover:border-purple-500/30 text-sm flex items-center justify-center gap-2"
-                                        >
-                                            {passwordSaving ? (
-                                                <>
-                                                    <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                                    <span>Mentés folyamatban...</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <FiLock className="w-5 h-5" />
-                                                    <span>Jelszó módosítása</span>
-                                                </>
-                                            )}
-                                        </button>
+                                            {passwordError || passwordSuccess || 'Erős, legalább 6 karakter hosszú jelszót válasszon.'}
+                                        </p>
                                     </div>
-                                </form>
+                                    <button
+                                        form="password-form"
+                                        type="submit"
+                                        disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword}
+                                        className="flex items-center justify-center gap-2 px-6 py-2.5 bg-purple-500 hover:bg-purple-600 text-white disabled:bg-purple-500/30 disabled:text-white/50 disabled:cursor-not-allowed rounded-lg transition-all duration-300 font-bold text-sm w-full sm:w-auto ml-auto shrink-0"
+                                    >
+                                        {passwordSaving ? (
+                                            <>
+                                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                <span>Mentés...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <FiLock className="w-4 h-4" />
+                                                <span>Jelszó módosítása</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

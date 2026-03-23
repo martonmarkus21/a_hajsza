@@ -98,7 +98,7 @@ export function useGameInfo() {
         activeGameArea = gameArea.activeGameArea;
       }
 
-      // Also check for active custom zones (scenario, crossing_point) via direct geofence fetch
+      // Also check for active custom zones via direct geofence fetch
       try {
         const geofenceResponse = await fetch('http://localhost:3000/api/geofence', {
           headers: {

@@ -47,7 +47,7 @@ export default function Login() {
   };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-[#1a1a1a] via-[#0f0f0f] to-black overflow-hidden selection:bg-orange-500/30 selection:text-orange-200 font-sans text-white">
+    <div className="fixed inset-0 bg-gradient-to-br from-[#1a1a1a] via-[#0f0f0f] to-black overflow-hidden font-sans text-white">
 
       {/* Scrollable Content Wrapper */}
       <div className="relative z-10 w-full h-full overflow-y-auto custom-scrollbar flex items-center justify-center p-4">

@@ -127,31 +127,39 @@ html {
 }
 
 .mw-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  border: none;
 }
 
-.mw-badge.active {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+.mw-badge.active, .mw-badge.online, .mw-badge.success {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
 }
 
-.mw-badge.inactive {
+.mw-badge.info {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.mw-badge.inactive, .mw-badge.missing, .mw-badge.error, .mw-badge.captured {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
-.mw-badge.warning {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.2);
+.mw-badge.warning, .mw-badge.mw {
+  background: rgba(249, 115, 22, 0.1);
+  color: #f97316;
+}
+
+.mw-badge.offline, .mw-badge.neutral {
+  background: rgba(107, 114, 128, 0.1);
+  color: #9ca3af;
 }
 
 .glass-effect {
@@ -668,6 +676,54 @@ html {
 }
 
 .mw-toggle input:checked+.mw-toggle-slider::before {
+  left: calc(100% - 23px);
+  background: #10b981;
+}
+
+/* Neutral Toggle Switch (Gray when inactive) */
+.mw-toggle-neutral {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.mw-toggle-neutral input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mw-toggle-neutral-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  transition: all 0.3s ease;
+}
+
+.mw-toggle-neutral-slider::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  background: #9ca3af;
+  /* gray-400 */
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.mw-toggle-neutral input:checked+.mw-toggle-neutral-slider {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.mw-toggle-neutral input:checked+.mw-toggle-neutral-slider::before {
   left: calc(100% - 23px);
   background: #10b981;
 }

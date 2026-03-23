@@ -8,7 +8,7 @@ import { RolesGuard } from '../auth/roles.guard';
 @Controller('api/geofence')
 @UseGuards(JwtAuthGuard)
 export class GeofencesController {
-  constructor(private readonly geofencesService: GeofencesService) {}
+  constructor(private readonly geofencesService: GeofencesService) { }
 
   @Get()
   async findAll() {
@@ -34,6 +34,13 @@ export class GeofencesController {
   @Roles('admin')
   async deactivate(@Param('id') id: string) {
     return await this.geofencesService.deactivate(parseInt(id));
+  }
+
+  @Put('bulk-status')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  async bulkUpdateStatus(@Body() body: { activateIds: number[], deactivateIds: number[] }) {
+    return await this.geofencesService.bulkUpdateStatus(body);
   }
 
   @Delete(':id')

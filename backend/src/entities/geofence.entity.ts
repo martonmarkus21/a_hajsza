@@ -36,7 +36,7 @@ export class Geofence {
 
   @Column({ name: 'geofence_type' })
   @Index()
-  geofenceType: string; // 'game_area', 'scenario', 'crossing_point'
+  geofenceType: string; // 'game_area', 'scenario'
 
   @Column({ type: 'jsonb', nullable: true, name: 'metadata_json' })
   metadataJson: any;

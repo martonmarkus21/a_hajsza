@@ -53,9 +53,5 @@ export class GameDaysService {
     return gameDay?.specialRulesJson?.isFinalDay === true;
   }
 
-  async getAllowedCrossingPoints(): Promise<any[]> {
-    const gameDay = await this.findToday();
-    return gameDay?.specialRulesJson?.allowedCrossingPoints || [];
-  }
 }
 

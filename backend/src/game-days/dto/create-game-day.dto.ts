@@ -18,11 +18,6 @@ export class CreateGameDayDto {
       start: string;
       end: string;
     };
-    allowedCrossingPoints?: Array<{
-      lat: number;
-      lon: number;
-      name: string;
-    }>;
   };
 }
 

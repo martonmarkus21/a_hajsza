@@ -27,6 +27,9 @@ export class CreateGeofenceDto {
 
   @IsOptional()
   metadataJson?: any;
+
+  @IsOptional()
+  active?: boolean;
 }
 
 
