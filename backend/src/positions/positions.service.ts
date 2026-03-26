@@ -114,11 +114,9 @@ export class PositionsService {
       timestamp: savedPosition.timestamp,
     });
 
-    // Check for rule violations
-    const violations = await this.ruleViolationsService.checkViolations(
-      pairId,
-      savedPosition,
-    );
+    // Check for rule violations (and whether the pair currently must be visible continuously)
+    const { violations, gameAreaExitViolationActive } =
+      await this.ruleViolationsService.checkViolations(pairId, savedPosition);
 
     // Calculate distance to nearest officer (other active pair)
     const distanceToNearestOfficer = await this.calculateDistanceToNearestOfficer(
@@ -138,9 +136,9 @@ export class PositionsService {
       timestamp: savedPosition.timestamp.toISOString(),
     });
 
-    // Only broadcast position updates for the map when the timer allows it
-    // CRITICAL: Each pair can only send ONE position update per timer cycle
-    // This prevents continuous updates on the map - only the first position after timer expires is shown
+    // Map updates:
+    // - normally: only when timer allows + each pair once per cycle
+    // - but if `game_area_exit` rule is active for this pair: broadcast continuously (ignore cycle counter)
     // ALWAYS reload settings from database to get the most current state (prevent stale data)
     const currentSettings = await this.gameSettingsRepository.findOne({ where: {} });
     let shouldShowOnMap = false;
@@ -149,73 +147,92 @@ export class PositionsService {
       console.log('[Position] No game settings found, not broadcasting position update for map');
     } else if (!currentSettings.isTimerRunning) {
       console.log('[Position] Timer is not running, not broadcasting position update for map. pairId:', pairId);
-    } else if (currentSettings.allowPositionUpdatesForMap !== true) {
-      console.log('[Position] Position updates for map are not allowed (allowPositionUpdatesForMap = false), not broadcasting. pairId:', pairId);
     } else {
-      // Timer is running AND allowPositionUpdatesForMap is true
-      // Check if this pair has already sent a position in this cycle
-      // CRITICAL: Reload settings again to get the most current state (prevent race conditions)
-      const freshSettings = await this.gameSettingsRepository.findOne({ where: {} });
-      if (!freshSettings || freshSettings.allowPositionUpdatesForMap !== true) {
-        // Don't log here to avoid spam - this is expected when window is closed
-      } else {
-        const pairsSent = freshSettings.pairsSentPositionThisCycle;
-        
-        // Convert to array (simple-array type can be string or array)
-        let pairsSentArray: number[] = [];
-        if (pairsSent) {
-          if (Array.isArray(pairsSent)) {
-            pairsSentArray = pairsSent;
+      // Timer is running
+      // - continuous violation: broadcast always (ignore allowPositionUpdatesForMap and pair counter)
+      // - otherwise: follow counter logic below
+      shouldShowOnMap = gameAreaExitViolationActive;
+
+      if (currentSettings.allowPositionUpdatesForMap === true) {
+        // Timer is running AND allowPositionUpdatesForMap is true
+        // Check if this pair has already sent a position in this cycle
+        // CRITICAL: Reload settings again to get the most current state (prevent race conditions)
+        const freshSettings = await this.gameSettingsRepository.findOne({ where: {} });
+        if (!freshSettings || freshSettings.allowPositionUpdatesForMap !== true) {
+          // Don't log here to avoid spam - this is expected when window is closed
+        } else {
+          const pairsSent = freshSettings.pairsSentPositionThisCycle;
+          
+          // Convert to array (simple-array type can be string or array)
+          let pairsSentArray: number[] = [];
+          if (pairsSent) {
+            if (Array.isArray(pairsSent)) {
+              pairsSentArray = pairsSent;
+            } else {
+              // Handle string case (simple-array stored as comma-separated string)
+              const pairsSentStr = String(pairsSent);
+              if (pairsSentStr.trim() !== '') {
+                pairsSentArray = pairsSentStr
+                  .split(',')
+                  .map((id) => parseInt(id.trim()))
+                  .filter((id) => !isNaN(id));
+              }
+            }
+          }
+          
+          // CRITICAL: Check if pairId is already in the array (handle both number and string comparisons)
+          const pairIdInArray = pairsSentArray.some((id) => Number(id) === Number(pairId));
+          
+          if (pairIdInArray) {
+            // This pair has already sent a position in this cycle.
+            // In continuous violation mode we still broadcast above (shouldShowOnMap already true).
           } else {
-            // Handle string case (simple-array stored as comma-separated string)
-            const pairsSentStr = String(pairsSent);
-            if (pairsSentStr.trim() !== '') {
-              pairsSentArray = pairsSentStr.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+            // This pair hasn't sent a position yet in this cycle - allow it and consume its slot
+            const updatedPairsSent = [...pairsSentArray, pairId];
+            freshSettings.pairsSentPositionThisCycle = updatedPairsSent;
+            await this.gameSettingsRepository.save(freshSettings);
+            
+            shouldShowOnMap = true;
+            console.log('[Position] Pair position update allowed. pairId:', pairId, 'pairsSent:', updatedPairsSent);
+            
+            // Check if all active pairs have sent their position
+            // If yes, close the window to prevent further position updates until next timer cycle
+            const allActivePairs = await this.deviceRepository
+              .createQueryBuilder('device')
+              .where('device.pairId IS NOT NULL')
+              .andWhere('device.lastSeenAt IS NOT NULL')
+              .andWhere('device.lastSeenAt > :thirtyMinutesAgo', { 
+                thirtyMinutesAgo: new Date(Date.now() - 30 * 60 * 1000) 
+              })
+              .select('DISTINCT device.pairId', 'pairId')
+              .getRawMany();
+            
+            const activePairIds = allActivePairs
+              .map((p: any) => p.pairId)
+              .filter((id: number) => id !== null);
+            
+            const allPairsSent =
+              activePairIds.length > 0 && activePairIds.every((id: number) => updatedPairsSent.includes(id));
+            
+            if (allPairsSent) {
+              // All active pairs have sent their position - close the window IMMEDIATELY
+              freshSettings.allowPositionUpdatesForMap = false;
+              await this.gameSettingsRepository.save(freshSettings);
+              console.log(
+                '[Position] All active pairs have sent position. Closing position update window IMMEDIATELY. Positions will stay on map until next timer cycle.',
+              );
             }
           }
         }
-        
-        // CRITICAL: Check if pairId is already in the array (handle both number and string comparisons)
-        const pairIdInArray = pairsSentArray.some(id => Number(id) === Number(pairId));
-        
-        if (pairIdInArray) {
-          // This pair has already sent a position in this cycle - don't show on map
-          // Don't log here to avoid spam
-        } else {
-          // This pair hasn't sent a position yet in this cycle - allow it
-          // Add to list and save atomically
-          const updatedPairsSent = [...pairsSentArray, pairId];
-          freshSettings.pairsSentPositionThisCycle = updatedPairsSent;
-          await this.gameSettingsRepository.save(freshSettings);
-          
-          shouldShowOnMap = true;
-          console.log('[Position] Pair position update allowed. pairId:', pairId, 'pairsSent:', updatedPairsSent);
-          
-          // Check if all active pairs have sent their position
-          // If yes, close the window to prevent further position updates until next timer cycle
-          const allActivePairs = await this.deviceRepository
-            .createQueryBuilder('device')
-            .where('device.pairId IS NOT NULL')
-            .andWhere('device.lastSeenAt IS NOT NULL')
-            .andWhere('device.lastSeenAt > :thirtyMinutesAgo', { 
-              thirtyMinutesAgo: new Date(Date.now() - 30 * 60 * 1000) 
-            })
-            .select('DISTINCT device.pairId', 'pairId')
-            .getRawMany();
-          
-          const activePairIds = allActivePairs.map((p: any) => p.pairId).filter((id: number) => id !== null);
-          
-          // Check if all active pairs have sent their position
-          const allPairsSent = activePairIds.length > 0 && activePairIds.every((id: number) => updatedPairsSent.includes(id));
-          
-          if (allPairsSent) {
-            // All active pairs have sent their position - close the window IMMEDIATELY
-            // This prevents further position updates until the next timer cycle
-            // But the positions already sent will stay on the map
-            freshSettings.allowPositionUpdatesForMap = false;
-            await this.gameSettingsRepository.save(freshSettings);
-            console.log('[Position] All active pairs have sent position. Closing position update window IMMEDIATELY. Positions will stay on map until next timer cycle.');
-          }
+      } else {
+        // allowPositionUpdatesForMap = false:
+        // - continuous violation: shouldShowOnMap is already true
+        // - normal pairs: shouldShowOnMap stays false
+        if (!gameAreaExitViolationActive) {
+          console.log(
+            '[Position] Position updates for map are not allowed (allowPositionUpdatesForMap = false). pairId:',
+            pairId,
+          );
         }
       }
     }
@@ -243,7 +260,7 @@ export class PositionsService {
       success: true,
       message: 'Position recorded',
       violationDetected: violations.length > 0,
-      continuousMode: violations.length > 0,
+      continuousMode: gameAreaExitViolationActive,
     };
   }
 

@@ -1,9 +1,11 @@
 
 import { useState } from 'react';
-import { FiUser, FiTrash2, FiEdit, FiPlus, FiCheckCircle, FiXCircle, FiSearch, FiShield } from 'react-icons/fi';
+import { FiUser, FiTrash2, FiEdit, FiPlus, FiCheckCircle, FiXCircle, FiShield, FiUsers } from 'react-icons/fi';
 import { FaSortUp, FaSortDown } from 'react-icons/fa6';
 import { UserCog } from 'lucide-react';
 import Modal from '../../components/Modal';
+import MwTableSearchInput from '../../components/MwTableSearchInput';
+import { formatDateTimeBudapestParts } from '../../utils/formatDateTimeBudapest';
 
 interface UserManagementProps {
     users: any[];
@@ -79,16 +81,12 @@ export default function UserManagement({
         <div className="space-y-6">
             {/* Top Bar */}
             <div className="mw-card flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="relative w-full md:w-96 group">
-                    <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none" />
-                    <input
-                        type="text"
-                        placeholder="Keresés felhasználók között..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="mw-input pl-11"
-                    />
-                </div>
+                <MwTableSearchInput
+                    value={searchTerm}
+                    onChange={setSearchTerm}
+                    placeholder="Keresés felhasználók között..."
+                    className="w-full md:w-96"
+                />
                 <button
                     onClick={() => setShowCreateModal(true)}
                     className="mw-btn mw-btn-primary w-full md:w-auto"
@@ -106,7 +104,7 @@ export default function UserManagement({
                             <UserCog className="w-6 h-6" />
                         </div>
                         Felhasználók listája
-                        <span className="text-sm font-normal text-gray-500 ml-2 py-1 px-3 bg-white/5 rounded-full border border-white/5">{filteredUsers.length} felhasználó</span>
+                        <span className="text-sm font-normal text-gray-500 ml-2 py-1 px-3 bg-white/5 rounded-full border border-white/5">{filteredUsers.length} találat</span>
                     </h3>
                 </div>
 
@@ -140,8 +138,11 @@ export default function UserManagement({
                         <tbody className="divide-y divide-white/5">
                             {filteredUsers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="text-center py-12 text-gray-500">
-                                        Nem található felhasználó a keresési feltételekkel.
+                                    <td colSpan={5} className="p-0">
+                                        <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2">
+                                            <FiUsers className="w-8 h-8 opacity-30" />
+                                            <p className="font-medium text-sm">Nincs megjeleníthető felhasználó.</p>
+                                        </div>
                                     </td>
                                 </tr>
                             ) : (
@@ -157,7 +158,9 @@ export default function UserManagement({
                                                 </div>
                                                 <div>
                                                     <div className="font-bold text-white group-hover:text-orange-400 transition-colors">{user.username}</div>
-                                                    <div className="text-xs text-gray-500">Létrehozva: {new Date(user.createdAt).toLocaleDateString()}</div>
+                                                    <div className="text-xs text-gray-500">
+                                                        Létrehozva: {formatDateTimeBudapestParts(user.createdAt)?.date ?? '—'}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
@@ -213,12 +216,12 @@ export default function UserManagement({
                 isOpen={showCreateModal}
                 onClose={() => setShowCreateModal(false)}
                 title={
-                    <>
-                        <div className="p-2 bg-orange-500/20 rounded-lg">
-                            <FiPlus className="w-5 h-5 text-orange-500" />
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex-shrink-0 p-2 bg-orange-500/20 rounded-lg flex items-center justify-center">
+                            <FiPlus className="w-5 h-5 text-orange-400" />
                         </div>
-                        Új felhasználó létrehozása
-                    </>
+                        <span className="text-xl font-bold text-white leading-tight">Új felhasználó létrehozása</span>
+                    </div>
                 }
             >
                 <div className="p-6 space-y-4">

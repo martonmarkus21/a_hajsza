@@ -1,10 +1,12 @@
 
 import { useState } from 'react';
-import { FiUsers, FiPlus, FiTrash2, FiMail, FiShield, FiSearch, FiEdit3, FiMinus, FiCheckCircle, FiXCircle } from 'react-icons/fi';
+import { FiUsers, FiPlus, FiTrash2, FiMail, FiShield, FiEdit3, FiMinus, FiCheckCircle, FiXCircle, FiAlertCircle } from 'react-icons/fi';
 import { FaHandcuffs, FaSortUp, FaSortDown } from 'react-icons/fa6';
 import Modal from '../../components/Modal';
+import MwTableSearchInput from '../../components/MwTableSearchInput';
 import EditNameModal from '../../components/EditNameModal';
 import { useNotification } from '../../contexts/NotificationContext';
+import { formatDateTimeBudapestParts } from '../../utils/formatDateTimeBudapest';
 
 interface PairsManagementProps {
     pairs: any[];
@@ -19,6 +21,8 @@ interface PairsManagementProps {
     showCreateModal: boolean;
     setShowCreateModal: (show: boolean) => void;
     onPairSelect?: (pair: any) => void;
+    activeGameAreaExitViolations?: Record<number, boolean>;
+    onOpenViolationDetails?: (pairId: number) => void;
 }
 
 export default function PairsManagement({
@@ -33,7 +37,9 @@ export default function PairsManagement({
     handleCapture,
     showCreateModal,
     setShowCreateModal,
-    onPairSelect
+    onPairSelect,
+    activeGameAreaExitViolations,
+    onOpenViolationDetails
 }: PairsManagementProps) {
     const { addNotification } = useNotification();
     const [searchTerm, setSearchTerm] = useState('');
@@ -107,21 +113,17 @@ export default function PairsManagement({
         <div className="space-y-6">
             {/* Top Bar with Search & Actions */}
             <div className="mw-card flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="relative w-full md:w-96 group">
-                    <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none" />
-                    <input
-                        type="text"
-                        placeholder="Keresés név vagy sorszám alapján..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="mw-input pl-11"
-                    />
-                </div>
+                <MwTableSearchInput
+                    value={searchTerm}
+                    onChange={setSearchTerm}
+                    placeholder="Keresés név vagy sorszám alapján..."
+                    className="w-full md:w-96"
+                />
 
                 <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 w-full md:w-auto">
                     {[
                         { id: 'all', label: 'Összes', icon: null },
-                        { id: 'active', label: 'Aktív', icon: null },
+                        { id: 'active', label: 'Aktív', icon: FiCheckCircle },
                         { id: 'captured', label: 'Elfogva', icon: FaHandcuffs },
                         { id: 'mw', label: 'Most Wanted', icon: FiShield },
                     ].map(filter => (
@@ -149,7 +151,7 @@ export default function PairsManagement({
                             <FiUsers className="w-6 h-6" />
                         </div>
                         Párok listája
-                        <span className="text-sm font-normal text-gray-500 ml-2 py-1 px-3 bg-white/5 rounded-full border border-white/5">{filteredPairs.length} csapat</span>
+                        <span className="text-sm font-normal text-gray-500 ml-2 py-1 px-3 bg-white/5 rounded-full border border-white/5">{filteredPairs.length} találat</span>
                     </h3>
                 </div>
 
@@ -188,8 +190,11 @@ export default function PairsManagement({
                         <tbody className="divide-y divide-white/5">
                             {filteredPairs.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="text-center py-12 text-gray-500">
-                                        Nem található pár a keresési feltételekkel.
+                                    <td colSpan={6} className="p-0">
+                                        <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2">
+                                            <FiUsers className="w-8 h-8 opacity-30" />
+                                            <p className="font-medium text-sm">Nincs megjeleníthető pár.</p>
+                                        </div>
                                     </td>
                                 </tr>
                             ) : (
@@ -199,7 +204,7 @@ export default function PairsManagement({
                                             <div 
                                                 onClick={() => onPairSelect && onPairSelect(pair)}
                                                 className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] border-orange-500 text-white transition-colors duration-300 ${pair.mostWanted
-                                                ? 'bg-orange-500 hover:bg-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.6)]'
+                                                ? 'bg-orange-500 hover:bg-orange-400'
                                                 : 'bg-[#2a2a2a] hover:bg-[#383838]'
                                                 }`}
                                                 title="Pár részleteinek megtekintése"
@@ -208,8 +213,24 @@ export default function PairsManagement({
                                             </div>
                                         </td>
                                         <td className="py-4">
-                                            <div className={`text-left font-bold text-base transition-colors duration-200 ${pair.name ? 'text-white group-hover:text-orange-400' : 'text-gray-500 italic font-normal'}`}>
-                                                {pair.name || 'Névtelen'}
+                                            <div className="flex items-center gap-2">
+                                                <div className={`text-left font-bold text-base transition-colors duration-200 ${pair.name ? 'text-white group-hover:text-orange-400' : 'text-gray-500 italic font-normal'}`}>
+                                                    {pair.name || 'Névtelen'}
+                                                </div>
+                                                {activeGameAreaExitViolations?.[pair.id] && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onOpenViolationDetails?.(pair.id);
+                                                        }}
+                                                        className="p-0.5 text-red-500 hover:text-red-300 transition-colors focus:outline-none"
+                                                        title="Szabályszegés részletei"
+                                                        aria-label="Szabályszegés részletei"
+                                                    >
+                                                        <FiAlertCircle className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                             </div>
                                             {pair.captured && (
                                                 <div className="flex items-center gap-1 text-xs text-red-500 font-bold uppercase tracking-wider mt-1">
@@ -252,8 +273,8 @@ export default function PairsManagement({
                                                     <span className="text-xs font-mono text-gray-300 bg-black/40 px-2 py-1 rounded border border-white/5">
                                                         {pair.lastPosition.lat.toFixed(4)}, {pair.lastPosition.lon.toFixed(4)}
                                                     </span>
-                                                    <span className="text-[10px] text-gray-500 mt-1">
-                                                        {new Date(pair.lastPosition.timestamp).toLocaleTimeString()}
+                                                    <span className="text-[10px] text-gray-500 mt-1 font-mono tabular-nums">
+                                                        {formatDateTimeBudapestParts(pair.lastPosition.timestamp)?.time ?? '—'}
                                                     </span>
                                                 </div>
                                             ) : (
@@ -303,7 +324,6 @@ export default function PairsManagement({
             </div>
 
             {/* Rename Modal */}
-            {/* Rename Modal */}
             <EditNameModal
                 isOpen={!!renamingPair}
                 initialName={renamingPair?.name || ''}
@@ -328,12 +348,12 @@ export default function PairsManagement({
                 isOpen={showCreateModal}
                 onClose={() => setShowCreateModal(false)}
                 title={
-                    <>
-                        <div className="p-2 bg-orange-500/20 rounded-lg">
-                            <FiPlus className="w-5 h-5 text-orange-500" />
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex-shrink-0 p-2 bg-orange-500/20 rounded-lg flex items-center justify-center">
+                            <FiPlus className="w-5 h-5 text-orange-400" />
                         </div>
-                        Új pár létrehozása
-                    </>
+                        <span className="text-xl font-bold text-white leading-tight">Új pár létrehozása</span>
+                    </div>
                 }
             >
                 <div className="p-6 space-y-4">

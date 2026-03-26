@@ -78,6 +78,8 @@ Content-Type: application/json
 - **`PUT /api/geofence/:id/activate`** - Geofence aktiválása.
 - **`PUT /api/geofence/:id/deactivate`** - Geofence deaktiválása.
 - **`DELETE /api/geofence/:id`** - Geofence törlése.
+- **`PUT /api/geofence/bulk-status`** - Több geofence atomikus aktiválása/deaktiválása (Admin).
+  - **Body**: `{ "ids": [1, 2, 3], "active": true }`
 
 ### Játéktér (Belső területek/Megyék)
 - **`GET /api/game-area`** - Jelenlegi játéktér és szabályok lekérése.
@@ -95,6 +97,12 @@ Content-Type: application/json
 - **`GET /api/game-settings/countdown`** - Visszaszámláló infó.
 - **`POST /api/game-settings/timer/start`** - Játékidő / stopper indítása.
 - **`POST /api/game-settings/timer/stop`** - Globális időzítő leállítása.
+
+### Szabályszegések (Rule Violations)
+- **`GET /api/rule-violations/active-game-area`** - Aktív játékterület-elhagyás szabályszegések lekérése.
+- **`GET /api/rule-violations/list`** - Szabályszegések lapozott listája szűréssel és rendezéssel (Admin).
+  - **Query params**: `page`, `pageSize`, `type` (`all` | `game_area_exit` | `vehicle_time_exceeded`), `status` (`all` | `active` | `resolved`), `search`, `sortBy`, `sortDir`.
+- **`DELETE /api/rule-violations/:id`** - Lezárt szabályszegés törlése (Admin).
 
 ### Audit log
 - **`GET /api/audit-logs`** - Rendszernaplók lekérése (Admin).

@@ -149,6 +149,58 @@ export class FcmService implements OnModuleInit {
     }
   }
 
+  /**
+   * Minden aktív (utóbbi 30 percben látott) eszközre küld, kivéve egy adott pár eszközeit —
+   * pl. játékterület-szabályszegés megszűnésekor a többi párnak (üldözőknek).
+   */
+  async sendToAllPairsExceptPair(
+    excludePairId: number,
+    message: { title: string; body: string },
+  ) {
+    if (!this.firebaseApp) {
+      console.warn('FCM not initialized, skipping push notification');
+      return { success: false, message: 'FCM not initialized' };
+    }
+
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+    const activeDevices = await this.deviceRepository
+      .createQueryBuilder('device')
+      .where('device.fcmToken IS NOT NULL')
+      .andWhere('device.fcmToken != :empty', { empty: '' })
+      .andWhere('device.lastSeenAt IS NOT NULL')
+      .andWhere('device.lastSeenAt > :thirtyMinutesAgo', { thirtyMinutesAgo })
+      .andWhere('device.pairId IS NOT NULL')
+      .andWhere('device.pairId != :excludePairId', { excludePairId })
+      .getMany();
+
+    const tokens = activeDevices.map((d) => d.fcmToken).filter(Boolean) as string[];
+
+    if (tokens.length === 0) {
+      return { success: false, message: 'Nincs cél eszköz FCM tokennel' };
+    }
+
+    const messagePayload: admin.messaging.MulticastMessage = {
+      notification: {
+        title: message.title,
+        body: message.body,
+      },
+      tokens,
+    };
+
+    try {
+      const response = await admin.messaging().sendEachForMulticast(messagePayload);
+      return {
+        success: true,
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+      };
+    } catch (error) {
+      console.error('FCM send error:', error);
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
+
   async sendToDevice(
     token: string,
     message: { title: string; body: string; data?: Record<string, string> },

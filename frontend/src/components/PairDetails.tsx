@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Pair } from '../types';
-import { FiNavigation, FiLock, FiShield, FiInfo, FiCheckCircle, FiXCircle, FiCrosshair, FiSend, FiX, FiExternalLink } from 'react-icons/fi';
+import { FiNavigation, FiLock, FiShield, FiInfo, FiCheckCircle, FiXCircle, FiCrosshair, FiSend, FiX, FiExternalLink, FiAlertCircle } from 'react-icons/fi';
 import { FaMapMarkerAlt, FaWaze } from 'react-icons/fa';
 import { HiPencil } from 'react-icons/hi2';
 import Modal from './Modal';
@@ -16,6 +16,8 @@ interface PairDetailsProps {
   onMw: (pairId: number) => void;
   onRename: (pairId: number, name: string) => void;
   onSendMessage: (pairId: number) => void;
+  hasActiveGameAreaViolation?: boolean;
+  onOpenViolationDetails?: (pairId: number) => void;
   onClosingStart?: () => void;
 }
 
@@ -28,6 +30,8 @@ export default function PairDetails({
   onMw,
   onRename,
   onSendMessage,
+  hasActiveGameAreaViolation = false,
+  onOpenViolationDetails,
   onClosingStart,
 }: PairDetailsProps) {
   const { addNotification } = useNotification();
@@ -170,6 +174,15 @@ export default function PairDetails({
                     <span className="mw-badge active">
                       <FiCheckCircle className="w-3.5 h-3.5" /> Aktív
                     </span>
+                  )}
+                  {hasActiveGameAreaViolation && (
+                    <button
+                      onClick={() => onOpenViolationDetails?.(pair.id)}
+                      className="mw-badge error hover:bg-red-500/20 transition-colors"
+                      title="Aktív szabályszegés részletei"
+                    >
+                      <FiAlertCircle className="w-3.5 h-3.5" /> Szabályszegés
+                    </button>
                   )}
                 </div>
               </div>

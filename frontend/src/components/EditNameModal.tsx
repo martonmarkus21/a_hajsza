@@ -29,12 +29,12 @@ export default function EditNameModal({ isOpen, onClose, onSave, initialName }: 
             onClose={onClose}
             variant="blue"
             title={
-                <>
-                    <div className="p-2 bg-blue-500/20 rounded-lg">
-                        <FiEdit3 className="w-5 h-5 text-blue-500" />
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex-shrink-0 p-2 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                        <FiEdit3 className="w-5 h-5 text-blue-400" />
                     </div>
-                    Pár átnevezése
-                </>
+                    <span className="text-xl font-bold text-white leading-tight">Pár átnevezése</span>
+                </div>
             }
         >
             <div className="p-6">

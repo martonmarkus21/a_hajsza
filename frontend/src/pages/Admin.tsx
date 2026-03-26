@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiEdit, FiCheckCircle, FiUser, FiShield, FiPlus, FiMail } from 'react-icons/fi';
 
@@ -13,12 +13,16 @@ import PairsManagement from './admin/PairsManagement';
 import DeviceManagement from './admin/DeviceManagement';
 import UserManagement from './admin/UserManagement';
 import GeofenceManager from './admin/GeofenceManager';
+import RuleViolationsManagement from './admin/RuleViolationsManagement';
+import type { AdminRuleViolationRow } from './admin/RuleViolationsManagement';
 import PairDetails from '../components/PairDetails';
+import RuleViolationDetailsModal from '../components/RuleViolationDetailsModal';
 
 // Shared Components
 import SendMessageModal from '../components/SendMessageModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { useNotification } from '../contexts/NotificationContext';
+import { formatDateTimeBudapestParts } from '../utils/formatDateTimeBudapest';
 
 // Styles
 import 'leaflet/dist/leaflet.css';
@@ -67,11 +71,24 @@ interface User {
   updatedAt: string;
 }
 
+interface ActiveGameAreaViolation {
+  pairId: number;
+  assignedNumber: number | null;
+  pairName: string | null;
+  description: string;
+  createdAt: string;
+}
+
 export default function Admin() {
   const navigate = useNavigate();
   const { addNotification } = useNotification();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedPair, setSelectedPair] = useState<Pair | null>(null);
+  const [showViolationDetailsModal, setShowViolationDetailsModal] = useState(false);
+  const [selectedViolationPairId, setSelectedViolationPairId] = useState<number | null>(null);
+  /** Naplósorból megnyitva: ne írja felül az élő API a megjelenített adatot */
+  const [violationModalArchive, setViolationModalArchive] = useState<AdminRuleViolationRow | null>(null);
+  const violationArchiveClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [browserLocation, setBrowserLocation] = useState<{ lat: number; lon: number } | null>(null);
 
   // Generic Confirmation State
@@ -97,6 +114,40 @@ export default function Admin() {
   const [pairs, setPairs] = useState<Pair[]>([]);
   const { socket } = useSocket();
 
+  const [activeGameAreaExitViolations, setActiveGameAreaExitViolations] = useState<Record<number, boolean>>({});
+  const [activeGameAreaViolationDetails, setActiveGameAreaViolationDetails] = useState<Record<number, ActiveGameAreaViolation>>({});
+
+  const refreshActiveGameAreaViolations = useCallback(async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/rule-violations/active-game-area', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const map: Record<number, boolean> = {};
+      const details: Record<number, ActiveGameAreaViolation> = {};
+
+      for (const violation of data.violations || []) {
+        const pairId = Number(violation.pairId);
+        if (!pairId) continue;
+        map[pairId] = true;
+        details[pairId] = {
+          pairId,
+          assignedNumber: violation.assignedNumber ?? null,
+          pairName: violation.pairName ?? null,
+          description: violation.description || 'Pár kilépett a játéktérből',
+          createdAt: violation.createdAt,
+        };
+      }
+
+      setActiveGameAreaExitViolations(map);
+      setActiveGameAreaViolationDetails(details);
+    } catch (error) {
+      console.error('Error fetching active game area violations:', error);
+    }
+  }, []);
+
   // Sync pairs from hook BUT preserve socket-updated distancePosition
   // This prevents the jumping issue where API data overwrites socket data
   useEffect(() => {
@@ -119,6 +170,10 @@ export default function Admin() {
       });
     }
   }, [initialPairs]);
+
+  useEffect(() => {
+    void refreshActiveGameAreaViolations();
+  }, [refreshActiveGameAreaViolations]);
 
   // Listen for real-time position updates
   useEffect(() => {
@@ -169,14 +224,58 @@ export default function Admin() {
       }));
     };
 
+    const handleRuleViolation = (data: any) => {
+      if (!data || data.violationType !== 'game_area_exit') return;
+      const pairId = Number(data.pairId);
+      if (!pairId) return;
+
+      if (data.resolved === false) {
+        setActiveGameAreaExitViolations((prev) => ({ ...prev, [pairId]: true }));
+        setActiveGameAreaViolationDetails((prev) => ({
+          ...prev,
+          [pairId]: {
+            pairId,
+            assignedNumber: pairs.find((p) => p.id === pairId)?.assignedNumber ?? null,
+            pairName: pairs.find((p) => p.id === pairId)?.name ?? null,
+            description: data.description || 'Pár kilépett a játéktérből',
+            createdAt: data.createdAt || data.timestamp || new Date().toISOString(),
+          },
+        }));
+        const targetPair = pairs.find((p) => p.id === pairId);
+        const pairText = targetPair
+          ? `${targetPair.assignedNumber}. pár${targetPair.name ? ` (${targetPair.name})` : ''}`
+          : `${pairId}. azonosítójú pár`;
+        addNotification(
+          'error',
+          `Szabálysértés: a(z) ${pairText} elhagyta az aktív játékterületet. Ettől kezdve folyamatosan láthatja ezt a párost a térképen, amíg a játékterületre nem tér vissza.`,
+          true, // global
+        );
+      } else {
+        setActiveGameAreaExitViolations((prev) => {
+          if (!prev[pairId]) return prev;
+          const next = { ...prev };
+          delete next[pairId];
+          return next;
+        });
+        setActiveGameAreaViolationDetails((prev) => {
+          if (!prev[pairId]) return prev;
+          const next = { ...prev };
+          delete next[pairId];
+          return next;
+        });
+      }
+    };
+
     socket.on('distanceUpdate', handleDistanceUpdate);
     socket.on('positionUpdate', handlePositionUpdate);
+    socket.on('ruleViolation', handleRuleViolation);
 
     return () => {
       socket.off('distanceUpdate', handleDistanceUpdate);
       socket.off('positionUpdate', handlePositionUpdate);
+      socket.off('ruleViolation', handleRuleViolation);
     };
-  }, [socket]);
+  }, [socket, addNotification, pairs]);
 
 
 
@@ -449,7 +548,7 @@ export default function Admin() {
 
   const createPair = async () => {
     if (!newPair.assignedNumber) {
-      addNotification('error', 'Add meg a számot!');
+      addNotification('error', 'Adja meg a számot!');
       return;
     }
     const res = await fetch('http://localhost:3000/api/pairs', {
@@ -915,6 +1014,16 @@ export default function Admin() {
             showCreateModal={showCreatePairModal}
             setShowCreateModal={setShowCreatePairModal}
             onPairSelect={setSelectedPair}
+            activeGameAreaExitViolations={activeGameAreaExitViolations}
+            onOpenViolationDetails={(pairId) => {
+              if (violationArchiveClearTimerRef.current) {
+                clearTimeout(violationArchiveClearTimerRef.current);
+                violationArchiveClearTimerRef.current = null;
+              }
+              setViolationModalArchive(null);
+              setSelectedViolationPairId(pairId);
+              setShowViolationDetailsModal(true);
+            }}
           />
         );
       case 'devices':
@@ -926,6 +1035,37 @@ export default function Admin() {
             handleForceLogout={handleForceLogout}
             handleDeleteDevice={handleDeleteDevice}
             onPairSelect={setSelectedPair}
+            activeGameAreaExitViolations={activeGameAreaExitViolations}
+            onOpenViolationDetails={(pairId) => {
+              if (violationArchiveClearTimerRef.current) {
+                clearTimeout(violationArchiveClearTimerRef.current);
+                violationArchiveClearTimerRef.current = null;
+              }
+              setViolationModalArchive(null);
+              setSelectedViolationPairId(pairId);
+              setShowViolationDetailsModal(true);
+            }}
+          />
+        );
+      case 'rule_violations':
+        return (
+          <RuleViolationsManagement
+            pairs={pairs}
+            onOpenGameAreaDetails={(row: AdminRuleViolationRow) => {
+              if (violationArchiveClearTimerRef.current) {
+                clearTimeout(violationArchiveClearTimerRef.current);
+                violationArchiveClearTimerRef.current = null;
+              }
+              setViolationModalArchive(row);
+              setSelectedViolationPairId(row.pairId);
+              setShowViolationDetailsModal(true);
+            }}
+            onSelectPairById={(pairId) => {
+              const p = pairs.find((x) => x.id === pairId);
+              if (p) setSelectedPair(p);
+              else addNotification('info', 'Ez a pár nem szerepel a jelenlegi párok listájában.');
+            }}
+            onActiveViolationsNeedRefresh={refreshActiveGameAreaViolations}
           />
         );
       case 'users':
@@ -959,10 +1099,11 @@ export default function Admin() {
             onToggleHungary={handleToggleHungary}
             onPairSelect={setSelectedPair}
             onRefresh={fetchGeofences}
+            activeGameAreaExitViolations={activeGameAreaExitViolations}
           />
         );
       default:
-        return <div>Válassz egy menüpontot</div>;
+        return <div>Válasson egy menüpontot</div>;
     }
   };
 
@@ -988,6 +1129,18 @@ export default function Admin() {
             onCapture={handleCaptureDirect}
             onMw={handleMw}
             onRename={(id, name) => handleEditPairName({ id, name })}
+            hasActiveGameAreaViolation={
+              !!(selectedPair && activeGameAreaExitViolations[selectedPair.id])
+            }
+            onOpenViolationDetails={(pairId) => {
+              if (violationArchiveClearTimerRef.current) {
+                clearTimeout(violationArchiveClearTimerRef.current);
+                violationArchiveClearTimerRef.current = null;
+              }
+              setViolationModalArchive(null);
+              setSelectedViolationPairId(pairId);
+              setShowViolationDetailsModal(true);
+            }}
             onSendMessage={(id) => {
               setSelectedMessagePair(pairs.find(p => p.id === id) || null);
               setShowMessageModal(true);
@@ -1004,6 +1157,56 @@ export default function Admin() {
             onSend={handleSendMessage}
           />
 
+          <RuleViolationDetailsModal
+            isOpen={showViolationDetailsModal}
+            onClose={() => {
+              setShowViolationDetailsModal(false);
+              if (violationArchiveClearTimerRef.current) {
+                clearTimeout(violationArchiveClearTimerRef.current);
+              }
+              violationArchiveClearTimerRef.current = setTimeout(() => {
+                setViolationModalArchive(null);
+                violationArchiveClearTimerRef.current = null;
+              }, 220);
+            }}
+            pairId={selectedViolationPairId}
+            archiveSnapshot={
+              violationModalArchive
+                ? {
+                    violationId: violationModalArchive.id,
+                    violationType: violationModalArchive.violationType,
+                    description: violationModalArchive.description,
+                    createdAt: violationModalArchive.createdAt,
+                    resolved: violationModalArchive.resolved,
+                    resolvedAt: violationModalArchive.resolvedAt,
+                  }
+                : null
+            }
+            initialAssignedNumber={
+              selectedViolationPairId != null
+                ? violationModalArchive?.assignedNumber ??
+                  activeGameAreaViolationDetails[selectedViolationPairId]?.assignedNumber ??
+                  pairs.find((p) => p.id === selectedViolationPairId)?.assignedNumber ??
+                  null
+                : null
+            }
+            initialPairName={
+              selectedViolationPairId != null
+                ? violationModalArchive?.pairName ??
+                  activeGameAreaViolationDetails[selectedViolationPairId]?.pairName ??
+                  pairs.find((p) => p.id === selectedViolationPairId)?.name ??
+                  null
+                : null
+            }
+            initialStartedAt={
+              selectedViolationPairId != null
+                ? violationModalArchive?.createdAt ??
+                  activeGameAreaViolationDetails[selectedViolationPairId]?.createdAt ??
+                  null
+                : null
+            }
+          />
+
           {/* User Edit Modal */}
           <Modal
             isOpen={showUserModal}
@@ -1018,11 +1221,16 @@ export default function Admin() {
                     {editingUser?.username}
                   </h3>
                   <div className="flex items-center gap-3 text-xs text-gray-500 font-normal">
-                    <span>Létrehozva: {editingUser && new Date(editingUser.createdAt).toLocaleDateString()}</span>
+                    <span>
+                      Létrehozva:{' '}
+                      {editingUser ? formatDateTimeBudapestParts(editingUser.createdAt)?.date ?? '—' : '—'}
+                    </span>
                     {editingUser?.updatedAt && (
                       <>
                         <span className="w-1 h-1 bg-gray-500 rounded-full"></span>
-                        <span>Módosítva: {new Date(editingUser.updatedAt).toLocaleDateString()}</span>
+                        <span>
+                          Módosítva: {formatDateTimeBudapestParts(editingUser.updatedAt)?.date ?? '—'}
+                        </span>
                       </>
                     )}
                   </div>

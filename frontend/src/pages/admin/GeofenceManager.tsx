@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MapContainer, TileLayer, Circle, Polygon, Popup, Marker, useMapEvents, useMap, ZoomControl } from 'react-leaflet';
-import { FiPlus, FiTrash2, FiMapPin, FiGlobe, FiTarget, FiX, FiMap, FiSearch } from 'react-icons/fi';
+import { MapContainer, TileLayer, Circle, Polygon, Popup, useMapEvents, useMap, ZoomControl } from 'react-leaflet';
+import { FiPlus, FiTrash2, FiMapPin, FiGlobe, FiTarget, FiX, FiMap } from 'react-icons/fi';
 
 import L from 'leaflet';
 import mwOrangeImage from '../../assets/images/mw_orange.png';
 import { useNotification } from '../../contexts/NotificationContext';
 
 import { Pair } from '../../types';
+import SmoothAnimatedMarker from '../../components/SmoothAnimatedMarker';
+import { buildPairMarkerDivHtml } from '../../utils/pairMapMarkerHtml';
+import MwTableSearchInput from '../../components/MwTableSearchInput';
 
 interface Geofence {
     id: number;
@@ -47,6 +50,8 @@ interface GeofenceManagerProps {
     onToggleHungary?: (active: boolean) => void;
     onPairSelect?: (pair: Pair) => void;
     onRefresh: () => void;
+    /** Aktív játékterület elhagyása — piros jelző a térképi pár ikonon */
+    activeGameAreaExitViolations?: Record<number, boolean>;
 }
 
 // Map click handler - passes lat/lng to parent
@@ -157,7 +162,8 @@ export default function GeofenceManager({
     onActivateHungary,
     onToggleHungary,
     onPairSelect,
-    onRefresh
+    onRefresh,
+    activeGameAreaExitViolations,
 }: GeofenceManagerProps) {
     const { addNotification } = useNotification();
     const [browserLocation, setBrowserLocation] = useState<{ lat: number; lon: number } | null>(null);
@@ -609,16 +615,13 @@ export default function GeofenceManager({
                 {/* Controls Area: Search & Tabs - Spacious (Reverted) */}
                 <div className="p-5 space-y-4 border-b border-white/5">
                     {/* Search Input */}
-                    <div className="relative group">
-                        <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none w-5 h-5" />
-                        <input
-                            type="text"
-                            placeholder="Keresés..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="mw-input pl-11 py-2.5 w-full"
-                        />
-                    </div>
+                    <MwTableSearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        placeholder="Keresés..."
+                        className="w-full"
+                        inputClassName="py-2.5 w-full"
+                    />
 
                     {/* Filter Tabs as Standard Buttons */}
                     <div className="flex gap-2">
@@ -1064,8 +1067,10 @@ export default function GeofenceManager({
 
                     {/* Browser location marker */}
                     {browserLocation && (
-                        <Marker
+                        <SmoothAnimatedMarker
+                            key="admin-browser-location"
                             position={[browserLocation.lat, browserLocation.lon]}
+                            duration={380}
                             icon={L.divIcon({
                                 className: 'custom-browser-location-marker',
                                 html: `<div style="width:${MARKER_SIZE}px;height:${MARKER_SIZE}px;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,0.4);background-image:url(${mwOrangeImage});background-size:cover;background-position:center;overflow:hidden;"></div>`,
@@ -1099,27 +1104,33 @@ export default function GeofenceManager({
                                     </div>
                                 </div>
                             </Popup>
-                        </Marker>
+                        </SmoothAnimatedMarker>
                     )}
 
                     {/* Pair markers - SAME STYLE AS MAIN PAGE */}
                     {pairs.filter(p => p.active && p.lastPosition && p.lastPosition.lat != null && p.lastPosition.lon != null && !p.captured).map((pair) => {
-                        const backgroundColor = pair.mostWanted ? '#f36f26' : '#2a2a2a';
-                        const borderColor = '#f36f26';
+                        const hasViolation = !!activeGameAreaExitViolations?.[pair.id];
                         return (
-                            <Marker
+                            <SmoothAnimatedMarker
                                 key={`pair-${pair.id}`}
                                 position={[pair.lastPosition!.lat, pair.lastPosition!.lon]}
+                                duration={400}
                                 icon={L.divIcon({
                                     className: 'custom-pair-marker',
-                                    html: `<div style="background-color:${backgroundColor};width:${PAIR_ICON_SIZE}px;height:${PAIR_ICON_SIZE}px;border-radius:50%;border:${PAIR_BORDER_WIDTH}px solid ${borderColor};display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:${PAIR_FONT_SIZE}px;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${pair.assignedNumber}</div>`,
+                                    html: buildPairMarkerDivHtml({
+                                        assignedNumber: pair.assignedNumber,
+                                        mostWanted: !!pair.mostWanted,
+                                        hasViolation,
+                                        size: PAIR_ICON_SIZE,
+                                        fontSize: PAIR_FONT_SIZE,
+                                        borderWidth: PAIR_BORDER_WIDTH,
+                                        borderColor: '#f36f26',
+                                    }),
                                     iconSize: [PAIR_ICON_SIZE, PAIR_ICON_SIZE],
                                     iconAnchor: [PAIR_ICON_SIZE / 2, PAIR_ICON_SIZE / 2],
                                 })}
                                 eventHandlers={{
                                     click: () => {
-                                        // Prevent map click if needed, though Marker usually captures it
-                                        // e.originalEvent.stopPropagation();
                                         if (onPairSelect) onPairSelect(pair);
                                     }
                                 }}

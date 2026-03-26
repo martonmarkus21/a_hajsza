@@ -87,7 +87,7 @@ Geofence esemény (belépés, kilépés, teljesítés).
 ```
 
 ### `ruleViolation`
-Szabályszegés észlelve.
+Szabályszegés észlelve vagy megszűnése.
 
 ```json
 {
@@ -95,9 +95,14 @@ Szabályszegés észlelve.
   "violationType": "game_area_exit",
   "description": "Pár kilépett a játéktérből",
   "continuousMode": true,
-  "timestamp": "2024-01-15T10:50:00Z"
+  "resolved": false,
+  "timestamp": "2024-01-15T10:50:00Z",
+  "createdAt": "2024-01-15T10:50:00Z"
 }
 ```
+
+> **Megjegyzés**: Ha `resolved: true`, a szabályszegés megszűnt (a pár visszatért a
+> játékterületre). A `continuousMode` ilyenkor `false` értékű.
 
 ### `pairStatusUpdate`
 Pár státusz változás (aktív, inaktív, stb.).

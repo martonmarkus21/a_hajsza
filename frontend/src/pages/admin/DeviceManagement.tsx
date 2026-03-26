@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { FiSmartphone, FiTrash2, FiLogOut, FiSearch, FiWifi, FiWifiOff, FiCheckCircle, FiXCircle } from 'react-icons/fi';
+import { FiSmartphone, FiTrash2, FiLogOut, FiWifi, FiWifiOff, FiCheckCircle, FiXCircle, FiAlertCircle } from 'react-icons/fi';
 import { FaSortUp, FaSortDown } from 'react-icons/fa6';
+import { DateTimeStackCell } from '../../utils/formatDateTimeBudapest';
+import MwTableSearchInput from '../../components/MwTableSearchInput';
 
 interface DeviceManagementProps {
     devices: any[];
@@ -9,6 +11,8 @@ interface DeviceManagementProps {
     handleForceLogout: (deviceId: string) => void;
     handleDeleteDevice: (id: number) => void;
     onPairSelect?: (pair: any) => void;
+    activeGameAreaExitViolations?: Record<number, boolean>;
+    onOpenViolationDetails?: (pairId: number) => void;
 }
 
 export default function DeviceManagement({
@@ -17,7 +21,9 @@ export default function DeviceManagement({
     pairsList,
     handleForceLogout,
     handleDeleteDevice,
-    onPairSelect
+    onPairSelect,
+    activeGameAreaExitViolations,
+    onOpenViolationDetails
 }: DeviceManagementProps) {
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -100,16 +106,12 @@ export default function DeviceManagement({
 
             {/* Top Bar with Search & Filters */}
             <div className="mw-card flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="relative w-full md:w-96 group">
-                    <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none" />
-                    <input
-                        type="text"
-                        placeholder="Keresés IMEI vagy Pár alapján..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="mw-input pl-11"
-                    />
-                </div>
+                <MwTableSearchInput
+                    value={searchTerm}
+                    onChange={setSearchTerm}
+                    placeholder="Keresés IMEI vagy Pár alapján..."
+                    className="w-full md:w-96"
+                />
                 <div className="flex gap-2 w-full md:w-auto">
                     {[
                         { id: 'all', label: 'Összes', icon: null },
@@ -134,11 +136,14 @@ export default function DeviceManagement({
 
             <div className="mw-card p-0 overflow-hidden flex flex-col">
                 <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-3 flex-wrap">
                         <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500">
                             <FiSmartphone className="w-6 h-6" />
                         </div>
                         Eszközök listája
+                        <span className="text-sm font-normal text-gray-500 ml-2 py-1 px-3 bg-white/5 rounded-full border border-white/5">
+                            {filteredDevices.length} találat
+                        </span>
                     </h3>
                 </div>
 
@@ -157,8 +162,8 @@ export default function DeviceManagement({
                                         Hozzárendelt Pár {getSortIcon('pair')}
                                     </div>
                                 </th>
-                                <th className="text-left py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('lastSeen')}>
-                                    <div className="flex items-center gap-1 text-gray-400 group-hover:text-white">
+                                <th className="text-center py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('lastSeen')}>
+                                    <div className="flex items-center justify-center gap-1 text-gray-400 group-hover:text-white">
                                         Utoljára látva {getSortIcon('lastSeen')}
                                     </div>
                                 </th>
@@ -178,14 +183,23 @@ export default function DeviceManagement({
                         <tbody className="divide-y divide-white/5">
                             {filteredDevices.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="text-center py-12 text-gray-500">
-                                        Nem található eszköz a keresési feltételekkel.
+                                    <td colSpan={6} className="p-0">
+                                        <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2">
+                                            <FiSmartphone className="w-8 h-8 opacity-30" />
+                                            <p className="font-medium text-sm">Nincs megjeleníthető eszköz.</p>
+                                        </div>
                                     </td>
                                 </tr>
                             ) : (
                                 filteredDevices.map((device) => {
                                     const isActive = activeDevices.some(d => d.imeiOrDeviceId === device.imeiOrDeviceId);
                                     const hasPair = device.pairId || device.pairNumber;
+                                    const pairViolation =
+                                        device.pairId && activeGameAreaExitViolations?.[device.pairId];
+                                    const pairForMw =
+                                        pairsList.find((p: { id: number }) => p.id === device.pairId) ||
+                                        pairsList.find((p: { name: string }) => p.name === device.pairName);
+                                    const pairMostWanted = !!pairForMw?.mostWanted;
 
                                     return (
                                         <tr key={device.id} className="group hover:bg-white/5 transition-colors">
@@ -210,21 +224,49 @@ export default function DeviceManagement({
                                                                     if (pairObj) onPairSelect(pairObj);
                                                                 }
                                                             }}
-                                                            className="w-8 h-8 flex-shrink-0 cursor-pointer rounded-full bg-[#2a2a2a] hover:bg-[#383838] transition-colors border-[3px] border-orange-500 flex items-center justify-center font-bold text-white text-xs outline-none focus:outline-none"
+                                                            className={`w-8 h-8 flex-shrink-0 cursor-pointer rounded-full border-[3px] border-orange-500 flex items-center justify-center font-bold text-white text-xs outline-none focus:outline-none transition-colors duration-300 ${
+                                                                pairMostWanted
+                                                                    ? 'bg-orange-500 hover:bg-orange-400'
+                                                                    : 'bg-[#2a2a2a] hover:bg-[#383838]'
+                                                            }`}
                                                             title="Pár részleteinek megtekintése"
                                                         >
                                                             {device.pairNumber}
                                                         </button>
-                                                        <span className="text-gray-300 group-hover:text-white transition-colors">
-                                                            {device.pairName || <span className="text-gray-500 italic">Névtelen</span>}
+                                                        <span
+                                                            className={`inline-flex items-center gap-2 transition-colors duration-200 ${
+                                                                device.pairName
+                                                                    ? 'font-bold text-gray-300'
+                                                                    : 'text-gray-300 group-hover:text-white'
+                                                            }`}
+                                                        >
+                                                            {device.pairName || (
+                                                                <span className="text-gray-500 italic font-normal">Névtelen</span>
+                                                            )}
+                                                            {pairViolation && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (device.pairId) onOpenViolationDetails?.(device.pairId);
+                                                                    }}
+                                                                    className="p-0.5 text-red-500 hover:text-red-300 transition-colors focus:outline-none"
+                                                                    title="Szabályszegés részletei"
+                                                                    aria-label="Szabályszegés részletei"
+                                                                >
+                                                                    <FiAlertCircle className="w-4 h-4" />
+                                                                </button>
+                                                            )}
                                                         </span>
                                                     </div>
                                                 ) : (
                                                     <span className="text-gray-600 italic text-sm">Nincs hozzárendelve</span>
                                                 )}
                                             </td>
-                                            <td className="py-4 text-sm text-gray-400 font-mono">
-                                                {device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : '-'}
+                                            <td className="py-4 text-sm text-gray-400 align-middle">
+                                                <div className="flex justify-center">
+                                                    <DateTimeStackCell iso={device.lastSeenAt} />
+                                                </div>
                                             </td>
                                             <td className="text-center py-4">
                                                 {isActive ? (

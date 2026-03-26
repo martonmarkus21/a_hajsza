@@ -7,7 +7,7 @@ interface ModalProps {
     title: React.ReactNode;
     children: React.ReactNode;
     maxWidth?: string;
-    variant?: 'orange' | 'blue' | 'red';
+    variant?: 'orange' | 'blue' | 'red' | 'green';
 }
 
 export default function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-lg', variant = 'orange' }: ModalProps) {
@@ -34,6 +34,7 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
         switch (variant) {
             case 'blue': return 'from-blue-500/10';
             case 'red': return 'from-red-500/10';
+            case 'green': return 'from-emerald-500/10';
             default: return 'from-orange-500/10';
         }
     };
@@ -45,8 +46,8 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
                 onClick={onClose}
             />
             <div className={`relative w-full ${maxWidth} bg-[#1a1a1a] rounded-2xl border border-white/10 shadow-2xl overflow-hidden ${isAnimating || !isOpen ? 'animate-scale-out' : 'animate-scale-in'} z-10 will-change-transform`}>
-                <div className={`p-6 border-b border-white/5 bg-gradient-to-r ${getGradient()} to-transparent flex items-center justify-between`}>
-                    <div className="text-xl font-bold text-white flex items-center gap-2">
+                <div className={`p-6 border-b border-white/5 bg-gradient-to-r ${getGradient()} to-transparent flex items-center justify-between gap-4`}>
+                    <div className="min-w-0 flex-1 flex items-center">
                         {title}
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Circle, Polygon, Popup, Marker, useMap, ZoomControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, Polygon, Popup, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { useSocket } from './hooks/useSocket';
 import { usePairs } from './hooks/usePairs';
@@ -13,6 +13,7 @@ import Login from './pages/Login';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
 import PairDetails from './components/PairDetails';
+import RuleViolationDetailsModal from './components/RuleViolationDetailsModal';
 import MWLoader from './components/MWLoader';
 import SendMessageModal from './components/SendMessageModal';
 import EditNameModal from './components/EditNameModal';
@@ -45,6 +46,8 @@ import logoImage from './assets/images/most_wanted_logo_raw.png';
 import mwOrangeImage from './assets/images/mw_orange.png';
 import 'leaflet/dist/leaflet.css';
 import './App.css';
+import SmoothAnimatedMarker from './components/SmoothAnimatedMarker';
+import { buildPairMarkerDivHtml } from './utils/pairMapMarkerHtml';
 
 interface Geofence {
   id: number;
@@ -61,6 +64,14 @@ interface Geofence {
     countyName?: string;
     description?: string;
   };
+}
+
+interface ActiveGameAreaViolation {
+  pairId: number;
+  assignedNumber: number | null;
+  pairName: string | null;
+  description: string;
+  createdAt: string;
 }
 
 // Component to handle map resize dynamically using ResizeObserver
@@ -534,7 +545,8 @@ function ModernSidebar({
   calculateDistance,
   formatDistance,
   forceRender,
-  isHeaderExpanded
+  isHeaderExpanded,
+  activeGameAreaExitViolations
 }: {
   isVisible: boolean;
   activePairs: Pair[];
@@ -547,6 +559,7 @@ function ModernSidebar({
   formatDistance: Function;
   forceRender: number;
   isHeaderExpanded: boolean;
+  activeGameAreaExitViolations: Record<number, boolean>;
 }) {
   return (
     <div
@@ -581,6 +594,7 @@ function ModernSidebar({
             activePairs.map(pair => {
               const isSelected = selectedPairId === pair.id;
               const isMw = pair.mostWanted;
+              const hasViolation = !!activeGameAreaExitViolations[pair.id];
 
               return (
                 <div
@@ -588,6 +602,8 @@ function ModernSidebar({
                   onClick={() => pair.active && onPairClick(pair)}
                   className={`group relative p-3 rounded-2xl border transition-all duration-200 cursor-pointer overflow-hidden ${isSelected
                     ? 'bg-orange-500/10 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.1)]'
+                    : hasViolation
+                      ? 'bg-red-500/[0.06] border-red-500/40 hover:bg-red-500/[0.09] hover:border-red-500/50'
                     : isMw
                       ? 'bg-orange-500/[0.03] border-orange-500/20 hover:bg-orange-500/[0.06] hover:border-orange-500/30'
                       : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06] hover:border-white/10'
@@ -597,22 +613,37 @@ function ModernSidebar({
                   {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-orange-500" />}
 
                   <div className="flex items-center gap-3">
-                    {/* Avatar / Number - Round 3: Thinner Border, Grey BG, Larger Text */}
+                    {/* Avatar / Number — középen a középső tartalommal és a gombokkal */}
                     <div className={`relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl border-[3px] border-orange-500 text-white shadow-lg pb-0.5 transition-all duration-300 ${isMw ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)]' : 'bg-[#222]'}`}>
                       {pair.assignedNumber}
                       {/* Status Dot */}
                       <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-[#121212] ${pair.captured ? 'bg-red-500' : pair.active ? 'bg-emerald-500' : 'bg-gray-500'
                         }`} />
+                      {hasViolation && (
+                        <div
+                          className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-red-500/90 border border-black/40 flex items-center justify-center"
+                          title="Aktív szabályszegés: játéktér elhagyása"
+                        >
+                          <FiAlertCircle className="w-3 h-3 text-white" />
+                        </div>
+                      )}
                     </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0 flex flex-col justify-center min-h-[40px]">
-                      {pair.name && (
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-base font-bold truncate ${isSelected ? 'text-white' : 'text-gray-200 group-hover:text-white'}`}>
-                            {pair.name}
-                          </span>
+                    {/* Név/badge sor csak ha van tartalom — üres helykitöltő nélkül, hogy ne nőjön feleslegesen a sor */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-1">
+                      {(pair.name || isMw || hasViolation) && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {pair.name && (
+                            <span className={`text-base font-bold truncate ${isSelected ? 'text-white' : 'text-gray-200 group-hover:text-white'}`}>
+                              {pair.name}
+                            </span>
+                          )}
                           {isMw && <span className="mw-badge mw !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]"><FiShield className="w-2.5 h-2.5 fill-current" /> MW</span>}
+                          {hasViolation && (
+                            <span className="mw-badge error !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]">
+                              <FiAlertCircle className="w-2.5 h-2.5" /> Szabálysz.
+                            </span>
+                          )}
                         </div>
                       )}
 
@@ -652,8 +683,7 @@ function ModernSidebar({
                       )}
                     </div>
 
-                    {/* Actions (Always Visible, Side-by-Side) */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <button
                         onClick={(e) => { e.stopPropagation(); onEditName(pair.id); }}
                         className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
@@ -761,6 +791,8 @@ function MapView() {
   const [showPairDetails, setShowPairDetails] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messagePairId, setMessagePairId] = useState<number | null>(null);
+  const [showViolationDetailsModal, setShowViolationDetailsModal] = useState(false);
+  const [selectedViolationPairId, setSelectedViolationPairId] = useState<number | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [locationUpdateCountdown, setLocationUpdateCountdown] = useState<{ minutes: number; seconds: number } | null>(null);
   const [gameSettings, setGameSettings] = useState<{
@@ -772,6 +804,8 @@ function MapView() {
   } | null>(null);
   const [browserLocation, setBrowserLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [forceRender, setForceRender] = useState(0);
+  const [activeGameAreaExitViolations, setActiveGameAreaExitViolations] = useState<Record<number, boolean>>({});
+  const [activeGameAreaViolationDetails, setActiveGameAreaViolationDetails] = useState<Record<number, ActiveGameAreaViolation>>({});
 
   const [activeMapLayer, setActiveMapLayer] = useState<MapLayerType>('standard');
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
@@ -797,6 +831,39 @@ function MapView() {
     fetchGeofences();
     const interval = setInterval(fetchGeofences, 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const fetchActiveGameAreaViolations = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/rule-violations/active-game-area', {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const map: Record<number, boolean> = {};
+        const details: Record<number, ActiveGameAreaViolation> = {};
+        for (const violation of data.violations || []) {
+          const pairId = Number(violation.pairId);
+          if (!pairId) continue;
+          map[pairId] = true;
+          details[pairId] = {
+            pairId,
+            assignedNumber: violation.assignedNumber ?? null,
+            pairName: violation.pairName ?? null,
+            description: violation.description || 'Pár kilépett a játéktérből',
+            createdAt: violation.createdAt,
+          };
+        }
+        setActiveGameAreaExitViolations(map);
+        setActiveGameAreaViolationDetails(details);
+      } catch (error) {
+        console.error('Error fetching active game area violations:', error);
+      }
+    };
+
+    fetchActiveGameAreaViolations();
   }, []);
 
   useEffect(() => {
@@ -940,14 +1007,63 @@ function MapView() {
       refetch();
     });
     socket.on('gameAreaUpdate', () => fetchGeofences());
+    socket.on('ruleViolation', (data: any) => {
+      if (!data || data.violationType !== 'game_area_exit') return;
+      const pairId = Number(data.pairId);
+      if (!pairId) return;
+
+      if (data.resolved === false) {
+        setActiveGameAreaExitViolations((prev) => ({ ...prev, [pairId]: true }));
+        setActiveGameAreaViolationDetails((prev) => ({
+          ...prev,
+          [pairId]: {
+            pairId,
+            assignedNumber:
+              pairsState.find((p) => p.id === pairId)?.assignedNumber ??
+              pairs.find((p) => p.id === pairId)?.assignedNumber ??
+              null,
+            pairName:
+              pairsState.find((p) => p.id === pairId)?.name ??
+              pairs.find((p) => p.id === pairId)?.name ??
+              null,
+            description: data.description || 'Pár kilépett a játéktérből',
+            createdAt: data.createdAt || data.timestamp || new Date().toISOString(),
+          },
+        }));
+        const targetPair =
+          pairsState.find((p) => p.id === pairId) || pairs.find((p) => p.id === pairId);
+        const pairText = targetPair
+          ? `${targetPair.assignedNumber}. pár${targetPair.name ? ` (${targetPair.name})` : ''}`
+          : `${pairId}. azonosítójú pár`;
+        addNotification(
+          'error',
+          `Szabálysértés: a(z) ${pairText} elhagyta az aktív játékterületet. Ettől kezdve folyamatosan láthatja ezt a párost a térképen, amíg a játékterületre nem tér vissza.`,
+          true, // global
+        );
+      } else {
+        setActiveGameAreaExitViolations((prev) => {
+          if (!prev[pairId]) return prev;
+          const next = { ...prev };
+          delete next[pairId];
+          return next;
+        });
+        setActiveGameAreaViolationDetails((prev) => {
+          if (!prev[pairId]) return prev;
+          const next = { ...prev };
+          delete next[pairId];
+          return next;
+        });
+      }
+    });
     return () => {
       socket.off('distanceUpdate', handleDistanceUpdate);
       socket.off('positionUpdate', handlePositionUpdate);
       socket.off('capture');
       socket.off('mwHighlight');
       socket.off('gameAreaUpdate');
+      socket.off('ruleViolation');
     };
-  }, [socket, gameSettings, refetch]);
+  }, [socket, gameSettings, refetch, addNotification, pairsState, pairs]);
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371000;
@@ -999,7 +1115,7 @@ function MapView() {
     const p = pairsState.find((p) => p.id === pairId);
     let n = newName;
     if (n === undefined) {
-      n = prompt('Add meg a pár nevét:', p?.name || '') || undefined;
+      n = prompt('Adja meg a pár nevét:', p?.name || '') || undefined;
       if (n === undefined) return; // User cancelled prompt
     }
     if (n === null) return;
@@ -1064,9 +1180,10 @@ function MapView() {
 
           {/* User Location Marker - Round 3: No white border, use Image */}
           {browserLocation && (
-            <Marker
-              key={`user-loc-${activeMapLayer}`}
+            <SmoothAnimatedMarker
+              key="browser-location"
               position={[browserLocation.lat, browserLocation.lon]}
+              duration={380}
               icon={L.divIcon({
                 className: 'custom-browser-location-marker',
                 html: `<div style="width:32px;height:32px;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,0.4);background-image:url(${mwOrangeImage});background-size:cover;background-position:center;overflow:hidden;"></div>`,
@@ -1100,19 +1217,23 @@ function MapView() {
                   </div>
                 </div>
               </Popup>
-            </Marker>
+            </SmoothAnimatedMarker>
           )}
 
           {/* Pair Markers */}
           {displayPairsOnMap.map((pair) => (
             pair.lastPosition && (
-              <Marker
-                key={`${pair.id}-${activeMapLayer}`}
+              <SmoothAnimatedMarker
+                key={`pair-${pair.id}`}
                 position={[pair.lastPosition.lat, pair.lastPosition.lon]}
-                // Round 3: Larger size (32px), Larger Font (18px), Thicker Border (3px) -> Matches Sidebar/Details
+                duration={400}
                 icon={L.divIcon({
                   className: 'custom-pair-marker',
-                  html: `<div style="background-color:${pair.mostWanted ? '#f97316' : '#2a2a2a'};width:32px;height:32px;border-radius:50%;border:3px solid #f97316;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.3);">${pair.assignedNumber}</div>`,
+                  html: buildPairMarkerDivHtml({
+                    assignedNumber: pair.assignedNumber,
+                    mostWanted: !!pair.mostWanted,
+                    hasViolation: !!activeGameAreaExitViolations[pair.id],
+                  }),
                   iconSize: [32, 32],
                   iconAnchor: [16, 16],
                 })}
@@ -1315,6 +1436,7 @@ function MapView() {
         formatDistance={formatDistance}
         forceRender={forceRender}
         isHeaderExpanded={isHeaderExpanded}
+        activeGameAreaExitViolations={activeGameAreaExitViolations}
       />
 
       {/* Modals */}
@@ -1328,6 +1450,11 @@ function MapView() {
           onCapture={handleCapture}
           onMw={handleMw}
           onRename={handleAssignName}
+          hasActiveGameAreaViolation={!!activeGameAreaExitViolations[selectedPair.id]}
+          onOpenViolationDetails={(pairId) => {
+            setSelectedViolationPairId(pairId);
+            setShowViolationDetailsModal(true);
+          }}
           /* Round 3: Fix Message Logic - Keep details open */
           onSendMessage={(id) => {
             setMessagePairId(id); // Set the specific pair ID
@@ -1357,6 +1484,31 @@ function MapView() {
             setRenamingPair(null);
           }
         }}
+      />
+
+      <RuleViolationDetailsModal
+        isOpen={showViolationDetailsModal}
+        onClose={() => setShowViolationDetailsModal(false)}
+        pairId={selectedViolationPairId}
+        initialAssignedNumber={
+          selectedViolationPairId != null
+            ? activeGameAreaViolationDetails[selectedViolationPairId]?.assignedNumber ??
+              pairsState.find((p) => p.id === selectedViolationPairId)?.assignedNumber ??
+              null
+            : null
+        }
+        initialPairName={
+          selectedViolationPairId != null
+            ? activeGameAreaViolationDetails[selectedViolationPairId]?.pairName ??
+              pairsState.find((p) => p.id === selectedViolationPairId)?.name ??
+              null
+            : null
+        }
+        initialStartedAt={
+          selectedViolationPairId != null
+            ? activeGameAreaViolationDetails[selectedViolationPairId]?.createdAt ?? null
+            : null
+        }
       />
 
       <ConfirmationModal

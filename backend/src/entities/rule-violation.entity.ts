@@ -40,10 +40,10 @@ export class RuleViolation {
   @Index()
   resolved: boolean;
 
-  @Column({ nullable: true, name: 'resolved_at', type: 'timestamp' })
+  @Column({ nullable: true, name: 'resolved_at', type: 'timestamptz' })
   resolvedAt: Date;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
 
