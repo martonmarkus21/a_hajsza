@@ -6,7 +6,7 @@ import { Pair } from '../entities/pair.entity';
 import { DeviceLoginDto } from './dto/device-login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { FcmService } from '../fcm/fcm.service';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class DevicesService {

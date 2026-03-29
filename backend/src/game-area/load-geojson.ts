@@ -25,11 +25,9 @@ export interface CountyData {
 }
 
 export function loadCountiesFromGeoJSON(): Record<string, CountyData> {
-  // Try multiple paths: dist folder, src folder, and project root
   const possiblePaths = [
-    path.join(__dirname, '../../../../counties.geojson'), // From dist/game-area
-    path.join(__dirname, '../../../counties.geojson'), // From dist
-    path.join(process.cwd(), 'counties.geojson'), // Project root
+    path.join(__dirname, '../../data/counties.geojson'), // From dist/game-area or src/game-area
+    path.join(process.cwd(), 'data/counties.geojson'), // Project root (backend)
   ];
   
   let geojsonPath: string | null = null;
@@ -94,11 +92,9 @@ export function loadCountiesFromGeoJSON(): Record<string, CountyData> {
 }
 
 export function loadHungaryBoundaryFromGeoJSON(): number[][] | null {
-  // Try multiple paths: dist folder, src folder, and project root
   const possiblePaths = [
-    path.join(__dirname, '../../../../counties.geojson'), // From dist/game-area
-    path.join(__dirname, '../../../counties.geojson'), // From dist
-    path.join(process.cwd(), 'counties.geojson'), // Project root
+    path.join(__dirname, '../../data/counties.geojson'), // From dist/game-area or src/game-area
+    path.join(process.cwd(), 'data/counties.geojson'), // Project root (backend)
   ];
   
   let geojsonPath: string | null = null;

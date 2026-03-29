@@ -36,17 +36,29 @@ Thumbs.db
 # Android
 android-app/.gradle/
 android-app/app/build/
+android-app/build/
 android-app/.idea/
 android-app/local.properties
 google-services.json
 android-app/app/google-services.json
+android-app/**/*.apk
+android-app/**/*.aab
+android-app/**/*.ap_
+android-app/**/*.dex
+android-app/**/*.class
+android-app/bin/
+android-app/gen/
+android-app/out/
+android-app/.navigation/
+android-app/captures/
+android-app/vcs.xml
+android-app/keystore.properties
+android-app/key.properties
+android-app/*.keystore
+android-app/*.jks
 
 # Temporary files
 *.tmp
 *.temp
-
-
-
-
 
 

@@ -29,7 +29,7 @@ npm run dev
 ## Adatbázis indítása (Docker)
 
 ```bash
-docker-compose up -d postgres redis
+docker compose up -d postgres redis
 ```
 
 ## Android App
@@ -69,7 +69,7 @@ CORS_ORIGIN=http://localhost:3001
 
 ## Fejlesztési workflow
 
-1. Indítsd el a PostgreSQL-t és Redis-t: `docker-compose up -d`
+1. Indítsd el a PostgreSQL-t és Redis-t: `docker compose up -d`
 2. Indítsd el a backend-et: `cd backend && npm run start:dev`
 3. Indítsd el a frontend-et: `cd frontend && npm run dev`
 4. Nyisd meg a böngészőt: `http://localhost:3001`

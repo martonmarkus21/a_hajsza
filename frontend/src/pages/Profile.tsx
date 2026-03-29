@@ -212,7 +212,7 @@ export default function Profile() {
                             <div className="mw-card p-0 overflow-hidden sticky top-6">
                                 {/* Header gradient - Extended height and clarity */}
                                 <div className="h-36 bg-gradient-to-b from-orange-500/15 via-orange-900/5 to-transparent relative">
-                                    <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20 mix-blend-overlay" />
+                                    <div className="absolute inset-0 opacity-20 mix-blend-overlay" />
                                 </div>
 
                                 {/* Avatar & Name */}

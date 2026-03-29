@@ -1,13 +1,14 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import * as admin from 'firebase-admin';
+import { initializeApp, cert, getApps, getApp, App } from 'firebase-admin/app';
+import { getMessaging, MulticastMessage, Message } from 'firebase-admin/messaging';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, MoreThan, SelectQueryBuilder } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Device } from '../entities/device.entity';
 import { Pair } from '../entities/pair.entity';
 
 @Injectable()
 export class FcmService implements OnModuleInit {
-  private firebaseApp: admin.app.App | null = null;
+  private firebaseApp: App | null = null;
 
   constructor(
     @InjectRepository(Device)
@@ -22,9 +23,9 @@ export class FcmService implements OnModuleInit {
       process.env.FIREBASE_PRIVATE_KEY &&
       process.env.FIREBASE_CLIENT_EMAIL) {
       try {
-        if (!admin.apps.length) {
-          this.firebaseApp = admin.initializeApp({
-            credential: admin.credential.cert({
+        if (!getApps().length) {
+          this.firebaseApp = initializeApp({
+            credential: cert({
               projectId: process.env.FIREBASE_PROJECT_ID,
               privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
               clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
@@ -32,7 +33,7 @@ export class FcmService implements OnModuleInit {
           });
           console.log('Firebase initialized');
         } else {
-          this.firebaseApp = admin.app();
+          this.firebaseApp = getApp();
         }
       } catch (error) {
         console.warn('Firebase initialization failed, FCM will not work:', error.message);
@@ -60,7 +61,7 @@ export class FcmService implements OnModuleInit {
       return { success: false, message: 'A párhoz nem tartozik aktív eszköz' };
     }
 
-    const messagePayload: admin.messaging.MulticastMessage = {
+    const messagePayload: MulticastMessage = {
       notification: {
         title: message.title,
         body: message.body,
@@ -69,7 +70,7 @@ export class FcmService implements OnModuleInit {
     };
 
     try {
-      const response = await admin.messaging().sendEachForMulticast(messagePayload);
+      const response = await getMessaging().sendEachForMulticast(messagePayload);
       return {
         success: true,
         successCount: response.successCount,
@@ -128,7 +129,7 @@ export class FcmService implements OnModuleInit {
       return { success: false, message: 'Nincs aktív pár. Nincs bejelentkezett eszköz.' };
     }
 
-    const messagePayload: admin.messaging.MulticastMessage = {
+    const messagePayload: MulticastMessage = {
       notification: {
         title: message.title,
         body: message.body,
@@ -137,7 +138,7 @@ export class FcmService implements OnModuleInit {
     };
 
     try {
-      const response = await admin.messaging().sendEachForMulticast(messagePayload);
+      const response = await getMessaging().sendEachForMulticast(messagePayload);
       return {
         success: true,
         successCount: response.successCount,
@@ -180,7 +181,7 @@ export class FcmService implements OnModuleInit {
       return { success: false, message: 'Nincs cél eszköz FCM tokennel' };
     }
 
-    const messagePayload: admin.messaging.MulticastMessage = {
+    const messagePayload: MulticastMessage = {
       notification: {
         title: message.title,
         body: message.body,
@@ -189,7 +190,7 @@ export class FcmService implements OnModuleInit {
     };
 
     try {
-      const response = await admin.messaging().sendEachForMulticast(messagePayload);
+      const response = await getMessaging().sendEachForMulticast(messagePayload);
       return {
         success: true,
         successCount: response.successCount,
@@ -214,7 +215,7 @@ export class FcmService implements OnModuleInit {
       return { success: false, message: 'No FCM token provided' };
     }
 
-    const messagePayload: admin.messaging.Message = {
+    const messagePayload: Message = {
       notification: {
         title: message.title,
         body: message.body,
@@ -224,7 +225,7 @@ export class FcmService implements OnModuleInit {
     };
 
     try {
-      const response = await admin.messaging().send(messagePayload);
+      const response = await getMessaging().send(messagePayload);
       return {
         success: true,
         messageId: response,
