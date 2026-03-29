@@ -177,6 +177,7 @@ export class GameSettingsService implements OnModuleInit {
       .where('device.fcmToken IS NOT NULL')
       .andWhere('device.fcmToken != :empty', { empty: '' })
       .andWhere('device.lastSeenAt IS NOT NULL')
+      .andWhere('device.loggedOutAt IS NULL')
       .andWhere('device.lastSeenAt > :thirtyMinutesAgo', { thirtyMinutesAgo })
       .getMany();
 

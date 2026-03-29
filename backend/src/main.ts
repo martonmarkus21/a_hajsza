@@ -22,18 +22,20 @@ async function bootstrap() {
     }),
   );
 
-  // Seed database if needed (with delay to ensure DB is ready)
-  if (process.env.SEED_DB === 'true') {
+  const seedRequested = process.env.SEED_DB === 'true';
+  const seedInDev = process.env.NODE_ENV === 'development' && seedRequested;
+  if (seedInDev) {
     try {
-      // Wait a bit for DB to be ready
-      await new Promise(resolve => setTimeout(resolve, 3000));
       const dataSource = app.get(DataSource);
       await seedDatabase(dataSource);
       console.log('Database seeded successfully');
     } catch (error) {
       console.error('Database seeding error:', error);
-      // Don't fail startup if seeding fails
     }
+  } else if (seedRequested) {
+    console.warn(
+      '[Seed] SEED_DB=true ignored: seed only runs when NODE_ENV=development.',
+    );
   }
 
   const port = process.env.PORT || 3000;

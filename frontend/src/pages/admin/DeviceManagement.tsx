@@ -4,6 +4,12 @@ import { FaSortUp, FaSortDown } from 'react-icons/fa6';
 import { DateTimeStackCell } from '../../utils/formatDateTimeBudapest';
 import MwTableSearchInput from '../../components/MwTableSearchInput';
 
+/** Egyetlen megjelenített időpont: kijelentkezett eszköznél a kijelentkezés, különben az utolsó szerverkapcsolat. */
+function deviceListTimestampIso(device: { loggedOutAt?: string | null; lastSeenAt?: string | null }): string | null {
+  if (device.loggedOutAt) return device.loggedOutAt;
+  return device.lastSeenAt ?? null;
+}
+
 interface DeviceManagementProps {
     devices: any[];
     activeDevices: any[];
@@ -57,10 +63,13 @@ export default function DeviceManagement({
                     return pair ? pair.assignedNumber : 0;
                 };
                 return (getPairNumber(a) - getPairNumber(b)) * direction;
-            case 'lastSeen':
-                const timeA = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
-                const timeB = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
+            case 'lastSeen': {
+                const isoA = deviceListTimestampIso(a);
+                const isoB = deviceListTimestampIso(b);
+                const timeA = isoA ? new Date(isoA).getTime() : 0;
+                const timeB = isoB ? new Date(isoB).getTime() : 0;
                 return (timeA - timeB) * direction;
+            }
             case 'status':
                 const statusA = isActiveA ? 1 : 0;
                 const statusB = isActiveB ? 1 : 0;
@@ -162,9 +171,13 @@ export default function DeviceManagement({
                                         Hozzárendelt Pár {getSortIcon('pair')}
                                     </div>
                                 </th>
-                                <th className="text-center py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('lastSeen')}>
+                                <th
+                                    className="text-center py-4 cursor-pointer group hover:bg-white/5 transition-colors"
+                                    onClick={() => handleSort('lastSeen')}
+                                    title="Munkamenet alatt: utolsó szerverkapcsolat. Kijelentkezés után: kijelentkezés ideje."
+                                >
                                     <div className="flex items-center justify-center gap-1 text-gray-400 group-hover:text-white">
-                                        Utoljára látva {getSortIcon('lastSeen')}
+                                        Legutóbb aktív {getSortIcon('lastSeen')}
                                     </div>
                                 </th>
                                 <th className="text-center py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('status')}>
@@ -265,7 +278,7 @@ export default function DeviceManagement({
                                             </td>
                                             <td className="py-4 text-sm text-gray-400 align-middle">
                                                 <div className="flex justify-center">
-                                                    <DateTimeStackCell iso={device.lastSeenAt} />
+                                                    <DateTimeStackCell iso={deviceListTimestampIso(device)} />
                                                 </div>
                                             </td>
                                             <td className="text-center py-4">

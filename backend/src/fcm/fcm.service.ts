@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Device } from '../entities/device.entity';
 import { Pair } from '../entities/pair.entity';
+import { logVerbose } from '../common/verbose-log';
 
 @Injectable()
 export class FcmService implements OnModuleInit {
@@ -15,7 +16,7 @@ export class FcmService implements OnModuleInit {
     private deviceRepository: Repository<Device>,
     @InjectRepository(Pair)
     private pairRepository: Repository<Pair>,
-  ) { }
+  ) {}
 
   onModuleInit() {
     // Only initialize Firebase if credentials are provided
@@ -31,7 +32,7 @@ export class FcmService implements OnModuleInit {
               clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
             }),
           });
-          console.log('Firebase initialized');
+          logVerbose('Firebase initialized');
         } else {
           this.firebaseApp = getApp();
         }
@@ -99,14 +100,15 @@ export class FcmService implements OnModuleInit {
       .where('device.fcmToken IS NOT NULL')
       .andWhere('device.fcmToken != :empty', { empty: '' })
       .andWhere('device.lastSeenAt IS NOT NULL')
+      .andWhere('device.loggedOutAt IS NULL')
       .andWhere('device.lastSeenAt > :thirtyMinutesAgo', { thirtyMinutesAgo })
       .getMany();
 
-    console.log(`[FCM] Found ${activeDevices.length} active devices with FCM tokens (seen within last 30 minutes)`);
+    logVerbose(`[FCM] Found ${activeDevices.length} active devices with FCM tokens (seen within last 30 minutes)`);
 
     const tokens = activeDevices.map((d) => d.fcmToken).filter(Boolean);
 
-    console.log(`[FCM] Extracted ${tokens.length} FCM tokens for sending to all pairs`);
+    logVerbose(`[FCM] Extracted ${tokens.length} FCM tokens for sending to all pairs`);
 
     if (tokens.length === 0) {
       // Check if there are any active pairs at all
@@ -170,6 +172,7 @@ export class FcmService implements OnModuleInit {
       .where('device.fcmToken IS NOT NULL')
       .andWhere('device.fcmToken != :empty', { empty: '' })
       .andWhere('device.lastSeenAt IS NOT NULL')
+      .andWhere('device.loggedOutAt IS NULL')
       .andWhere('device.lastSeenAt > :thirtyMinutesAgo', { thirtyMinutesAgo })
       .andWhere('device.pairId IS NOT NULL')
       .andWhere('device.pairId != :excludePairId', { excludePairId })

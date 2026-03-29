@@ -8,6 +8,7 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { PairsService } from '../pairs/pairs.service';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { loadHungaryBoundaryFromGeoJSON } from '../game-area/load-geojson';
+import { RedisGeofenceCacheService } from '../redis/redis-geofence-cache.service';
 
 @Injectable()
 export class GeofencesService {
@@ -18,6 +19,7 @@ export class GeofencesService {
     private auditLogsService: AuditLogsService,
     private pairsService: PairsService,
     private webSocketGateway: WebSocketGateway,
+    private redisGeofenceCache: RedisGeofenceCacheService,
   ) { }
 
   async findAll() {
@@ -51,6 +53,7 @@ export class GeofencesService {
     });
 
     const savedGeofence = await this.geofenceRepository.save(geofence);
+    await this.redisGeofenceCache.invalidateActiveGeofences();
 
     // Send push notification to all pairs
     const pairs = await this.pairsService.findAll(true);
@@ -117,6 +120,7 @@ export class GeofencesService {
 
     geofence.active = true;
     await this.geofenceRepository.save(geofence);
+    await this.redisGeofenceCache.invalidateActiveGeofences();
 
     // Broadcast update for ALL geofence types
     this.webSocketGateway.broadcastGameAreaUpdate({
@@ -176,6 +180,7 @@ export class GeofencesService {
 
     geofence.active = false;
     await this.geofenceRepository.save(geofence);
+    await this.redisGeofenceCache.invalidateActiveGeofences();
 
     // Broadcast update for ALL geofence types
     this.webSocketGateway.broadcastGameAreaUpdate({
@@ -227,6 +232,8 @@ export class GeofencesService {
         .execute();
     }
 
+    await this.redisGeofenceCache.invalidateActiveGeofences();
+
     // Broadcast SINGLE update after all operations
     this.webSocketGateway.broadcastGameAreaUpdate({
       timestamp: new Date().toISOString(),
@@ -242,6 +249,7 @@ export class GeofencesService {
     }
 
     await this.geofenceRepository.remove(geofence);
+    await this.redisGeofenceCache.invalidateActiveGeofences();
 
     // Audit log
     await this.auditLogsService.log({

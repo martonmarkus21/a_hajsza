@@ -1,12 +1,15 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, Not } from 'typeorm';
+import { Repository, MoreThan, Not, IsNull } from 'typeorm';
 import { Device } from '../entities/device.entity';
 import { Pair } from '../entities/pair.entity';
 import { DeviceLoginDto } from './dto/device-login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { FcmService } from '../fcm/fcm.service';
 import * as bcrypt from 'bcryptjs';
+import { logVerbose } from '../common/verbose-log';
+import { RecentDevicePairIdsService } from '../device-activity/recent-device-pair-ids.service';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
 
 @Injectable()
 export class DevicesService {
@@ -17,7 +20,9 @@ export class DevicesService {
     private pairRepository: Repository<Pair>,
     private jwtService: JwtService,
     private fcmService: FcmService,
-  ) { }
+    private recentDevicePairIdsService: RecentDevicePairIdsService,
+    private auditLogsService: AuditLogsService,
+  ) {}
 
   async login(deviceLoginDto: DeviceLoginDto) {
     // Find pair by assigned number (username is pair number)
@@ -49,7 +54,7 @@ export class DevicesService {
       throw new UnauthorizedException('Invalid pair: invalid ID');
     }
 
-    console.log(`[Device] Login attempt: pairNumber=${pairNumber}, pair.id=${pair.id}, validPairId=${validPairId}`);
+    logVerbose(`[Device] Login attempt: pairNumber=${pairNumber}, pair.id=${pair.id}, validPairId=${validPairId}`);
 
     // Simple password check (in production, use proper device credentials)
     // For now, password is the pair number as string
@@ -76,12 +81,12 @@ export class DevicesService {
         // Use raw query to avoid TypeORM relation issues
         if (deviceLoginDto.fcmToken) {
           await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, last_seen_at = $2, fcm_token = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
+            `UPDATE devices SET pair_id = $1, last_seen_at = $2, fcm_token = $3, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
             [validPairId, new Date(), deviceLoginDto.fcmToken, device.id]
           );
         } else {
           await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, last_seen_at = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
+            `UPDATE devices SET pair_id = $1, last_seen_at = $2, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
             [validPairId, new Date(), device.id]
           );
         }
@@ -92,20 +97,20 @@ export class DevicesService {
         // Otherwise, just update this device to point to the new pair
         if (existingDeviceForPair && existingDeviceForPair.id !== device.id) {
           // Pair has a different device - delete it and use this device
-          console.log(`[Device] Pair ${validPairId} already has device ${existingDeviceForPair.imeiOrDeviceId}, replacing with ${device.imeiOrDeviceId}`);
+          logVerbose(`[Device] Pair ${validPairId} already has device ${existingDeviceForPair.imeiOrDeviceId}, replacing with ${device.imeiOrDeviceId}`);
           await this.deviceRepository.remove(existingDeviceForPair);
         }
         // Update device to point to this pair
         // CRITICAL: Use raw query to avoid TypeORM relation issues
-        console.log(`[Device] Moving device ${device.imeiOrDeviceId} from pair ${device.pairId || 'none (deleted)'} to pair ${validPairId}`);
+        logVerbose(`[Device] Moving device ${device.imeiOrDeviceId} from pair ${device.pairId || 'none (deleted)'} to pair ${validPairId}`);
         if (deviceLoginDto.fcmToken) {
           await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, last_seen_at = $2, fcm_token = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
+            `UPDATE devices SET pair_id = $1, last_seen_at = $2, fcm_token = $3, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
             [validPairId, new Date(), deviceLoginDto.fcmToken, device.id]
           );
         } else {
           await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, last_seen_at = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
+            `UPDATE devices SET pair_id = $1, last_seen_at = $2, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
             [validPairId, new Date(), device.id]
           );
         }
@@ -115,16 +120,16 @@ export class DevicesService {
       // Device doesn't exist
       if (existingDeviceForPair) {
         // Pair already has a device - update it with new deviceId
-        console.log(`[Device] Pair ${validPairId} already has device ${existingDeviceForPair.imeiOrDeviceId}, updating to ${deviceLoginDto.deviceId}`);
+        logVerbose(`[Device] Pair ${validPairId} already has device ${existingDeviceForPair.imeiOrDeviceId}, updating to ${deviceLoginDto.deviceId}`);
         const newDeviceId = deviceLoginDto.deviceId || `device_${pairNumber}_${Date.now()}`;
         if (deviceLoginDto.fcmToken) {
           await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, imei_or_device_id = $2, last_seen_at = $3, fcm_token = $4, updated_at = CURRENT_TIMESTAMP WHERE id = $5`,
+            `UPDATE devices SET pair_id = $1, imei_or_device_id = $2, last_seen_at = $3, fcm_token = $4, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $5`,
             [validPairId, newDeviceId, new Date(), deviceLoginDto.fcmToken, existingDeviceForPair.id]
           );
         } else {
           await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, imei_or_device_id = $2, last_seen_at = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
+            `UPDATE devices SET pair_id = $1, imei_or_device_id = $2, last_seen_at = $3, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
             [validPairId, newDeviceId, new Date(), existingDeviceForPair.id]
           );
         }
@@ -136,6 +141,7 @@ export class DevicesService {
           pairId: validPairId,
           imeiOrDeviceId: deviceLoginDto.deviceId || `device_${pairNumber}_${Date.now()}`,
           lastSeenAt: new Date(),
+          loggedOutAt: null,
           fcmToken: deviceLoginDto.fcmToken || null,
         });
         // Fetch the created device
@@ -151,14 +157,14 @@ export class DevicesService {
     // Activate pair when device logs in
     // CRITICAL: Use raw SQL to avoid TypeORM relation issues that set device.pair_id to null
     if (!pair.active) {
-      console.log(`[Device] Activating pair ${validPairId} (assignedNumber: ${pair.assignedNumber})`);
+      logVerbose(`[Device] Activating pair ${validPairId} (assignedNumber: ${pair.assignedNumber})`);
       await this.pairRepository.query(
         `UPDATE pairs SET active = $1, "updatedAt" = CURRENT_TIMESTAMP WHERE id = $2`,
         [true, validPairId]
       );
     }
 
-    console.log(`[Device] Login successful:`, {
+    logVerbose(`[Device] Login successful:`, {
       deviceId: device.imeiOrDeviceId,
       pairId: validPairId,
       pairNumber: pair.assignedNumber,
@@ -166,6 +172,8 @@ export class DevicesService {
       deviceLastSeenAt: device.lastSeenAt,
       devicePairId: device.pairId,
     });
+
+    this.recentDevicePairIdsService.invalidateSnapshot();
 
     // Generate JWT token
     const token = this.jwtService.sign({
@@ -221,8 +229,12 @@ export class DevicesService {
       pairName: d.pair.name,
       imeiOrDeviceId: d.imeiOrDeviceId,
       lastSeenAt: d.lastSeenAt,
+      loggedOutAt: d.loggedOutAt,
       hasFcmToken: !!d.fcmToken,
-      active: d.lastSeenAt && new Date().getTime() - d.lastSeenAt.getTime() < 30 * 60 * 1000, // Active if seen in last 30 min
+      active:
+        d.loggedOutAt == null &&
+        !!d.lastSeenAt &&
+        new Date().getTime() - d.lastSeenAt.getTime() < 30 * 60 * 1000,
     }));
   }
 
@@ -231,6 +243,7 @@ export class DevicesService {
     const devices = await this.deviceRepository.find({
       where: {
         lastSeenAt: MoreThan(thirtyMinutesAgo),
+        loggedOutAt: IsNull(),
       },
       relations: ['pair'],
     });
@@ -238,16 +251,20 @@ export class DevicesService {
     // Filter by actual device activity
     // Device is active only if:
     // 1. lastSeenAt is within 30 minutes AND
-    // 2. pair exists
+    // 2. not logged out (loggedOutAt IS NULL) AND
+    // 3. pair exists
     // NOTE: We DON'T check pair.active flag here because:
     // - pair.active is controlled by ON/OFF button and only affects map visibility
-    // - Device login status is determined by lastSeenAt only
-    // - If device logged out, lastSeenAt is set to old date, so it won't be returned anyway
+    // - Device login status is determined by lastSeenAt + loggedOutAt
     const activeDevices = devices.filter((d) => {
       if (!d.pair || !d.pairId) return false;
       // Device is active if lastSeenAt is within 30 minutes (regardless of pair.active)
       // pair.active is only for map visibility, not for login status
-      return d.lastSeenAt && new Date(d.lastSeenAt) > thirtyMinutesAgo;
+      return (
+        d.loggedOutAt == null &&
+        !!d.lastSeenAt &&
+        new Date(d.lastSeenAt) > thirtyMinutesAgo
+      );
     });
 
     return activeDevices.map((d) => ({
@@ -262,7 +279,7 @@ export class DevicesService {
     }));
   }
 
-  async logout(deviceId: string, isForceLogout: boolean = false) {
+  async logout(deviceId: string, isForceLogout: boolean = false, adminUserId?: number) {
     const device = await this.deviceRepository.findOne({
       where: { imeiOrDeviceId: deviceId },
       relations: ['pair'],
@@ -286,20 +303,34 @@ export class DevicesService {
             action: 'logout',
           },
         });
-        console.log(`[Device] Sent force logout FCM notification to device ${deviceId}`);
+        logVerbose(`[Device] Sent force logout FCM notification to device ${deviceId}`);
       } catch (error) {
         console.error(`[Device] Failed to send force logout FCM notification:`, error);
       }
     }
 
-    // Set lastSeenAt to a very old date to mark device as inactive
-    // This ensures findActiveDevices won't return this device
-    // The last known position is still available in the Position table for the admin panel
-    const veryOldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000); // 1 year ago
-    const previousLastSeenAt = device.lastSeenAt; // Save for logging
-    device.lastSeenAt = veryOldDate;
+    // Keep lastSeenAt = last real activity (admin "Legutóbb aktív"). Offline = loggedOutAt set.
+    const lastActiveAt = device.lastSeenAt;
+    const loggedOutAt = new Date();
+    device.loggedOutAt = loggedOutAt;
     await this.deviceRepository.save(device);
-    console.log(`[Device] Set lastSeenAt to old date for device ${deviceId} due to ${isForceLogout ? 'force ' : ''}logout. Previous lastSeenAt: ${previousLastSeenAt}`);
+    this.recentDevicePairIdsService.invalidateSnapshot();
+    logVerbose(
+      `[Device] Logout ${deviceId} (${isForceLogout ? 'force ' : ''}); lastSeenAt kept: ${lastActiveAt}`,
+    );
+
+    await this.auditLogsService.log({
+      ...(adminUserId != null ? { userId: adminUserId } : {}),
+      actionType: isForceLogout ? 'device_force_logout' : 'device_logout',
+      entityType: 'device',
+      entityId: device.id,
+      dataJson: {
+        imeiOrDeviceId: deviceId,
+        pairId: device.pairId,
+        lastActiveAt: lastActiveAt ? lastActiveAt.toISOString() : null,
+        loggedOutAt: loggedOutAt.toISOString(),
+      },
+    });
 
     // Only try to deactivate pair if device has a valid pairId and pair exists
     if (device.pairId && device.pair) {
@@ -313,17 +344,20 @@ export class DevicesService {
       });
 
       const hasOtherActiveDevice = otherActiveDevices.some(
-        (d) => d.lastSeenAt && new Date(d.lastSeenAt) > thirtyMinutesAgo,
+        (d) =>
+          d.loggedOutAt == null &&
+          !!d.lastSeenAt &&
+          new Date(d.lastSeenAt) > thirtyMinutesAgo,
       );
 
       // If no other active device, deactivate the pair
       if (!hasOtherActiveDevice && device.pair.active) {
         device.pair.active = false;
         await this.pairRepository.save(device.pair);
-        console.log(`[Device] Deactivated pair ${device.pair.id} (assignedNumber: ${device.pair.assignedNumber}) due to ${isForceLogout ? 'force ' : ''}logout`);
+        logVerbose(`[Device] Deactivated pair ${device.pair.id} (assignedNumber: ${device.pair.assignedNumber}) due to ${isForceLogout ? 'force ' : ''}logout`);
       }
     } else {
-      console.log(`[Device] Device ${deviceId} has no valid pair (pairId: ${device.pairId}), skipping pair deactivation`);
+      logVerbose(`[Device] Device ${deviceId} has no valid pair (pairId: ${device.pairId}), skipping pair deactivation`);
     }
 
     return {
@@ -338,6 +372,7 @@ export class DevicesService {
       throw new Error('Device not found');
     }
     await this.deviceRepository.remove(device);
+    this.recentDevicePairIdsService.invalidateSnapshot();
     return { success: true, message: 'Device deleted successfully' };
   }
 }

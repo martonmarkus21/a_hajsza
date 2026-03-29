@@ -4,7 +4,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
 import { PairsModule } from './pairs/pairs.module';
 import { PositionsModule } from './positions/positions.module';
@@ -21,6 +20,16 @@ import { MessagesModule } from './messages/messages.module';
 import { DevicesModule } from './devices/devices.module';
 import { UsersModule } from './users/users.module';
 import { GameSettingsModule } from './game-settings/game-settings.module';
+import { RedisModule } from './redis/redis.module';
+import { RecentDevicePairIdsModule } from './device-activity/recent-device-pair-ids.module';
+
+function typeOrmLogging(): boolean | ('error' | 'warn' | 'info' | 'log' | 'schema' | 'query' | 'migration')[] {
+  const v = (process.env.TYPEORM_LOGGING || '').toLowerCase().trim();
+  if (v === 'true' || v === 'all' || v === '1') return true;
+  if (v === 'error') return ['error'];
+  if (v === 'warn') return ['warn', 'error'];
+  return false;
+}
 
 @Module({
   imports: [
@@ -37,7 +46,7 @@ import { GameSettingsModule } from './game-settings/game-settings.module';
       database: process.env.DB_DATABASE || 'most_wanted',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: process.env.NODE_ENV === 'development',
-      logging: process.env.NODE_ENV === 'development',
+      logging: typeOrmLogging(),
       retryAttempts: 3,
       retryDelay: 3000,
     }),
@@ -47,7 +56,8 @@ import { GameSettingsModule } from './game-settings/game-settings.module';
         port: parseInt(process.env.REDIS_PORT || '6379'),
       },
     }),
-    DatabaseModule,
+    RedisModule,
+    RecentDevicePairIdsModule,
     AuthModule,
     PairsModule,
     PositionsModule,

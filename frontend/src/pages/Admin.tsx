@@ -23,6 +23,7 @@ import SendMessageModal from '../components/SendMessageModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { useNotification } from '../contexts/NotificationContext';
 import { formatDateTimeBudapestParts } from '../utils/formatDateTimeBudapest';
+import { mergeLastPosition } from '../utils/mergeLastPosition';
 
 // Styles
 import 'leaflet/dist/leaflet.css';
@@ -57,6 +58,7 @@ interface Device {
   pairName: string | null;
   imeiOrDeviceId: string;
   lastSeenAt: string | null;
+  loggedOutAt: string | null;
   hasFcmToken: boolean;
   active: boolean;
 }
@@ -161,7 +163,7 @@ export default function Admin() {
             // Preserve lastPosition from socket (positionUpdate events)
             return {
               ...apiPair,
-              lastPosition: existing.lastPosition || apiPair.lastPosition,
+              lastPosition: mergeLastPosition(existing.lastPosition, apiPair.lastPosition),
               distancePosition: existing.distancePosition, // Keep socket-updated distance position
             };
           }

@@ -38,7 +38,7 @@ export class CapturesService {
       throw new BadRequestException('Pair already captured');
     }
 
-    // Get last position
+    // Last persisted position sample (counter cycle); may be null if only Redis has recent fixes
     const lastPosition = await this.positionRepository.findOne({
       where: { pairId: createCaptureDto.pairId },
       order: { timestamp: 'DESC' },

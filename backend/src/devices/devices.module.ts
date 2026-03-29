@@ -7,10 +7,13 @@ import { DevicesService } from './devices.service';
 import { Device } from '../entities/device.entity';
 import { Pair } from '../entities/pair.entity';
 import { FcmModule } from '../fcm/fcm.module';
+import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { DeviceAuthGuard } from '../auth/device-auth.guard';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Device, Pair]),
+    AuditLogsModule,
     ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -25,7 +28,7 @@ import { FcmModule } from '../fcm/fcm.module';
     FcmModule,
   ],
   controllers: [DevicesController],
-  providers: [DevicesService],
+  providers: [DevicesService, DeviceAuthGuard],
   exports: [DevicesService],
 })
 export class DevicesModule {}

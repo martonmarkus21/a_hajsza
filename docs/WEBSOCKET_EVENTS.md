@@ -30,7 +30,7 @@ Leiratkozás pozíció frissítésekről.
 ## Szerver → Kliens események
 
 ### `positionUpdate`
-Új pozíció érkezett.
+Térképen megjelenő párkoordináta (nem minden GPS-küldésnél megy ki — lásd API spec: időzítő / szabályszegés „folyamatos” mód).
 
 ```json
 {
@@ -41,6 +41,19 @@ Leiratkozás pozíció frissítésekről.
   "speed": 0,
   "timestamp": "2024-01-15T10:30:00Z",
   "vehicleMode": false
+}
+```
+
+### `distanceUpdate`
+Egyenes vonalú távolságszámításhoz használt friss koordináta — **gyakrabban** érkezik, mint a `positionUpdate` (a kliens a saját GPS + pár pozíciójából számolhat távolságot).
+
+```json
+{
+  "pairId": 1,
+  "lat": 47.4979,
+  "lon": 19.0402,
+  "distanceToNearestOfficer": null,
+  "timestamp": "2024-01-15T10:30:00Z"
 }
 ```
 

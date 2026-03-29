@@ -1,16 +1,20 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Pair } from '../entities/pair.entity';
 import { Position } from '../entities/position.entity';
 import { Capture } from '../entities/capture.entity';
 import { MwFlag } from '../entities/mw-flag.entity';
 import { Device } from '../entities/device.entity';
+import { RuleViolation } from '../entities/rule-violation.entity';
+import { RedisPositionService } from '../redis/redis-position.service';
 import { CreatePairDto } from './dto/create-pair.dto';
 import { UpdatePairDto } from './dto/update-pair.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { FcmService } from '../fcm/fcm.service';
 import { GameSettingsService } from '../game-settings/game-settings.service';
+import { RecentDevicePairIdsService } from '../device-activity/recent-device-pair-ids.service';
+import { parsePairsSentIds } from '../common/pairs-sent.util';
 
 @Injectable()
 export class PairsService {
@@ -25,9 +29,13 @@ export class PairsService {
     private mwFlagRepository: Repository<MwFlag>,
     @InjectRepository(Device)
     private deviceRepository: Repository<Device>,
+    @InjectRepository(RuleViolation)
+    private ruleViolationRepository: Repository<RuleViolation>,
     private auditLogsService: AuditLogsService,
     private fcmService: FcmService,
     private gameSettingsService: GameSettingsService,
+    private redisPositionService: RedisPositionService,
+    private recentDevicePairIdsService: RecentDevicePairIdsService,
   ) {}
 
   async findAll(active?: boolean) {
@@ -38,150 +46,196 @@ export class PairsService {
     }
 
     const pairs = await query.getMany();
+    if (pairs.length === 0) {
+      return { pairs: [] };
+    }
 
-    // Get latest position and status for each pair
-    const pairsWithStatus = await Promise.all(
-      pairs.map(async (pair) => {
-        // Check if pair has active device (logged in within last 30 minutes)
-        const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-        const activeDevice = await this.deviceRepository.findOne({
-          where: { pairId: pair.id },
-        });
+    const pairIds = pairs.map((p) => p.id);
 
-        // Device is active only if lastSeenAt is within 30 minutes
-        // Don't check pair.active flag here - pair.active is just for map visibility (ON/OFF button)
-        // The actual device activity is determined by lastSeenAt
-        // If lastSeenAt is old (logout), device is inactive regardless of pair.active
-        const hasActiveDevice = !!(activeDevice && 
-          activeDevice.lastSeenAt && 
-          new Date(activeDevice.lastSeenAt) > thirtyMinutesAgo);
+    const activeExitViolations = await this.ruleViolationRepository.find({
+      where: { violationType: 'game_area_exit', resolved: false },
+      select: ['pairId'],
+    });
+    const exitViolationPairIds = new Set(activeExitViolations.map((v) => v.pairId));
 
-        // Update pair.active based on hasActiveDevice
-        // If device is not active (logged out or timed out), deactivate pair
-        // But only if pair is currently active (don't reactivate if manually deactivated)
-        // This ensures that on first load, pairs without active devices are not marked as active
-        if (!hasActiveDevice && pair.active) {
-          // Device is not active but pair is active - deactivate pair
-          // This happens when:
-          // 1. Device logged out (lastSeenAt is old)
-          // 2. Device timed out (lastSeenAt is old)
-          // 3. First load with no active devices
-          pair.active = false;
-          await this.pairRepository.save(pair);
-        }
-        // Note: We don't reactivate here if hasActiveDevice is true but pair.active is false
-        // because that would reactivate pairs that were explicitly deactivated by ON/OFF button
-        // Pair activation should only happen in devices.service.ts when device logs in
+    const liveByPairId = await this.redisPositionService.getLivePositionsForPairIds(pairIds);
+    const gameSettings = await this.gameSettingsService.getSettings();
 
-        // Only show pairs with active devices when active=true filter is used
-        if (active === true && !hasActiveDevice) {
-          return null;
-        }
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
-        // If active filter is not set, still return all pairs but mark inactive ones
-        // This allows admin to see all pairs, but frontend can filter
+    const devices = await this.deviceRepository.find({
+      where: { pairId: In(pairIds) },
+    });
+    const deviceByPairId = new Map<number, Device>();
+    for (const d of devices) {
+      const cur = deviceByPairId.get(d.pairId);
+      if (!cur) {
+        deviceByPairId.set(d.pairId, d);
+        continue;
+      }
+      const curT = cur.lastSeenAt ? new Date(cur.lastSeenAt).getTime() : 0;
+      const dT = d.lastSeenAt ? new Date(d.lastSeenAt).getTime() : 0;
+      if (dT > curT) deviceByPairId.set(d.pairId, d);
+    }
 
-        // Get the latest position for the pair
-        // CRITICAL: Only return lastPosition if timer allows it AND pair has sent position this cycle
-        // This prevents new users from seeing positions before the timer expires
-        const lastPosition = await this.positionRepository.findOne({
-          where: { pairId: pair.id },
-          order: { timestamp: 'DESC' },
-        });
+    const captures = await this.captureRepository.find({
+      where: { pairId: In(pairIds) },
+      select: ['pairId'],
+    });
+    const capturedPairIds = new Set(captures.map((c) => c.pairId));
 
-        const isCaptured = await this.captureRepository.findOne({
-          where: { pairId: pair.id },
-        });
+    const mwRows = await this.mwFlagRepository.find({
+      where: { pairId: In(pairIds), active: true },
+      select: ['pairId'],
+    });
+    const mwPairIds = new Set(mwRows.map((m) => m.pairId));
 
-        const isMostWanted = await this.mwFlagRepository.findOne({
-          where: { pairId: pair.id, active: true },
-        });
+    const latestByPairId = await this.loadLatestPositionPerPair(pairIds);
 
-        // Pair is active only if it has an active device
-        // pair.active flag is controlled by ON/OFF button and only affects map visibility
-        // The isActive property here reflects actual device login status, not pair.active flag
-        // Frontend will filter based on both isActive (hasActiveDevice) and pair.active for map display
-        const isActive = hasActiveDevice;
+    const pairsSentArray = parsePairsSentIds(gameSettings.pairsSentPositionThisCycle);
+    const firstInCycleByPairId = await this.loadFirstPositionInCycleForPairs(
+      pairs,
+      pairsSentArray,
+      gameSettings,
+    );
 
-        // CRITICAL: Only return lastPosition if timer allows it AND pair has sent position this cycle
-        // This prevents new users and admin panel from seeing positions before the timer expires
-        // AND prevents seeing continuously updating positions
-        let allowedLastPosition = null;
-        const gameSettings = await this.gameSettingsService.getSettings();
-        
-        // CRITICAL: Only return lastPosition if:
-        // 1. Timer is running
-        // 2. Pair has sent position this cycle (pairsSentPositionThisCycle includes pair.id)
-        // 3. Position timestamp is after lastLocationUpdate (current cycle)
-        // 4. We only return positions from the current cycle (not continuously updating ones)
-        if (lastPosition && gameSettings.isTimerRunning && gameSettings.lastLocationUpdate) {
-          const pairsSent = gameSettings.pairsSentPositionThisCycle;
-          
-          // Convert to array (simple-array type can be string or array)
-          let pairsSentArray: number[] = [];
-          if (pairsSent) {
-            if (Array.isArray(pairsSent)) {
-              pairsSentArray = pairsSent;
-            } else {
-              // Handle string case (simple-array stored as comma-separated string)
-              const pairsSentStr = String(pairsSent);
-              if (pairsSentStr.trim() !== '') {
-                pairsSentArray = pairsSentStr.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+    const pairIdsToDeactivate: number[] = [];
+    const results: Array<{
+      id: number;
+      assignedNumber: number;
+      name: string | null;
+      active: boolean;
+      captured: boolean;
+      mostWanted: boolean;
+      hasActiveDevice: boolean;
+      lastPosition: { lat: number; lon: number; timestamp: string } | null;
+      /** Always null from API; pursuers’ straight-line distance is computed in the browser (GPS + pair position). */
+      distanceToNearestOfficer: number | null;
+    } | null> = [];
+
+    for (const pair of pairs) {
+      const activeDevice = deviceByPairId.get(pair.id);
+      const hasActiveDevice = !!(
+        activeDevice &&
+        activeDevice.loggedOutAt == null &&
+        activeDevice.lastSeenAt &&
+        new Date(activeDevice.lastSeenAt) > thirtyMinutesAgo
+      );
+
+      if (!hasActiveDevice && pair.active) {
+        pairIdsToDeactivate.push(pair.id);
+      }
+
+      if (active === true && !hasActiveDevice) {
+        results.push(null);
+        continue;
+      }
+
+      const lastPosition = latestByPairId.get(pair.id) ?? null;
+      let allowedLastPosition: { lat: number; lon: number; timestamp: string } | null = null;
+
+      if (lastPosition && gameSettings.isTimerRunning && gameSettings.lastLocationUpdate) {
+        const pairIdInArray = pairsSentArray.some((id) => Number(id) === Number(pair.id));
+        if (pairIdInArray) {
+          const firstPositionInCycle = firstInCycleByPairId.get(pair.id);
+          if (firstPositionInCycle) {
+            allowedLastPosition = {
+              lat: parseFloat(firstPositionInCycle.lat.toString()),
+              lon: parseFloat(firstPositionInCycle.lon.toString()),
+              timestamp: firstPositionInCycle.timestamp.toISOString(),
+            };
+            // pl. játékterület-visszalépéskor mentett újabb sor a positions táblában — térkép frissítéshez ez kell
+            if (lastPosition) {
+              const tFirst = new Date(firstPositionInCycle.timestamp).getTime();
+              const tLatest = new Date(lastPosition.timestamp).getTime();
+              if (tLatest > tFirst) {
+                allowedLastPosition = {
+                  lat: parseFloat(lastPosition.lat.toString()),
+                  lon: parseFloat(lastPosition.lon.toString()),
+                  timestamp: lastPosition.timestamp.toISOString(),
+                };
               }
             }
           }
-          
-          // Check if pairId is in the array (handle both number and string comparisons)
-          const pairIdInArray = pairsSentArray.some(id => Number(id) === Number(pair.id));
-          
-          if (pairIdInArray) {
-            // This pair has sent a position in the current cycle
-            // Now get the FIRST position from this cycle (the one sent when timer expired)
-            // NOT the latest one (which might be continuously updating)
-            const lastLocationUpdate = new Date(gameSettings.lastLocationUpdate);
-            
-            // Get the first position from this cycle (after lastLocationUpdate)
-            const firstPositionInCycle = await this.positionRepository
-              .createQueryBuilder('position')
-              .where('position.pairId = :pairId', { pairId: pair.id })
-              .andWhere('position.timestamp >= :lastLocationUpdate', { lastLocationUpdate })
-              .orderBy('position.timestamp', 'ASC')
-              .getOne();
-            
-            if (firstPositionInCycle) {
-              // Return the FIRST position from this cycle (not the latest one)
-              // This prevents continuously updating positions
-              allowedLastPosition = {
-                lat: parseFloat(firstPositionInCycle.lat.toString()),
-                lon: parseFloat(firstPositionInCycle.lon.toString()),
-                timestamp: firstPositionInCycle.timestamp.toISOString(),
-              };
-            }
-          }
         }
+      }
 
-        return {
-          id: pair.id,
-          assignedNumber: pair.assignedNumber,
-          name: pair.name,
-          active: isActive,
-          captured: !!isCaptured,
-          mostWanted: !!isMostWanted,
-          hasActiveDevice: hasActiveDevice || false,
-          lastPosition: allowedLastPosition,
-          distanceToNearestOfficer: allowedLastPosition ? await this.calculateDistanceToNearestOfficer(
-            allowedLastPosition.lat,
-            allowedLastPosition.lon,
-            pair.id,
-          ) : null,
-        };
-      }),
-    );
+      if (!allowedLastPosition && exitViolationPairIds.has(pair.id)) {
+        const live = liveByPairId.get(pair.id);
+        if (live) {
+          allowedLastPosition = {
+            lat: live.lat,
+            lon: live.lon,
+            timestamp: live.timestamp,
+          };
+        }
+      }
 
-    // Filter out null values
-    const filteredPairs = pairsWithStatus.filter((p) => p !== null);
+      results.push({
+        id: pair.id,
+        assignedNumber: pair.assignedNumber,
+        name: pair.name,
+        active: hasActiveDevice,
+        captured: capturedPairIds.has(pair.id),
+        mostWanted: mwPairIds.has(pair.id),
+        hasActiveDevice,
+        lastPosition: allowedLastPosition,
+        distanceToNearestOfficer: null,
+      });
+    }
 
-    return { pairs: filteredPairs };
+    if (pairIdsToDeactivate.length > 0) {
+      await this.pairRepository.update({ id: In(pairIdsToDeactivate) }, { active: false });
+      for (const p of pairs) {
+        if (pairIdsToDeactivate.includes(p.id)) p.active = false;
+      }
+    }
+
+    return { pairs: results.filter((p): p is NonNullable<typeof p> => p !== null) };
+  }
+
+  private async loadLatestPositionPerPair(pairIds: number[]): Promise<Map<number, Position>> {
+    const map = new Map<number, Position>();
+    if (pairIds.length === 0) return map;
+    const rows = await this.positionRepository
+      .createQueryBuilder('position')
+      .where('position.pairId IN (:...ids)', { ids: pairIds })
+      .distinctOn(['position.pairId'])
+      .orderBy('position.pairId', 'ASC')
+      .addOrderBy('position.timestamp', 'DESC')
+      .getMany();
+    for (const r of rows) {
+      map.set(r.pairId, r);
+    }
+    return map;
+  }
+
+  private async loadFirstPositionInCycleForPairs(
+    pairs: Pair[],
+    pairsSentArray: number[],
+    gameSettings: { isTimerRunning: boolean; lastLocationUpdate: Date | null },
+  ): Promise<Map<number, Position>> {
+    const map = new Map<number, Position>();
+    if (!gameSettings.isTimerRunning || !gameSettings.lastLocationUpdate || pairsSentArray.length === 0) {
+      return map;
+    }
+    const eligibleIds = pairs
+      .filter((p) => pairsSentArray.some((id) => Number(id) === Number(p.id)))
+      .map((p) => p.id);
+    if (eligibleIds.length === 0) return map;
+    const lastLocationUpdate = new Date(gameSettings.lastLocationUpdate);
+    const rows = await this.positionRepository
+      .createQueryBuilder('position')
+      .where('position.pairId IN (:...ids)', { ids: eligibleIds })
+      .andWhere('position.timestamp >= :lastLocationUpdate', { lastLocationUpdate })
+      .distinctOn(['position.pairId'])
+      .orderBy('position.pairId', 'ASC')
+      .addOrderBy('position.timestamp', 'ASC')
+      .getMany();
+    for (const r of rows) {
+      map.set(r.pairId, r);
+    }
+    return map;
   }
 
   async create(createPairDto: CreatePairDto, userId: number) {
@@ -247,6 +301,9 @@ export class PairsService {
     }
 
     await this.pairRepository.save(pair);
+    if (updatePairDto.active !== undefined) {
+      this.recentDevicePairIdsService.invalidateSnapshot();
+    }
 
     await this.auditLogsService.log({
       userId,
@@ -315,6 +372,9 @@ export class PairsService {
       console.log(`[Pair] Deleted ${positions.length} position(s) associated with pair ${id}`);
     }
 
+    await this.redisPositionService.deleteLivePosition(id);
+    this.recentDevicePairIdsService.invalidateSnapshot();
+
     await this.pairRepository.remove(pair);
 
     await this.auditLogsService.log({
@@ -337,64 +397,5 @@ export class PairsService {
     return await this.update(id, { name: nameToSet }, userId);
   }
 
-  private async calculateDistanceToNearestOfficer(
-    pairLat: number | null,
-    pairLon: number | null,
-    currentPairId: number,
-  ): Promise<number | null> {
-    if (!pairLat || !pairLon) return null;
-
-    // Calculate distance to nearest active pair (other pairs can be considered as "officers" in the game)
-    // Get all active pairs with recent positions (within last 30 minutes), excluding current pair
-    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-    
-    const activePositions = await this.positionRepository
-      .createQueryBuilder('position')
-      .innerJoin('position.pair', 'pair')
-      .where('position.timestamp > :thirtyMinutesAgo', { thirtyMinutesAgo })
-      .andWhere('pair.active = :active', { active: true })
-      .andWhere('position.pairId != :currentPairId', { currentPairId })
-      .orderBy('position.timestamp', 'DESC')
-      .getMany();
-
-    if (activePositions.length === 0) {
-      // No other active pairs, return null
-      return null;
-    }
-
-    // Find the minimum distance to any active pair
-    let minDistance = Infinity;
-    for (const position of activePositions) {
-      const distance = this.haversineDistance(
-        pairLat,
-        pairLon,
-        parseFloat(position.lat.toString()),
-        parseFloat(position.lon.toString()),
-      );
-      if (distance < minDistance) {
-        minDistance = distance;
-      }
-    }
-
-    return minDistance === Infinity ? null : minDistance;
-  }
-
-  private haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371000; // Earth radius in meters
-    const dLat = this.toRad(lat2 - lat1);
-    const dLon = this.toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(this.toRad(lat1)) *
-        Math.cos(this.toRad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }
-
-  private toRad(degrees: number): number {
-    return (degrees * Math.PI) / 180;
-  }
 }
 

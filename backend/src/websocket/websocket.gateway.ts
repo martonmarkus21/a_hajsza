@@ -8,6 +8,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
+import { logVerbose } from '../common/verbose-log';
 
 @WSGateway({
   namespace: '/ws/game',
@@ -29,16 +30,16 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
         try {
           const payload = this.jwtService.verify(token);
           client.data.user = payload;
-          console.log(`Client connected: ${client.id} (${payload.username || payload.deviceId || 'unknown'})`);
+          logVerbose(`Client connected: ${client.id} (${payload.username || payload.deviceId || 'unknown'})`);
           // Auto-subscribe to positions for authenticated users
           client.join('positions');
         } catch (jwtError) {
           console.error('WebSocket JWT verification error:', jwtError);
           // Don't disconnect, allow connection but without auth
-          console.log(`Client connected with invalid token: ${client.id}`);
+          logVerbose(`Client connected with invalid token: ${client.id}`);
         }
       } else {
-        console.log(`Client connected without auth: ${client.id}`);
+        logVerbose(`Client connected without auth: ${client.id}`);
         // Allow connection without auth for public events
       }
     } catch (error) {
@@ -48,7 +49,7 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
+    logVerbose(`Client disconnected: ${client.id}`);
   }
 
   @SubscribeMessage('subscribe:positions')

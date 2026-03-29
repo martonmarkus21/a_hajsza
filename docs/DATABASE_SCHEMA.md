@@ -27,13 +27,16 @@ CREATE TABLE devices (
   sim_number VARCHAR(50),
   fcm_token TEXT,
   last_seen_at TIMESTAMP,
+  logged_out_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
+> A `logged_out_at` a kijelentkezéskor áll be; sikeres bejelentkezéskor törlődik. Az utolsó valós szerverkapcsolat ideje a `last_seen_at` mezőben marad megjelenítéshez.
+
 ### `positions`
-Pozíciók táblája.
+Pozíciók táblája (történeti / időzítő szerinti **minták**; minden egyes app-os GPS-küldés nem feltétlenül kerül ide — lásd API specifikáció, Redis élő réteg).
 
 ```sql
 CREATE TABLE positions (

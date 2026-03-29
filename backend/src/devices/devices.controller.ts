@@ -43,8 +43,8 @@ export class DevicesController {
   @Post('force-logout/:deviceId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  async forceLogout(@Param('deviceId') deviceId: string) {
-    return await this.devicesService.logout(deviceId, true);
+  async forceLogout(@Request() req: any, @Param('deviceId') deviceId: string) {
+    return await this.devicesService.logout(deviceId, true, req.user?.userId);
   }
 
   @Get(':id/delete') // Using GET/DELETE logic or standard DELETE

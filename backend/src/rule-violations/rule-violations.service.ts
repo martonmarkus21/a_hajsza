@@ -2,28 +2,31 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { RuleViolation } from '../entities/rule-violation.entity';
-import { Position } from '../entities/position.entity';
 import { Geofence } from '../entities/geofence.entity';
+import { PositionSnapshot } from '../positions/position-snapshot';
+import { RedisGeofenceCacheService } from '../redis/redis-geofence-cache.service';
 import { GeofenceCompletion } from '../entities/geofence-completion.entity';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { GameDaysService } from '../game-days/game-days.service';
 import { FcmService } from '../fcm/fcm.service';
 import { Pair } from '../entities/pair.entity';
 import { MwFlag } from '../entities/mw-flag.entity';
+import { Position } from '../entities/position.entity';
 
 @Injectable()
 export class RuleViolationsService {
   constructor(
     @InjectRepository(RuleViolation)
     private ruleViolationRepository: Repository<RuleViolation>,
-    @InjectRepository(Geofence)
-    private geofenceRepository: Repository<Geofence>,
+    private redisGeofenceCache: RedisGeofenceCacheService,
     @InjectRepository(GeofenceCompletion)
     private geofenceCompletionRepository: Repository<GeofenceCompletion>,
     @InjectRepository(Pair)
     private pairRepository: Repository<Pair>,
     @InjectRepository(MwFlag)
     private mwFlagRepository: Repository<MwFlag>,
+    @InjectRepository(Position)
+    private positionRepository: Repository<Position>,
     private webSocketGateway: WebSocketGateway,
     private gameDaysService: GameDaysService,
     private fcmService: FcmService,
@@ -236,19 +239,17 @@ export class RuleViolationsService {
 
   async checkViolations(
     pairId: number,
-    position: Position,
+    position: PositionSnapshot,
   ): Promise<{ violations: RuleViolation[]; gameAreaExitViolationActive: boolean }> {
     const violations: RuleViolation[] = [];
     let gameAreaExitViolationActive = false;
 
     // Check game area exit
-    const gameAreaGeofences = await this.geofenceRepository.find({
-      where: { geofenceType: 'game_area', active: true },
-    });
+    const gameAreaGeofences = await this.redisGeofenceCache.getActiveGameAreaGeofences();
 
     if (gameAreaGeofences.length > 0) {
-      const lat = parseFloat(position.lat.toString());
-      const lon = parseFloat(position.lon.toString());
+      const lat = Number(position.lat);
+      const lon = Number(position.lon);
       const isInsideGameArea = gameAreaGeofences.some((geofence) =>
         this.isInsideGameAreaGeofence(lat, lon, geofence),
       );
@@ -270,7 +271,6 @@ export class RuleViolationsService {
             pairId,
             violationType: 'game_area_exit',
             description: 'Pár kilépett a játéktérből',
-            positionId: position.id,
             resolved: false,
           });
 
@@ -308,6 +308,18 @@ export class RuleViolationsService {
         });
 
         if (existingViolation) {
+          const reentryRow = this.positionRepository.create({
+            pairId,
+            lat: position.lat,
+            lon: position.lon,
+            accuracy: position.accuracy ?? undefined,
+            speed: position.speed ?? undefined,
+            vehicleMode: position.vehicleMode ?? false,
+            vehicleSessionRemaining: position.vehicleSessionRemaining ?? undefined,
+            timestamp: position.timestamp,
+          });
+          await this.positionRepository.save(reentryRow);
+
           await this.ruleViolationRepository.update(
             {
               pairId,
@@ -363,7 +375,6 @@ export class RuleViolationsService {
             pairId,
             violationType: 'vehicle_time_exceeded',
             description: 'Járműhasználati idő limit túllépve (40 perc)',
-            positionId: position.id,
             resolved: false,
           });
 
@@ -394,10 +405,8 @@ export class RuleViolationsService {
     return { violations, gameAreaExitViolationActive };
   }
 
-  private async checkGeofenceCompletions(pairId: number, position: Position) {
-    const activeGeofences = await this.geofenceRepository.find({
-      where: { geofenceType: 'scenario', active: true },
-    });
+  private async checkGeofenceCompletions(pairId: number, position: PositionSnapshot) {
+    const activeGeofences = await this.redisGeofenceCache.getActiveScenarioGeofences();
 
     for (const geofence of activeGeofences) {
       // Check if already completed
@@ -409,8 +418,8 @@ export class RuleViolationsService {
 
       // Check if within geofence
       const isInside = this.isPointInCircle(
-        parseFloat(position.lat.toString()),
-        parseFloat(position.lon.toString()),
+        Number(position.lat),
+        Number(position.lon),
         parseFloat(geofence.centerLat.toString()),
         parseFloat(geofence.centerLon.toString()),
         geofence.radiusM,
@@ -426,7 +435,6 @@ export class RuleViolationsService {
         const completion = this.geofenceCompletionRepository.create({
           geofenceId: geofence.id,
           pairId,
-          positionId: position.id,
         });
         await this.geofenceCompletionRepository.save(completion);
 

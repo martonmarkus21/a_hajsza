@@ -44,6 +44,10 @@ docker compose up -d postgres redis
 
 ### Backend (.env)
 
+A teljes sablon és magyarázatok: `backend/.env.example`. Indítás előtt másold `.env` névre és töltsd ki.
+
+**Kötelező / tipikus értékek:**
+
 ```env
 DB_HOST=localhost
 DB_PORT=5432
@@ -66,6 +70,14 @@ FIREBASE_CLIENT_EMAIL=your-client-email
 
 CORS_ORIGIN=http://localhost:3001
 ```
+
+**Megjegyzés:** a backend az élő GPS-pozíciókat és a kapcsolódó gyorsítótárat **Redisben** tartja; élesben és fejlesztésben is indíts Redis példányt (lásd Docker Compose).
+
+**Opcionális** (részletek az `.env.example`-ben):
+
+- `RECENT_DEVICE_PAIR_IDS_CACHE_MS` — aktív eszközök pár-ID listájának memóriabeli cache ideje
+- `TYPEORM_LOGGING`, `LOG_VERBOSE` — SQL / részletes alkalmazáslog
+- `SEED_DB`, `SEED_PAIRS` — csak fejlesztési seed
 
 ## Fejlesztési workflow
 

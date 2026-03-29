@@ -31,7 +31,11 @@ export class Device {
   fcmToken: string;
 
   @Column({ nullable: true, name: 'last_seen_at', type: 'timestamp' })
-  lastSeenAt: Date;
+  lastSeenAt: Date | null;
+
+  /** Set on logout; cleared on login. lastSeenAt stays as last real server contact for display. */
+  @Column({ nullable: true, name: 'logged_out_at', type: 'timestamp' })
+  loggedOutAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

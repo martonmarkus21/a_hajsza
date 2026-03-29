@@ -1,9 +1,17 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Device } from '../entities/device.entity';
+import { logVerbose } from '../common/verbose-log';
 
 @Injectable()
 export class DeviceAuthGuard implements CanActivate {
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    @InjectRepository(Device)
+    private deviceRepository: Repository<Device>,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -14,19 +22,19 @@ export class DeviceAuthGuard implements CanActivate {
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7);
-      console.log('[DeviceAuthGuard] Token found in Authorization header');
+      logVerbose('[DeviceAuthGuard] Token found in Authorization header');
     } else if (request.body?.token) {
       token = request.body.token;
-      console.log('[DeviceAuthGuard] Token found in body');
+      logVerbose('[DeviceAuthGuard] Token found in body');
     } else {
-      console.log('[DeviceAuthGuard] No token found in header or body');
+      logVerbose('[DeviceAuthGuard] No token found in header or body');
     }
 
     if (!token) {
       // Fallback: allow deviceId in body for backward compatibility
       const deviceId = request.body?.deviceId || request.headers['x-device-id'];
       if (deviceId) {
-        console.log('[DeviceAuthGuard] No token, but deviceId found:', deviceId);
+        logVerbose('[DeviceAuthGuard] No token, but deviceId found:', deviceId);
         // Allow but mark as unauthenticated device
         request.device = { deviceId, authenticated: false };
         return true;
@@ -37,14 +45,21 @@ export class DeviceAuthGuard implements CanActivate {
 
     try {
       const payload = this.jwtService.verify(token);
-      console.log('[DeviceAuthGuard] Token verified, payload:', { 
-        deviceId: payload.deviceId, 
-        pairId: payload.pairId, 
-        type: payload.type 
+      logVerbose('[DeviceAuthGuard] Token verified, payload:', {
+        deviceId: payload.deviceId,
+        pairId: payload.pairId,
+        type: payload.type,
       });
       if (payload.type !== 'device') {
         console.error('[DeviceAuthGuard] Invalid token type:', payload.type);
         throw new UnauthorizedException('Invalid token type');
+      }
+      const row = await this.deviceRepository.findOne({
+        where: { imeiOrDeviceId: payload.deviceId },
+        select: ['id', 'loggedOutAt'],
+      });
+      if (row?.loggedOutAt != null) {
+        throw new UnauthorizedException('Device session ended; please log in again');
       }
       request.device = payload;
       request.device.authenticated = true;

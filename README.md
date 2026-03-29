@@ -41,9 +41,9 @@ Nyisd meg: `http://localhost:3001`
 
 ### Backend
 - ✅ REST API (NestJS)
-- ✅ WebSocket (Socket.IO) valós idejű frissítések
-- ✅ PostgreSQL adatbázis
-- ✅ Redis + Bull/BullMQ
+- ✅ WebSocket (Socket.IO) valós idejű frissítések (`positionUpdate`, `distanceUpdate`, stb.)
+- ✅ PostgreSQL adatbázis (pozícióminták, üzleti adatok)
+- ✅ Redis: élő pár-pozíciók + geofence gyorsítótár; ugyanazon példányon Bull/BullMQ is futhat
 - ✅ FCM (Firebase Cloud Messaging)
 - ✅ JWT autentikáció (admin/officer és device)
 - ✅ Device bejelentkezés rendszer

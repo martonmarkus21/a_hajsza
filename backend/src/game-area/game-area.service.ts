@@ -6,6 +6,7 @@ import { UpdateGameAreaDto } from './dto/update-game-area.dto';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { loadCountiesFromGeoJSON, loadHungaryBoundaryFromGeoJSON } from './load-geojson';
+import { RedisGeofenceCacheService } from '../redis/redis-geofence-cache.service';
 
 @Injectable()
 export class GameAreaService {
@@ -17,6 +18,7 @@ export class GameAreaService {
     private geofenceRepository: Repository<Geofence>,
     private webSocketGateway: WebSocketGateway,
     private auditLogsService: AuditLogsService,
+    private redisGeofenceCache: RedisGeofenceCacheService,
   ) {
     // Load counties from GeoJSON on service initialization
     try {
@@ -207,6 +209,8 @@ export class GameAreaService {
         console.log('Created new Hungary geofence with polygon');
       }
     }
+
+    await this.redisGeofenceCache.invalidateActiveGeofences();
 
     // Broadcast update
     this.webSocketGateway.broadcastGameAreaUpdate({

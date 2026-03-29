@@ -7,6 +7,7 @@ import { useSocket } from './hooks/useSocket';
 import { usePairs } from './hooks/usePairs';
 import { useGameInfo } from './hooks/useGameInfo';
 import { Pair } from './types';
+import { mergeLastPosition } from './utils/mergeLastPosition';
 import { authService } from './services/auth';
 import { useNotification } from './contexts/NotificationContext';
 import Login from './pages/Login';
@@ -949,7 +950,7 @@ function MapView() {
           if (existing) {
             return {
               ...apiPair,
-              lastPosition: existing.lastPosition || apiPair.lastPosition,
+              lastPosition: mergeLastPosition(existing.lastPosition, apiPair.lastPosition),
               distancePosition: existing.distancePosition,
               distanceToNearestOfficer: existing.distanceToNearestOfficer ?? apiPair.distanceToNearestOfficer,
             };

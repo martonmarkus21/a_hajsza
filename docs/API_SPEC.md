@@ -34,7 +34,7 @@ Content-Type: application/json
   - **Response**: JWT token és device info.
 - **`GET /api/devices/me`** - Visszaadja a bejelentkezett eszköz adatait.
 - **`GET /api/devices`** - Kilistázza az összes regisztrált eszközt (Admin).
-- **`GET /api/devices/active`** - Visszaadja az online/aktív eszközöket.
+- **`GET /api/devices/active`** - Visszaadja az online/aktív eszközöket (JWT: admin vagy officer).
 - **`POST /api/devices/logout`** - Kijelentkezteti az aktuális eszközt.
 - **`POST /api/devices/force-logout/:deviceId`** - Kijelentkeztet egy adott eszközt (Admin).
 
@@ -49,9 +49,17 @@ Content-Type: application/json
 - **`POST /api/position`**
   - Menekülő app küldi a pozíciót.
   - **Body**: `{ "deviceId": "string", "pairId": 1, "lat": 47.4, "lon": 19.0, "accuracy": 10, "speed": 0, "timestamp": "...", "vehicleMode": false, "vehicleSessionRemaining": 0 }`
+  - **Viselkedés (Redis + PostgreSQL)**:
+    - Minden fogadott minta bekerül a **Redis** „élő pozíció” kulcsba (pár szerint), így a játéktér / szabályszegés ellenőrzés és a scheduler ebből is tud dolgozni.
+    - **PostgreSQL** `positions` táblába nem minden kérés ír: sor akkor keletkezik, ha a játékidőzítő logikája szerint az adott pár **ebben a ciklusban először** küld térképes pozíciót (`pairsSentPositionThisCycle`), illetve a szabályszegés-kezelés (pl. játékterületre visszalépés) külön menthet sort.
+    - **WebSocket**: `distanceUpdate` gyakrabban megy ki (távolságszámítás a kliensen); `positionUpdate` csak akkor, ha a térképen szabad frissíteni (pl. nyitott „pozíció ablak”, vagy aktív `game_area_exit` folyamatos követés).
 
 ### Párok
 - **`GET /api/pairs`** - Összes pár lekérése (opcionális `?active=true` szűréssel).
+  - **`lastPosition` a válaszban** (összefoglalva):
+    - Futó időzítő és `lastLocationUpdate` mellett, ha a pár szerepel a ciklus „már küldött” listájában: alapból a **ciklus első** PG-s mintája; ha van **újabb** sor ugyanahhoz a párhez a `positions` táblában (pl. visszalépéskor mentett pont), akkor az kerül vissza.
+    - Aktív, meg nem oldott **játékterület-elhagyás** szabályszegésnél: ha van élő Redis-pozíció, a `lastPosition` onnan jön (folyamatos követés).
+    - Egyébként (nincs időzítő feltétel vagy nincs megjeleníthető minta) a mező lehet `null`. A pontos feltételek a `PairsService` és a játékbeállítások összjátékától függnek.
 - **`POST /api/pairs`** - Új pár létrehozása (Admin).
 - **`PUT /api/pairs/:id`** - Pár adatainak (pl. aktív státusz) módosítása.
 - **`DELETE /api/pairs/:id`** - Pár törlése.
