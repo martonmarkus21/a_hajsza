@@ -57,6 +57,16 @@ Egyenes vonalú távolságszámításhoz használt friss koordináta — **gyakr
 }
 ```
 
+### `savedPositionSample`
+Új sor került a **PostgreSQL** `positions` táblába (időzítő ciklus szerinti mintavételezés — lásd API spec: `POST /api/position`). Globális broadcast (nem csak a `positions` szobába); tipikusan az admin „Mentett pozíciók” lista élő frissítésére.
+
+```json
+{
+  "pairId": 1,
+  "id": 42
+}
+```
+
 ### `capture`
 Pár elfogva.
 

@@ -49,13 +49,18 @@ CREATE TABLE positions (
   vehicle_mode BOOLEAN DEFAULT false,
   vehicle_session_remaining INTEGER,
   timestamp TIMESTAMP NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  game_area_snapshot_json JSONB,
+  had_rule_violation_at_save BOOLEAN DEFAULT false
 );
 
 CREATE INDEX idx_positions_pair_id ON positions(pair_id);
 CREATE INDEX idx_positions_timestamp ON positions(timestamp);
 CREATE INDEX idx_positions_pair_timestamp ON positions(pair_id, timestamp DESC);
 ```
+
+> **`game_area_snapshot_json`**: mentéskor aktív `game_area` geofence-ek pillanatképe (név, középpont, sugár, `metadata_json` polygon stb.) — admin térképes nézet / nyomvonal modál.  
+> **`had_rule_violation_at_save`**: a minta rögzítésekor volt-e a párnak meg nem oldott szabályszegése (pillanatkép, később nem változik).
 
 ### `captures`
 Elfogások táblája.

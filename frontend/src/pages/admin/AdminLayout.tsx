@@ -1,7 +1,7 @@
 
 import { ReactNode, useState } from 'react';
 import { FiSettings, FiUsers, FiMap, FiClock, FiLogOut, FiArrowLeft, FiSmartphone, FiChevronRight, FiAlertTriangle } from 'react-icons/fi';
-import { UserCog } from 'lucide-react';
+import { UserCog, MapPinned } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import logoImage from '../../assets/images/most_wanted_logo_raw.png';
 import MWLoader from '../../components/MWLoader';
@@ -53,6 +53,12 @@ export default function AdminLayout({ children, activeTab, setActiveTab, loading
             label: 'Szabályszegések',
             icon: FiAlertTriangle,
             description: 'Aktív és korábbi szabályszegések áttekintése és naplózása'
+        },
+        {
+            id: 'positions',
+            label: 'Pozíciók',
+            icon: MapPinned,
+            description: 'Mentett GPS-minták visszakeresése párok és idő szerint'
         },
         {
             id: 'users',

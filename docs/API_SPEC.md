@@ -52,7 +52,14 @@ Content-Type: application/json
   - **Viselkedés (Redis + PostgreSQL)**:
     - Minden fogadott minta bekerül a **Redis** „élő pozíció” kulcsba (pár szerint), így a játéktér / szabályszegés ellenőrzés és a scheduler ebből is tud dolgozni.
     - **PostgreSQL** `positions` táblába nem minden kérés ír: sor akkor keletkezik, ha a játékidőzítő logikája szerint az adott pár **ebben a ciklusban először** küld térképes pozíciót (`pairsSentPositionThisCycle`), illetve a szabályszegés-kezelés (pl. játékterületre visszalépés) külön menthet sort.
-    - **WebSocket**: `distanceUpdate` gyakrabban megy ki (távolságszámítás a kliensen); `positionUpdate` csak akkor, ha a térképen szabad frissíteni (pl. nyitott „pozíció ablak”, vagy aktív `game_area_exit` folyamatos követés).
+    - Amikor új `positions` sor keletkezik, a szerver elmenti a **mentéskor aktív játékterület(ek) pillanatképét** (`game_area_snapshot_json`) és azt, hogy **volt-e meg nem oldott szabályszegése** a párnak (`had_rule_violation_at_save`).
+    - **WebSocket**: `distanceUpdate` gyakrabban megy ki (távolságszámítás a kliensen); `positionUpdate` csak akkor, ha a térképen szabad frissíteni (pl. nyitott „pozíció ablak”, vagy aktív `game_area_exit` folyamatos követés). Új PG-s minta után globálisan kimegy a `savedPositionSample` esemény is (`pairId`, `id`).
+- **`GET /api/positions/admin/list`** (Admin JWT)
+  - Mentett (PostgreSQL) pozíciók lapozott listája szűréssel és rendezéssel.
+  - **Query**: `pairId` (opcionális), `from` / `to` (ISO timestamp, inkluzív), `page`, `pageSize` (max 5000), `sortBy` (`timestamp` | `id` | `pairId`), `sortDir` (`asc` | `desc`).
+  - **Response**: `{ items: [...], total, page, pageSize }` — az elemek tartalmazzák a pár azonosítókat, koordinátákat, `gameAreaSnapshot`, `hadRuleViolationAtSave` mezőket.
+- **`GET /api/positions/pair/:pairId/latest-saved`** (JWT: **admin** vagy **officer**)
+  - A megadott pár **legutóbbi mentett** pozíciósora (vagy `null`), ugyanazzal a mezőkészlettel, mint a list API elemek (pl. térkép modál / pár részletek).
 
 ### Párok
 - **`GET /api/pairs`** - Összes pár lekérése (opcionális `?active=true` szűréssel).

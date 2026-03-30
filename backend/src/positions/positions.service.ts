@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Position } from '../entities/position.entity';
 import { Device } from '../entities/device.entity';
 import { GameSettings } from '../entities/game-settings.entity';
+import { Geofence } from '../entities/geofence.entity';
+import { RuleViolation } from '../entities/rule-violation.entity';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { RuleViolationsService } from '../rule-violations/rule-violations.service';
@@ -12,6 +14,16 @@ import { RecentDevicePairIdsService } from '../device-activity/recent-device-pai
 import { PositionSnapshot } from './position-snapshot';
 import { logVerbose } from '../common/verbose-log';
 import { parsePairsSentIds } from '../common/pairs-sent.util';
+import { QueryAdminPositionsDto } from './dto/query-admin-positions.dto';
+
+function parseOptionalDateInput(raw?: string): Date | undefined {
+  if (raw == null || String(raw).trim() === '') return undefined;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) {
+    return undefined;
+  }
+  return d;
+}
 
 @Injectable()
 export class PositionsService {
@@ -22,11 +34,34 @@ export class PositionsService {
     private deviceRepository: Repository<Device>,
     @InjectRepository(GameSettings)
     private gameSettingsRepository: Repository<GameSettings>,
+    @InjectRepository(Geofence)
+    private geofenceRepository: Repository<Geofence>,
+    @InjectRepository(RuleViolation)
+    private ruleViolationRepository: Repository<RuleViolation>,
     private webSocketGateway: WebSocketGateway,
     private ruleViolationsService: RuleViolationsService,
     private redisPositionService: RedisPositionService,
     private recentDevicePairIdsService: RecentDevicePairIdsService,
   ) {}
+
+  /** Mentéskor aktív játékterület(ek) — admin egy pontos nézetéhez. */
+  private async buildGameAreaSnapshot(): Promise<Record<string, unknown>[] | null> {
+    const rows = await this.geofenceRepository.find({
+      where: { geofenceType: 'game_area', active: true },
+      order: { id: 'ASC' },
+    });
+    if (rows.length === 0) return null;
+    return rows.map((g) => ({
+      id: g.id,
+      name: g.name,
+      centerLat: parseFloat(String(g.centerLat)),
+      centerLon: parseFloat(String(g.centerLon)),
+      radiusM: g.radiusM,
+      active: true,
+      geofenceType: g.geofenceType,
+      metadataJson: g.metadataJson ?? null,
+    }));
+  }
 
   async create(createPositionDto: CreatePositionDto, devicePayload?: any) {
     logVerbose('[Position] Received position:', {
@@ -171,6 +206,9 @@ export class PositionsService {
 
     let savedPosition: Position | null = null;
     if (pairAddedToCycleThisRequest && currentSettings?.isTimerRunning) {
+      const hadRuleViolationAtSave =
+        (await this.ruleViolationRepository.count({ where: { pairId, resolved: false } })) > 0;
+      const gameAreaSnapshotJson = await this.buildGameAreaSnapshot();
       const positionRow = this.positionRepository.create({
         pairId: pairId,
         lat: createPositionDto.lat,
@@ -180,11 +218,17 @@ export class PositionsService {
         vehicleMode: createPositionDto.vehicleMode || false,
         vehicleSessionRemaining: createPositionDto.vehicleSessionRemaining,
         timestamp: serverTimestamp,
+        gameAreaSnapshotJson,
+        hadRuleViolationAtSave,
       });
       savedPosition = await this.positionRepository.save(positionRow);
       logVerbose('[Position] Sampled position persisted to PostgreSQL (counter cycle):', {
         id: savedPosition.id,
         pairId: savedPosition.pairId,
+      });
+      this.webSocketGateway.broadcastSavedPositionSample({
+        pairId: savedPosition.pairId,
+        id: savedPosition.id,
       });
     }
 
@@ -223,4 +267,97 @@ export class PositionsService {
     };
   }
 
+  /**
+   * Admin: mentett (PostgreSQL) pozíciók — ugyanazok, mint amik a térképre kerültek és mintába mentődtek.
+   */
+  async listPositionsForAdmin(query: QueryAdminPositionsDto) {
+    const from = parseOptionalDateInput(query.from);
+    const to = parseOptionalDateInput(query.to);
+    if (query.from != null && String(query.from).trim() !== '' && from === undefined) {
+      throw new BadRequestException('Érvénytelen „from” időpont.');
+    }
+    if (query.to != null && String(query.to).trim() !== '' && to === undefined) {
+      throw new BadRequestException('Érvénytelen „to” időpont.');
+    }
+    if (from && to && from.getTime() > to.getTime()) {
+      throw new BadRequestException('A „from” időpont nem lehet későbbi, mint a „to”.');
+    }
+
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 25;
+    const sortBy = query.sortBy ?? 'timestamp';
+    const sortDir = (query.sortDir ?? 'desc').toUpperCase() as 'ASC' | 'DESC';
+
+    const qb = this.positionRepository
+      .createQueryBuilder('position')
+      .leftJoinAndSelect('position.pair', 'pair');
+
+    if (query.pairId != null) {
+      qb.andWhere('position.pairId = :pairId', { pairId: query.pairId });
+    }
+    if (from) {
+      qb.andWhere('position.timestamp >= :from', { from });
+    }
+    if (to) {
+      qb.andWhere('position.timestamp <= :to', { to });
+    }
+
+    const sortColumn =
+      sortBy === 'id' ? 'position.id' : sortBy === 'pairId' ? 'position.pairId' : 'position.timestamp';
+    qb.orderBy(sortColumn, sortDir);
+
+    qb.skip((page - 1) * pageSize).take(pageSize);
+
+    const [rows, total] = await qb.getManyAndCount();
+
+    const items = rows.map((p) => ({
+      id: p.id,
+      pairId: p.pairId,
+      assignedNumber: p.pair?.assignedNumber ?? null,
+      pairName: p.pair?.name ?? null,
+      lat: Number(p.lat),
+      lon: Number(p.lon),
+      accuracy: p.accuracy != null ? Number(p.accuracy) : null,
+      speed: p.speed != null ? Number(p.speed) : null,
+      vehicleMode: p.vehicleMode,
+      vehicleSessionRemaining: p.vehicleSessionRemaining,
+      timestamp: p.timestamp instanceof Date ? p.timestamp.toISOString() : String(p.timestamp),
+      createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
+      gameAreaSnapshot: p.gameAreaSnapshotJson ?? null,
+      hadRuleViolationAtSave: !!p.hadRuleViolationAtSave,
+    }));
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  /** Legutóbbi mentett pozíció egy párhoz (pár részletei / térkép modál). */
+  async getLatestSavedPositionForPair(pairId: number) {
+    const p = await this.positionRepository.findOne({
+      where: { pairId },
+      order: { timestamp: 'DESC' },
+      relations: ['pair'],
+    });
+    if (!p) return null;
+    return {
+      id: p.id,
+      pairId: p.pairId,
+      assignedNumber: p.pair?.assignedNumber ?? null,
+      pairName: p.pair?.name ?? null,
+      lat: Number(p.lat),
+      lon: Number(p.lon),
+      accuracy: p.accuracy != null ? Number(p.accuracy) : null,
+      speed: p.speed != null ? Number(p.speed) : null,
+      vehicleMode: p.vehicleMode,
+      vehicleSessionRemaining: p.vehicleSessionRemaining,
+      timestamp: p.timestamp instanceof Date ? p.timestamp.toISOString() : String(p.timestamp),
+      createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
+      gameAreaSnapshot: p.gameAreaSnapshotJson ?? null,
+      hadRuleViolationAtSave: !!p.hadRuleViolationAtSave,
+    };
+  }
 }

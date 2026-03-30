@@ -14,6 +14,8 @@ import Login from './pages/Login';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
 import PairDetails from './components/PairDetails';
+import PositionsTraceMapModal, { type SinglePositionRow } from './components/PositionsTraceMapModal';
+import { fetchLatestSavedPositionForPair } from './utils/fetchLatestSavedPosition';
 import RuleViolationDetailsModal from './components/RuleViolationDetailsModal';
 import MWLoader from './components/MWLoader';
 import SendMessageModal from './components/SendMessageModal';
@@ -794,6 +796,12 @@ function MapView() {
   const [messagePairId, setMessagePairId] = useState<number | null>(null);
   const [showViolationDetailsModal, setShowViolationDetailsModal] = useState(false);
   const [selectedViolationPairId, setSelectedViolationPairId] = useState<number | null>(null);
+  const [pairLastPositionMap, setPairLastPositionMap] = useState<{
+    pairId: number;
+    headerSubtitle: string;
+    row: SinglePositionRow;
+  } | null>(null);
+  const [pairMapOpen, setPairMapOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [locationUpdateCountdown, setLocationUpdateCountdown] = useState<{ minutes: number; seconds: number } | null>(null);
   const [gameSettings, setGameSettings] = useState<{
@@ -1461,6 +1469,41 @@ function MapView() {
             setMessagePairId(id); // Set the specific pair ID
             setShowMessageModal(true);
           }}
+          onOpenLastPositionMap={async (p) => {
+            if (!p.lastPosition || p.lastPosition.lat == null || p.lastPosition.lon == null) return;
+            const name = p.name?.trim();
+            const saved = await fetchLatestSavedPositionForPair(p.id);
+            let row: SinglePositionRow;
+            let headerSubtitle: string;
+            if (saved) {
+              row = saved;
+              headerSubtitle = `Pár #${p.assignedNumber}${name ? ` (${name})` : ''} · ${new Date(saved.timestamp).toLocaleString('hu-HU', { dateStyle: 'medium', timeStyle: 'short' })}`;
+            } else {
+              row = {
+                id: 0,
+                lat: p.lastPosition.lat,
+                lon: p.lastPosition.lon,
+                timestamp: p.lastPosition.timestamp,
+              };
+              headerSubtitle = `Pár #${p.assignedNumber}${name ? ` (${name})` : ''} · utolsó ismert hely · ${new Date(p.lastPosition.timestamp).toLocaleString('hu-HU', { dateStyle: 'medium', timeStyle: 'short' })}`;
+            }
+            setPairLastPositionMap({ pairId: p.id, headerSubtitle, row });
+            setPairMapOpen(true);
+          }}
+        />
+      )}
+
+      {pairLastPositionMap && (
+        <PositionsTraceMapModal
+          isOpen={pairMapOpen}
+          onClose={() => {
+            setPairMapOpen(false);
+            window.setTimeout(() => setPairLastPositionMap(null), 220);
+          }}
+          variant="single"
+          pairId={pairLastPositionMap.pairId}
+          headerSubtitle={pairLastPositionMap.headerSubtitle}
+          singleRow={pairLastPositionMap.row}
         />
       )}
 

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import {
   FiAlertTriangle,
-  FiRefreshCw,
   FiActivity,
   FiCheckCircle,
   FiClock,
@@ -386,7 +385,7 @@ export default function RuleViolationsManagement({
         <div className="overflow-x-auto custom-scrollbar">
           {loading && allRows.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
-              <FiRefreshCw className="w-6 h-6 animate-spin mr-2 opacity-50" />
+              <span className="inline-block w-5 h-5 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin mr-2" />
               Betöltés…
             </div>
           ) : (

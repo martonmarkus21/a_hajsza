@@ -2,8 +2,13 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PositionsController } from './positions.controller';
+import { AdminPositionsController } from './admin-positions.controller';
+import { LatestSavedPositionsController } from './latest-saved-positions.controller';
 import { PositionsService } from './positions.service';
 import { Position } from '../entities/position.entity';
+import { Pair } from '../entities/pair.entity';
+import { Geofence } from '../entities/geofence.entity';
+import { RuleViolation } from '../entities/rule-violation.entity';
 import { Device } from '../entities/device.entity';
 import { GameSettings } from '../entities/game-settings.entity';
 import { WebSocketModule } from '../websocket/websocket.module';
@@ -12,7 +17,7 @@ import { DeviceAuthGuard } from '../auth/device-auth.guard';
 import { JwtModule } from '@nestjs/jwt';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Position, Device, GameSettings]),
+    TypeOrmModule.forFeature([Position, Device, GameSettings, Pair, Geofence, RuleViolation]),
     WebSocketModule,
     RuleViolationsModule,
     ConfigModule,
@@ -27,7 +32,7 @@ import { JwtModule } from '@nestjs/jwt';
       inject: [ConfigService],
     }),
   ],
-  controllers: [PositionsController],
+  controllers: [PositionsController, AdminPositionsController, LatestSavedPositionsController],
   providers: [PositionsService, DeviceAuthGuard],
   exports: [PositionsService],
 })

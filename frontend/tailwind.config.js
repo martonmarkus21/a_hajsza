@@ -55,6 +55,14 @@ export default {
           '0%': { transform: 'rotate(0deg)' },
           '100%': { transform: 'rotate(360deg)' },
         },
+        'content-reveal': {
+          '0%': { opacity: '0', transform: 'translateY(-8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'content-hide': {
+          '0%': { opacity: '1', transform: 'translateY(0)' },
+          '100%': { opacity: '0', transform: 'translateY(-8px)' },
+        },
       },
       animation: {
         'scale-in': 'scale-in 0.2s ease-out',
@@ -67,6 +75,8 @@ export default {
         'blob-reverse': "blob-reverse 13s infinite linear",
         drift: "drift 16s infinite linear",
         'spin-slow': "spin-slow 60s linear infinite",
+        'content-reveal': 'content-reveal 0.38s cubic-bezier(0.16, 1, 0.3, 1) both',
+        'content-hide': 'content-hide 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards',
       }
     },
   },

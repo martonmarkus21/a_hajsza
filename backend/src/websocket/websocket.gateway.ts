@@ -95,4 +95,9 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   broadcastGameAreaUpdate(data: any) {
     this.server.emit('gameAreaUpdate', data);
   }
+
+  /** Új, adatbázisba mentett GPS-minta (admin pozíciók lista élő frissítéséhez). */
+  broadcastSavedPositionSample(data: { pairId: number; id: number }) {
+    this.server.emit('savedPositionSample', data);
+  }
 }

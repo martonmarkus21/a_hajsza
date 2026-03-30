@@ -19,6 +19,8 @@ interface PairDetailsProps {
   hasActiveGameAreaViolation?: boolean;
   onOpenViolationDetails?: (pairId: number) => void;
   onClosingStart?: () => void;
+  /** Utolsó pozíció térképes részletei (élő adat, nem csak admin) */
+  onOpenLastPositionMap?: (pair: Pair) => void;
 }
 
 export default function PairDetails({
@@ -33,6 +35,7 @@ export default function PairDetails({
   hasActiveGameAreaViolation = false,
   onOpenViolationDetails,
   onClosingStart,
+  onOpenLastPositionMap,
 }: PairDetailsProps) {
   const { addNotification } = useNotification();
   const [isEditing, setIsEditing] = useState(false);
@@ -195,15 +198,37 @@ export default function PairDetails({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Location */}
               <div className="p-4 bg-black/20 rounded-xl border border-white/5 relative">
-                <div className="absolute top-4 right-4 text-blue-500/20">
+                <div className="absolute top-4 right-4 text-blue-500/20 pointer-events-none">
                   <FiCrosshair className="w-8 h-8" />
                 </div>
-                <label className="block text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Utolsó pozíció</label>
+                <span className="block text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">
+                  Utolsó pozíció
+                </span>
                 {pair.lastPosition && pair.lastPosition.lat != null && pair.lastPosition.lon != null ? (
                   <>
-                    <div className="text-white font-medium mb-1">
-                      {new Date(pair.lastPosition.timestamp).toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </div>
+                    {onOpenLastPositionMap ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenLastPositionMap(pair)}
+                        className="text-left w-full rounded-lg -mx-1 px-1 py-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/35"
+                      >
+                        <div className="text-white font-medium mb-1 transition-colors hover:text-orange-300">
+                          {new Date(pair.lastPosition.timestamp).toLocaleTimeString('hu-HU', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          })}
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="text-white font-medium mb-1">
+                        {new Date(pair.lastPosition.timestamp).toLocaleTimeString('hu-HU', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        })}
+                      </div>
+                    )}
                     <div className="text-xs text-blue-400 font-mono bg-blue-500/10 px-2 py-1 rounded w-fit">
                       {pair.lastPosition.lat.toFixed(5)}, {pair.lastPosition.lon.toFixed(5)}
                     </div>

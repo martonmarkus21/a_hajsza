@@ -47,6 +47,14 @@ export class Position {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  /** Mentéskor aktív játékterület(ek) pillanatképe (admin térképnézet). */
+  @Column({ type: 'jsonb', nullable: true, name: 'game_area_snapshot_json' })
+  gameAreaSnapshotJson: Record<string, unknown>[] | null;
+
+  /** Mentéskor volt-e fel nem oldott szabályszegése a párnak (pillanatkép, nem változik). */
+  @Column({ default: false, name: 'had_rule_violation_at_save' })
+  hadRuleViolationAtSave: boolean;
 }
 
 
