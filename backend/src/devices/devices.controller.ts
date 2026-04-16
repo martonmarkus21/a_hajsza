@@ -5,6 +5,7 @@ import { DeviceAuthGuard } from '../auth/device-auth.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { auditMetaFromRequest } from '../common/audit-request.util';
 
 @Controller('api/devices')
 export class DevicesController {
@@ -37,14 +38,14 @@ export class DevicesController {
   @Post('logout')
   @UseGuards(DeviceAuthGuard)
   async logout(@Request() req: any) {
-    return await this.devicesService.logout(req.device.deviceId);
+    return await this.devicesService.logout(req.device.deviceId, false, undefined, auditMetaFromRequest(req));
   }
 
   @Post('force-logout/:deviceId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async forceLogout(@Request() req: any, @Param('deviceId') deviceId: string) {
-    return await this.devicesService.logout(deviceId, true, req.user?.userId);
+    return await this.devicesService.logout(deviceId, true, req.user?.userId, auditMetaFromRequest(req));
   }
 
   @Get(':id/delete') // Using GET/DELETE logic or standard DELETE

@@ -10,6 +10,7 @@ import * as bcrypt from 'bcryptjs';
 import { logVerbose } from '../common/verbose-log';
 import { RecentDevicePairIdsService } from '../device-activity/recent-device-pair-ids.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import type { AuditRequestMeta } from '../common/audit-request.util';
 
 @Injectable()
 export class DevicesService {
@@ -279,7 +280,7 @@ export class DevicesService {
     }));
   }
 
-  async logout(deviceId: string, isForceLogout: boolean = false, adminUserId?: number) {
+  async logout(deviceId: string, isForceLogout: boolean = false, adminUserId?: number, audit?: AuditRequestMeta) {
     const device = await this.deviceRepository.findOne({
       where: { imeiOrDeviceId: deviceId },
       relations: ['pair'],
@@ -330,6 +331,7 @@ export class DevicesService {
         lastActiveAt: lastActiveAt ? lastActiveAt.toISOString() : null,
         loggedOutAt: loggedOutAt.toISOString(),
       },
+      ...audit,
     });
 
     // Only try to deactivate pair if device has a valid pairId and pair exists

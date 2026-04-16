@@ -6,6 +6,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcryptjs';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import type { AuditRequestMeta } from '../common/audit-request.util';
 
 @Injectable()
 export class UsersService {
@@ -48,7 +49,7 @@ export class UsersService {
     };
   }
 
-  async create(createUserDto: CreateUserDto, createdByUserId: number) {
+  async create(createUserDto: CreateUserDto, createdByUserId: number, audit?: AuditRequestMeta) {
     // Check if username already exists
     const existingUsername = await this.userRepository.findOne({
       where: { username: createUserDto.username },
@@ -85,6 +86,7 @@ export class UsersService {
       entityType: 'user',
       entityId: savedUser.id,
       dataJson: { username: savedUser.username, role: savedUser.role },
+      ...audit,
     });
 
     return {
@@ -98,7 +100,7 @@ export class UsersService {
     };
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto, updatedByUserId: number) {
+  async update(id: number, updateUserDto: UpdateUserDto, updatedByUserId: number, audit?: AuditRequestMeta) {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -150,6 +152,7 @@ export class UsersService {
       entityType: 'user',
       entityId: id,
       dataJson: updateUserDto,
+      ...audit,
     });
 
     return {
@@ -163,7 +166,7 @@ export class UsersService {
     };
   }
 
-  async delete(id: number, deletedByUserId: number) {
+  async delete(id: number, deletedByUserId: number, audit?: AuditRequestMeta) {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -183,6 +186,7 @@ export class UsersService {
       entityType: 'user',
       entityId: id,
       dataJson: { username: user.username },
+      ...audit,
     });
 
     return {

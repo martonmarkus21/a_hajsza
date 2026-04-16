@@ -880,6 +880,12 @@ body {
   min-width: 200px;
 }
 
+/* Compact saved-position game-area popup sizing */
+.mw-ga-popup .leaflet-popup-content {
+  min-width: 0 !important;
+  width: auto !important;
+}
+
 /* Hide Default Leaflet Close Button */
 .custom-popup-dark .leaflet-popup-close-button {
   display: none !important;

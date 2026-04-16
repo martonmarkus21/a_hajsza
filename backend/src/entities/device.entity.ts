@@ -24,9 +24,6 @@ export class Device {
   @Column({ unique: true, name: 'imei_or_device_id' })
   imeiOrDeviceId: string;
 
-  @Column({ nullable: true, name: 'sim_number' })
-  simNumber: string;
-
   @Column({ type: 'text', nullable: true, name: 'fcm_token' })
   fcmToken: string;
 

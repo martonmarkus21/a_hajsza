@@ -3,6 +3,7 @@ package com.mostwanted.app
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -29,8 +30,9 @@ class LoginActivity : AppCompatActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allGranted = permissions.all { it.value }
-        if (allGranted) {
+        val fine = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarse = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fine || coarse) {
             proceedWithLogin()
         } else {
             showError("A helymeghatározás engedélye szükséges!")
@@ -61,21 +63,31 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun checkPermissionsAndLogin() {
-        val permissions = arrayOf(
+        val permissions = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.POST_NOTIFICATIONS
         )
+        if (Build.VERSION.SDK_INT >= 33) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
 
-        val missingPermissions = permissions.filter {
+        val missing = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
-        if (missingPermissions.isEmpty()) {
+        if (missing.isEmpty()) {
             proceedWithLogin()
         } else {
-            requestPermissionLauncher.launch(permissions)
+            requestPermissionLauncher.launch(missing.toTypedArray())
         }
+    }
+
+    /** Eszközazonosító a szervernek: [android.provider.Settings.Secure.ANDROID_ID], vagy fallback időbélyeggel. */
+    private fun resolveDeviceIdForServer(): String {
+        return android.provider.Settings.Secure.getString(
+            contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID
+        ) ?: "device_${System.currentTimeMillis()}"
     }
 
     private fun proceedWithLogin() {
@@ -105,10 +117,7 @@ class LoginActivity : AppCompatActivity() {
     private fun login(pairNumber: String, password: String, fcmToken: String?) {
         lifecycleScope.launch {
             try {
-                val deviceId = android.provider.Settings.Secure.getString(
-                    contentResolver,
-                    android.provider.Settings.Secure.ANDROID_ID
-                ) ?: "device_${System.currentTimeMillis()}"
+                val deviceId = resolveDeviceIdForServer()
 
                 val request = com.mostwanted.app.api.DeviceLoginRequest(
                     username = pairNumber,
@@ -163,4 +172,3 @@ class LoginActivity : AppCompatActivity() {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 }
-

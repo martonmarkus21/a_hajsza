@@ -1,15 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Geofence } from '../entities/geofence.entity';
 import { UpdateGameAreaDto } from './dto/update-game-area.dto';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import type { AuditRequestMeta } from '../common/audit-request.util';
 import { loadCountiesFromGeoJSON, loadHungaryBoundaryFromGeoJSON } from './load-geojson';
 import { RedisGeofenceCacheService } from '../redis/redis-geofence-cache.service';
 
 @Injectable()
-export class GameAreaService {
+export class GameAreaService implements OnModuleInit {
   private counties: Record<string, { name: string; polygon: number[][] }> = {};
   private hungaryBoundary: number[][] | null = null;
 
@@ -34,6 +35,74 @@ export class GameAreaService {
       console.error('Error loading GeoJSON data:', error);
       this.counties = {};
       this.hungaryBoundary = null;
+    }
+  }
+
+  async onModuleInit(): Promise<void> {
+    await this.ensureCountyGeofencesSeededFromGeojson();
+  }
+
+  /**
+   * A counties.geojson összes polygon megyéje (és a fájlban szereplő országos határ) egyszer
+   * betöltődik a geofences táblába, ha még nincs ilyen nevű game_area sor — később csak aktív/inaktív.
+   */
+  private async ensureCountyGeofencesSeededFromGeojson(): Promise<void> {
+    try {
+      for (const [countyCode, countyData] of Object.entries(this.counties)) {
+        const existing = await this.geofenceRepository.findOne({
+          where: { geofenceType: 'game_area', name: countyData.name },
+        });
+        if (existing) continue;
+
+        const countyPolygon = countyData.polygon;
+        const center = this.calculatePolygonCenter(countyPolygon);
+        const radius = this.calculatePolygonRadius(countyPolygon, center);
+
+        await this.geofenceRepository.save(
+          this.geofenceRepository.create({
+            name: countyData.name,
+            centerLat: center.lat,
+            centerLon: center.lon,
+            radiusM: radius,
+            geofenceType: 'game_area',
+            active: false,
+            metadataJson: {
+              countyCode,
+              countyName: countyData.name,
+              polygon: countyPolygon,
+              type: 'polygon',
+            } as any,
+          }),
+        );
+      }
+
+      const hasHungary = await this.geofenceRepository.findOne({
+        where: { geofenceType: 'game_area', name: 'Magyarország' },
+      });
+      if (!hasHungary) {
+        const hungaryPolygon =
+          this.counties['magyarorszag']?.polygon || this.hungaryBoundary || this.getFallbackHungaryBoundary();
+        const center = this.calculatePolygonCenter(hungaryPolygon);
+        const radius = this.calculatePolygonRadius(hungaryPolygon, center);
+        await this.geofenceRepository.save(
+          this.geofenceRepository.create({
+            name: 'Magyarország',
+            centerLat: center.lat,
+            centerLon: center.lon,
+            radiusM: radius,
+            geofenceType: 'game_area',
+            active: false,
+            metadataJson: {
+              activeCounties: [],
+              activeRegions: [],
+              polygon: hungaryPolygon,
+              type: 'polygon',
+            } as any,
+          }),
+        );
+      }
+    } catch (e) {
+      console.error('ensureCountyGeofencesSeededFromGeojson failed:', e);
     }
   }
 
@@ -85,7 +154,7 @@ export class GameAreaService {
     return counties;
   }
 
-  async updateGameArea(updateGameAreaDto: UpdateGameAreaDto, userId?: number) {
+  async updateGameArea(updateGameAreaDto: UpdateGameAreaDto, userId?: number, audit?: AuditRequestMeta) {
     // Deactivate ALL existing game area geofences first (including "Magyarország")
     // Use update query for better performance
     await this.geofenceRepository.update(
@@ -227,6 +296,7 @@ export class GameAreaService {
         actionType: 'game_area_update',
         entityType: 'geofence',
         dataJson: updateGameAreaDto,
+        ...audit,
       });
     }
 

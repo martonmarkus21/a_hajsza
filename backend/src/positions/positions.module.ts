@@ -17,7 +17,14 @@ import { DeviceAuthGuard } from '../auth/device-auth.guard';
 import { JwtModule } from '@nestjs/jwt';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Position, Device, GameSettings, Pair, Geofence, RuleViolation]),
+    TypeOrmModule.forFeature([
+      Position,
+      Device,
+      GameSettings,
+      Pair,
+      Geofence,
+      RuleViolation,
+    ]),
     WebSocketModule,
     RuleViolationsModule,
     ConfigModule,

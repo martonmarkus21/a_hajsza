@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Position } from '../entities/position.entity';
+import { In, Repository } from 'typeorm';
+import { Position, type SavedAreaContext, type SavedScenarioZone } from '../entities/position.entity';
 import { Device } from '../entities/device.entity';
 import { GameSettings } from '../entities/game-settings.entity';
 import { Geofence } from '../entities/geofence.entity';
@@ -44,14 +44,36 @@ export class PositionsService {
     private recentDevicePairIdsService: RecentDevicePairIdsService,
   ) {}
 
-  /** Mentéskor aktív játékterület(ek) — admin egy pontos nézetéhez. */
-  private async buildGameAreaSnapshot(): Promise<Record<string, unknown>[] | null> {
-    const rows = await this.geofenceRepository.find({
-      where: { geofenceType: 'game_area', active: true },
-      order: { id: 'ASC' },
-    });
+  /** Mentéskor: fix game_area geofence ID-k + scenario körök — egy jsonb oszlopban. */
+  private async buildSavedSnapshotParts(): Promise<SavedAreaContext | null> {
+    const rows = await this.geofenceRepository.find({ where: { active: true }, order: { id: 'ASC' } });
     if (rows.length === 0) return null;
-    return rows.map((g) => ({
+
+    const gameAreaGeofenceIds: number[] = [];
+    const scenarioZones: SavedScenarioZone[] = [];
+
+    for (const g of rows) {
+      if (g.geofenceType === 'game_area') {
+        gameAreaGeofenceIds.push(g.id);
+        continue;
+      }
+      if (g.geofenceType === 'scenario') {
+        scenarioZones.push({
+          name: g.name?.trim() ? g.name.trim() : 'Egyedi zóna',
+          lat: parseFloat(String(g.centerLat)),
+          lon: parseFloat(String(g.centerLon)),
+          radiusM: g.radiusM,
+        });
+      }
+    }
+
+    if (gameAreaGeofenceIds.length === 0 && scenarioZones.length === 0) return null;
+    return { gameAreaGeofenceIds, scenarioZones };
+  }
+
+  private geofenceToLegacySnapshotItem(g: Geofence): Record<string, unknown> {
+    const meta = (g.metadataJson ?? null) as Record<string, unknown> | null;
+    return {
       id: g.id,
       name: g.name,
       centerLat: parseFloat(String(g.centerLat)),
@@ -59,8 +81,57 @@ export class PositionsService {
       radiusM: g.radiusM,
       active: true,
       geofenceType: g.geofenceType,
-      metadataJson: g.metadataJson ?? null,
-    }));
+      metadataJson: meta,
+    };
+  }
+
+  private async expandSavedContextsForPositions(
+    rows: Position[],
+  ): Promise<Map<number, Record<string, unknown>[] | null>> {
+    const out = new Map<number, Record<string, unknown>[] | null>();
+    const allIds = new Set<number>();
+    for (const p of rows) {
+      const ids = p.savedAreaContextJson?.gameAreaGeofenceIds;
+      if (ids?.length) ids.forEach((id) => allIds.add(id));
+    }
+
+    const geos = allIds.size ? await this.geofenceRepository.findBy({ id: In([...allIds]) }) : [];
+    const byId = new Map(geos.map((g) => [g.id, g]));
+
+    for (const p of rows) {
+      const ctx = p.savedAreaContextJson;
+      const areaIds = ctx?.gameAreaGeofenceIds ?? [];
+      const scenarioZones = ctx?.scenarioZones ?? [];
+      if (areaIds.length === 0 && scenarioZones.length === 0) {
+        out.set(p.id, null);
+        continue;
+      }
+
+      const items: Record<string, unknown>[] = [];
+      for (const id of areaIds) {
+        const g = byId.get(id);
+        if (g) items.push(this.geofenceToLegacySnapshotItem(g));
+      }
+
+      scenarioZones.forEach((z, idx) => {
+        const zoneName =
+          typeof z.name === 'string' && z.name.trim() !== '' ? z.name.trim() : 'Egyedi zóna';
+        items.push({
+          id: -(idx + 1),
+          name: zoneName,
+          centerLat: z.lat,
+          centerLon: z.lon,
+          radiusM: z.radiusM,
+          active: true,
+          geofenceType: 'scenario',
+          metadataJson: null,
+        });
+      });
+
+      out.set(p.id, items.length ? items : null);
+    }
+
+    return out;
   }
 
   async create(createPositionDto: CreatePositionDto, devicePayload?: any) {
@@ -208,7 +279,7 @@ export class PositionsService {
     if (pairAddedToCycleThisRequest && currentSettings?.isTimerRunning) {
       const hadRuleViolationAtSave =
         (await this.ruleViolationRepository.count({ where: { pairId, resolved: false } })) > 0;
-      const gameAreaSnapshotJson = await this.buildGameAreaSnapshot();
+      const savedAreaContextJson = await this.buildSavedSnapshotParts();
       const positionRow = this.positionRepository.create({
         pairId: pairId,
         lat: createPositionDto.lat,
@@ -218,7 +289,7 @@ export class PositionsService {
         vehicleMode: createPositionDto.vehicleMode || false,
         vehicleSessionRemaining: createPositionDto.vehicleSessionRemaining,
         timestamp: serverTimestamp,
-        gameAreaSnapshotJson,
+        savedAreaContextJson,
         hadRuleViolationAtSave,
       });
       savedPosition = await this.positionRepository.save(positionRow);
@@ -309,6 +380,7 @@ export class PositionsService {
     qb.skip((page - 1) * pageSize).take(pageSize);
 
     const [rows, total] = await qb.getManyAndCount();
+    const snapshotByPositionId = await this.expandSavedContextsForPositions(rows);
 
     const items = rows.map((p) => ({
       id: p.id,
@@ -323,7 +395,7 @@ export class PositionsService {
       vehicleSessionRemaining: p.vehicleSessionRemaining,
       timestamp: p.timestamp instanceof Date ? p.timestamp.toISOString() : String(p.timestamp),
       createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
-      gameAreaSnapshot: p.gameAreaSnapshotJson ?? null,
+      gameAreaSnapshot: snapshotByPositionId.get(p.id) ?? null,
       hadRuleViolationAtSave: !!p.hadRuleViolationAtSave,
     }));
 
@@ -343,6 +415,7 @@ export class PositionsService {
       relations: ['pair'],
     });
     if (!p) return null;
+    const snapshotById = await this.expandSavedContextsForPositions([p]);
     return {
       id: p.id,
       pairId: p.pairId,
@@ -356,7 +429,7 @@ export class PositionsService {
       vehicleSessionRemaining: p.vehicleSessionRemaining,
       timestamp: p.timestamp instanceof Date ? p.timestamp.toISOString() : String(p.timestamp),
       createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
-      gameAreaSnapshot: p.gameAreaSnapshotJson ?? null,
+      gameAreaSnapshot: snapshotById.get(p.id) ?? null,
       hadRuleViolationAtSave: !!p.hadRuleViolationAtSave,
     };
   }

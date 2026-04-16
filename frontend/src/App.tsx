@@ -829,7 +829,6 @@ function MapView() {
     if (!gameSettings) return [];
     return allActivePairs.filter((p) => {
       if (!p.lastPosition) return false;
-      if (!gameSettings.isTimerRunning) return false;
       return true;
     });
   }, [allActivePairs, gameSettings?.isTimerRunning, forceRender]);
@@ -924,14 +923,15 @@ function MapView() {
   useEffect(() => {
     const fetchGameSettings = async () => {
       try {
-        let response = await fetch('http://localhost:3000/api/game-settings', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const isAdmin = authService.getCurrentUser()?.role === 'admin';
+        const url = isAdmin
+          ? 'http://localhost:3000/api/game-settings'
+          : 'http://localhost:3000/api/game-settings/countdown';
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
         });
-        if (!response.ok && response.status === 403) {
-          response = await fetch('http://localhost:3000/api/game-settings/countdown', {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-          });
-        }
         if (response.ok) {
           const data = await response.json();
           setGameSettings({
@@ -943,7 +943,9 @@ function MapView() {
           });
           setLocationUpdateCountdown(data.countdown);
         }
-      } catch (error) { console.error('Error:', error); }
+      } catch (error) {
+        console.error('Error:', error);
+      }
     };
     fetchGameSettings();
     const interval = setInterval(fetchGameSettings, 1000);
@@ -1200,7 +1202,10 @@ function MapView() {
                 iconAnchor: [16, 16],
               })}
             >
-              <Popup className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}>
+              <Popup
+                key={`browser-location-popup-${activeMapLayer}`}
+                className={activeMapLayer === 'dark' ? "custom-popup-dark" : "custom-popup-light"}
+              >
                 <div className="p-3 min-w-[200px]">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">

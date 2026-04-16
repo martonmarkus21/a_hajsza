@@ -24,7 +24,6 @@ CREATE TABLE devices (
   id SERIAL PRIMARY KEY,
   pair_id INTEGER REFERENCES pairs(id) ON DELETE CASCADE,
   imei_or_device_id VARCHAR(255) UNIQUE NOT NULL,
-  sim_number VARCHAR(50),
   fcm_token TEXT,
   last_seen_at TIMESTAMP,
   logged_out_at TIMESTAMP,
@@ -33,6 +32,7 @@ CREATE TABLE devices (
 );
 ```
 
+> Az `imei_or_device_id` egyedi eszközazonosító a bejelentkezéshez és a naplózáshoz (oszlopnév történelmi okból „IMEI”; az Android kliens jellemzően `ANDROID_ID` szerinti azonosítót küld).  
 > A `logged_out_at` a kijelentkezéskor áll be; sikeres bejelentkezéskor törlődik. Az utolsó valós szerverkapcsolat ideje a `last_seen_at` mezőben marad megjelenítéshez.
 
 ### `positions`

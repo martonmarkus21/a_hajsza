@@ -5,6 +5,7 @@ import { MwFlag } from '../entities/mw-flag.entity';
 import { CreateMwFlagDto } from './dto/create-mw-flag.dto';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import type { AuditRequestMeta } from '../common/audit-request.util';
 
 @Injectable()
 export class MwFlagsService {
@@ -15,7 +16,7 @@ export class MwFlagsService {
     private auditLogsService: AuditLogsService,
   ) {}
 
-  async create(createMwFlagDto: CreateMwFlagDto) {
+  async create(createMwFlagDto: CreateMwFlagDto, audit?: AuditRequestMeta) {
     await this.mwFlagRepository.update(
       { pairId: createMwFlagDto.pairId, active: true },
       { active: false },
@@ -45,6 +46,7 @@ export class MwFlagsService {
       entityType: 'pair',
       entityId: createMwFlagDto.pairId,
       dataJson: { mwFlagId: savedMwFlag.id },
+      ...audit,
     });
 
     return {

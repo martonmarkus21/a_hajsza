@@ -73,10 +73,13 @@ private const val BASE_URL = "http://192.168.x.x:3000/"
 
 ## Engedélyek
 
-Az alkalmazás a következő engedélyeket kéri:
+Az alkalmazás a következő engedélyeket kéri (a `AndroidManifest.xml` szerint):
 
-- **Helymeghatározás**: Pozíció küldéshez
-- **Értesítések**: FCM push értesítések fogadásához
+- **Helymeghatározás** (fine / coarse, szükség szerint háttér hely): pozíció küldéshez
+- **Értesítések** (Android 13+): FCM push értesítésekhez
+- **Foreground service** (location típusú): háttérben futó helyszolgáltatás
+
+A bejelentkezéskor küldött `deviceId` előállítása: `LoginActivity` (`Settings.Secure.ANDROID_ID`).
 
 ## Hibaelhárítás
 

@@ -1,10 +1,19 @@
 
 import { useState } from 'react';
 import { FiUser, FiTrash2, FiEdit, FiPlus, FiCheckCircle, FiXCircle, FiShield, FiUsers } from 'react-icons/fi';
-import { FaSortUp, FaSortDown } from 'react-icons/fa6';
 import { UserCog } from 'lucide-react';
 import Modal from '../../components/Modal';
 import MwTableSearchInput from '../../components/MwTableSearchInput';
+import {
+    AdminDataTableCard,
+    AdminTableEmptyRow,
+} from '../../components/admin/AdminDataTableCard';
+import {
+    AdminTableShell,
+    AdminTableSortTh,
+    AdminTablePaginationFooter,
+} from '../../components/admin/AdminTableKit';
+import { DEFAULT_ADMIN_TABLE_PAGE_SIZE, useAdminListPagination } from '../../hooks/useAdminListPagination';
 import { formatDateTimeBudapestParts } from '../../utils/formatDateTimeBudapest';
 
 interface UserManagementProps {
@@ -53,21 +62,13 @@ export default function UserManagement({
         }
     });
 
+    const pagination = useAdminListPagination(filteredUsers, DEFAULT_ADMIN_TABLE_PAGE_SIZE, searchTerm);
+
     const handleSort = (key: any) => {
         setSortConfig(current => ({
             key,
             direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
         }));
-    };
-
-    const getSortIcon = (key: string) => {
-        const isActive = sortConfig.key === key;
-        return (
-            <div className="flex flex-col ml-1">
-                <FaSortUp className={`w-3 h-3 -mb-3 ${isActive && sortConfig.direction === 'asc' ? 'text-orange-500' : 'text-gray-500 opacity-60'}`} />
-                <FaSortDown className={`w-3 h-3 ${isActive && sortConfig.direction === 'desc' ? 'text-orange-500' : 'text-gray-500 opacity-60'}`} />
-            </div>
-        );
     };
 
     const handleCreate = async () => {
@@ -97,56 +98,69 @@ export default function UserManagement({
             </div>
 
             {/* Users List */}
-            <div className="mw-card p-0 overflow-hidden flex flex-col">
-                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500">
-                            <UserCog className="w-6 h-6" />
-                        </div>
-                        Felhasználók listája
-                        <span className="text-sm font-normal text-gray-500 ml-2 py-1 px-3 bg-white/5 rounded-full border border-white/5">{filteredUsers.length} találat</span>
-                    </h3>
-                </div>
-
-                <div className="overflow-x-auto">
-                    <table className="mw-table">
-                        <thead>
-                            <tr>
-                                <th className="text-left py-4 pl-6 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('username')}>
-                                    <div className="flex items-center gap-1 text-gray-400 group-hover:text-white">
-                                        Felhasználó {getSortIcon('username')}
-                                    </div>
-                                </th>
-                                <th className="text-left py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('email')}>
-                                    <div className="flex items-center gap-1 text-gray-400 group-hover:text-white">
-                                        Email {getSortIcon('email')}
-                                    </div>
-                                </th>
-                                <th className="text-left py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('role')}>
-                                    <div className="flex items-center gap-1 text-gray-400 group-hover:text-white">
-                                        Szerepkör {getSortIcon('role')}
-                                    </div>
-                                </th>
-                                <th className="text-center py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('status')}>
-                                    <div className="flex items-center justify-center gap-1 text-gray-400 group-hover:text-white">
-                                        Státusz {getSortIcon('status')}
-                                    </div>
-                                </th>
-                                <th className="text-right py-4 pr-6">Műveletek</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                            {filteredUsers.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="p-0">
-                                        <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2">
-                                            <FiUsers className="w-8 h-8 opacity-30" />
-                                            <p className="font-medium text-sm">Nincs megjeleníthető felhasználó.</p>
-                                        </div>
-                                    </td>
-                                </tr>
+            <AdminDataTableCard
+                title="Felhasználók listája"
+                icon={<UserCog className="w-6 h-6" />}
+                countBadge={`${pagination.totalFiltered} találat`}
+                scrollClassName="overflow-x-auto"
+                footer={
+                    <AdminTablePaginationFooter
+                        totalFiltered={pagination.totalFiltered}
+                        fromIdx={pagination.fromIdx}
+                        toIdx={pagination.toIdx}
+                        page={pagination.page}
+                        totalPages={pagination.totalPages}
+                        onPrev={() => pagination.setPage((p) => Math.max(1, p - 1))}
+                        onNext={() => pagination.setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                    />
+                }
+            >
+                <AdminTableShell
+                    headerRow={
+                        <tr>
+                            <AdminTableSortTh
+                                paddedStart
+                                onSort={() => handleSort('username')}
+                                active={sortConfig.key === 'username'}
+                                direction={sortConfig.direction}
+                            >
+                                Felhasználó
+                            </AdminTableSortTh>
+                            <AdminTableSortTh
+                                onSort={() => handleSort('email')}
+                                active={sortConfig.key === 'email'}
+                                direction={sortConfig.direction}
+                            >
+                                Email
+                            </AdminTableSortTh>
+                            <AdminTableSortTh
+                                onSort={() => handleSort('role')}
+                                active={sortConfig.key === 'role'}
+                                direction={sortConfig.direction}
+                            >
+                                Szerepkör
+                            </AdminTableSortTh>
+                            <AdminTableSortTh
+                                align="center"
+                                onSort={() => handleSort('status')}
+                                active={sortConfig.key === 'status'}
+                                direction={sortConfig.direction}
+                            >
+                                Státusz
+                            </AdminTableSortTh>
+                            <th className="text-right py-4 pr-6">Műveletek</th>
+                        </tr>
+                    }
+                >
+                            {pagination.totalFiltered === 0 ? (
+                                <AdminTableEmptyRow
+                                    colSpan={5}
+                                    icon={FiUsers}
+                                    title="Nincs megjeleníthető felhasználó."
+                                    hint='Próbáljon más keresőkifejezést vagy szűrést, vagy hozzon létre új felhasználót a „Felhasználó létrehozása” gombbal.'
+                                />
                             ) : (
-                                filteredUsers.map((user) => (
+                                pagination.slice.map((user) => (
                                     <tr key={user.id} className="group hover:bg-white/5 transition-colors">
                                         <td className="pl-6 py-4">
                                             <div className="flex items-center gap-3">
@@ -206,10 +220,8 @@ export default function UserManagement({
                                     </tr>
                                 ))
                             )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                </AdminTableShell>
+            </AdminDataTableCard>
 
             {/* Create Modal */}
             <Modal

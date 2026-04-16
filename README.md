@@ -59,6 +59,7 @@ Nyisd meg: `http://localhost:3001`
 - ✅ Bilincs, MW, Név hozzárendelés, Üzenetküldés
 - ✅ Pár részletek modal
 - ✅ Admin panel (teljes funkcionalitással)
+- ✅ Admin listák: közös táblázat-kártya (`AdminDataTableCard`), `AdminTableKit` (egységes `mw-table` váz, lapozó, rendezhető fejléc), lapozás a párok / eszközök / felhasználók tábláin is
 - ✅ Modern UI (fekete-narancs színséma)
 
 ### Android App
@@ -71,11 +72,13 @@ Nyisd meg: `http://localhost:3001`
 
 **API Endpoint**: `POST /api/devices/login`
 
-**Request**:
+**Request** (a `deviceId` kötelező; tipikusan Android `ANDROID_ID`):
 ```json
 {
-  "username": "1",  // Pár száma
-  "password": "1"   // Pár száma stringként
+  "username": "1",
+  "password": "1",
+  "deviceId": "android_id_or_stable_string",
+  "fcmToken": null
 }
 ```
 

@@ -5,6 +5,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { auditMetaFromRequest } from '../common/audit-request.util';
 
 @Controller('api/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -24,7 +25,7 @@ export class UsersController {
 
   @Post()
   async create(@Body() createUserDto: CreateUserDto, @Request() req: any) {
-    return await this.usersService.create(createUserDto, req.user.userId);
+    return await this.usersService.create(createUserDto, req.user.userId, auditMetaFromRequest(req));
   }
 
   @Put(':id')
@@ -33,12 +34,12 @@ export class UsersController {
     @Body() updateUserDto: UpdateUserDto,
     @Request() req: any,
   ) {
-    return await this.usersService.update(id, updateUserDto, req.user.userId);
+    return await this.usersService.update(id, updateUserDto, req.user.userId, auditMetaFromRequest(req));
   }
 
   @Delete(':id')
   async delete(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
-    return await this.usersService.delete(id, req.user.userId);
+    return await this.usersService.delete(id, req.user.userId, auditMetaFromRequest(req));
   }
 }
 

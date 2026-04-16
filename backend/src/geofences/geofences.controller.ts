@@ -4,6 +4,7 @@ import { CreateGeofenceDto } from './dto/create-geofence.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
+import { auditMetaFromRequest } from '../common/audit-request.util';
 
 @Controller('api/geofence')
 @UseGuards(JwtAuthGuard)
@@ -19,7 +20,7 @@ export class GeofencesController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   async create(@Body() createGeofenceDto: CreateGeofenceDto, @Request() req: any) {
-    return await this.geofencesService.create(createGeofenceDto, req.user.userId);
+    return await this.geofencesService.create(createGeofenceDto, req.user.userId, auditMetaFromRequest(req));
   }
 
   @Put(':id/activate')
@@ -47,7 +48,7 @@ export class GeofencesController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   async delete(@Param('id') id: string, @Request() req: any) {
-    return await this.geofencesService.delete(parseInt(id), req.user.userId);
+    return await this.geofencesService.delete(parseInt(id), req.user.userId, auditMetaFromRequest(req));
   }
 }
 

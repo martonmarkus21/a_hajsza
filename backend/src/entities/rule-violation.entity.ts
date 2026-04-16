@@ -8,7 +8,6 @@ import {
   Index,
 } from 'typeorm';
 import { Pair } from './pair.entity';
-import { Position } from './position.entity';
 
 @Entity('rule_violations')
 export class RuleViolation {
@@ -28,13 +27,6 @@ export class RuleViolation {
 
   @Column({ type: 'text', nullable: true })
   description: string;
-
-  @ManyToOne(() => Position, { nullable: true })
-  @JoinColumn({ name: 'position_id' })
-  position: Position;
-
-  @Column({ nullable: true, name: 'position_id' })
-  positionId: number;
 
   @Column({ default: false })
   @Index()

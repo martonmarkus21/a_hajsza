@@ -104,8 +104,9 @@ android-app/
 ### LoginActivity
 - Bejelentkezési képernyő
 - Pár szám és jelszó megadása
-- FCM token automatikus küldés
-- Engedélyek kezelése
+- **Eszközazonosító** (`deviceId` a login body-ban): `Settings.Secure.ANDROID_ID`
+- FCM token automatikus küldés (ha elérhető)
+- Engedélyek: hely, értesítés (Android 13+), foreground service (részletek a manifestben)
 
 ### MainActivity
 - Főképernyő minimal UI-val
@@ -180,11 +181,11 @@ Body: {
 
 ## Engedélyek
 
-- `ACCESS_FINE_LOCATION` - GPS pozíció
-- `ACCESS_COARSE_LOCATION` - Hozzávetőleges pozíció
-- `POST_NOTIFICATIONS` - Push értesítések
-- `FOREGROUND_SERVICE` - Háttér service
-- `WAKE_LOCK` - Háttérben futás
+- `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` — GPS / hálózati hely
+- `ACCESS_BACKGROUND_LOCATION` — háttérben is fusson a helykövetés (manifest szerint)
+- `POST_NOTIFICATIONS` — push értesítések (Android 13+)
+- `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_LOCATION` — hely típusú előtérbeli szolgáltatás
+- `WAKE_LOCK` — háttérben futás
 
 ## Offline működés
 

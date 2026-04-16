@@ -11,6 +11,7 @@ import { RedisPositionService } from '../redis/redis-position.service';
 import { CreatePairDto } from './dto/create-pair.dto';
 import { UpdatePairDto } from './dto/update-pair.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import type { AuditRequestMeta } from '../common/audit-request.util';
 import { FcmService } from '../fcm/fcm.service';
 import { GameSettingsService } from '../game-settings/game-settings.service';
 import { RecentDevicePairIdsService } from '../device-activity/recent-device-pair-ids.service';
@@ -171,6 +172,16 @@ export class PairsService {
         }
       }
 
+      // Ha nincs ciklusbeli / élő pozíció: mindig a legutóbbi mentett (positions) — számláló alatt is
+      // (új számlálónál lastLocationUpdate még null, vagy a pár még nem küldött a ciklusban; ilyenkor se tűnjön el a térképről).
+      if (!allowedLastPosition && lastPosition) {
+        allowedLastPosition = {
+          lat: parseFloat(lastPosition.lat.toString()),
+          lon: parseFloat(lastPosition.lon.toString()),
+          timestamp: lastPosition.timestamp.toISOString(),
+        };
+      }
+
       results.push({
         id: pair.id,
         assignedNumber: pair.assignedNumber,
@@ -238,7 +249,7 @@ export class PairsService {
     return map;
   }
 
-  async create(createPairDto: CreatePairDto, userId: number) {
+  async create(createPairDto: CreatePairDto, userId: number, audit?: AuditRequestMeta) {
     // Check if assigned number already exists
     const existing = await this.pairRepository.findOne({
       where: { assignedNumber: createPairDto.assignedNumber },
@@ -262,6 +273,7 @@ export class PairsService {
       entityType: 'pair',
       entityId: savedPair.id,
       dataJson: { assignedNumber: savedPair.assignedNumber },
+      ...audit,
     });
 
     return {
@@ -275,7 +287,7 @@ export class PairsService {
     };
   }
 
-  async update(id: number, updatePairDto: UpdatePairDto, userId: number) {
+  async update(id: number, updatePairDto: UpdatePairDto, userId: number, audit?: AuditRequestMeta) {
     const pair = await this.pairRepository.findOne({ where: { id } });
     if (!pair) {
       throw new BadRequestException('Pair not found');
@@ -311,6 +323,7 @@ export class PairsService {
       entityType: 'pair',
       entityId: id,
       dataJson: updatePairDto,
+      ...audit,
     });
 
     return {
@@ -324,7 +337,7 @@ export class PairsService {
     };
   }
 
-  async delete(id: number, userId: number) {
+  async delete(id: number, userId: number, audit?: AuditRequestMeta) {
     const pair = await this.pairRepository.findOne({ where: { id } });
     if (!pair) {
       throw new BadRequestException('Pair not found');
@@ -383,6 +396,7 @@ export class PairsService {
       entityType: 'pair',
       entityId: id,
       dataJson: { assignedNumber: pair.assignedNumber },
+      ...audit,
     });
 
     return {
@@ -391,10 +405,10 @@ export class PairsService {
     };
   }
 
-  async updateName(id: number, name: string | null, userId: number) {
+  async updateName(id: number, name: string | null, userId: number, audit?: AuditRequestMeta) {
     // Handle empty string as null
     const nameToSet = name === '' || name === null || name === undefined ? null : name;
-    return await this.update(id, { name: nameToSet }, userId);
+    return await this.update(id, { name: nameToSet }, userId, audit);
   }
 
 }

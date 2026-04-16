@@ -5,6 +5,7 @@ import { Geofence } from '../entities/geofence.entity';
 import { CreateGeofenceDto } from './dto/create-geofence.dto';
 import { FcmService } from '../fcm/fcm.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import type { AuditRequestMeta } from '../common/audit-request.util';
 import { PairsService } from '../pairs/pairs.service';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { loadHungaryBoundaryFromGeoJSON } from '../game-area/load-geojson';
@@ -39,7 +40,7 @@ export class GeofencesService {
     }));
   }
 
-  async create(createGeofenceDto: CreateGeofenceDto, userId: number) {
+  async create(createGeofenceDto: CreateGeofenceDto, userId: number, audit?: AuditRequestMeta) {
     const geofence = this.geofenceRepository.create({
       name: createGeofenceDto.name,
       centerLat: createGeofenceDto.centerLat,
@@ -78,6 +79,7 @@ export class GeofencesService {
       entityType: 'geofence',
       entityId: savedGeofence.id,
       dataJson: { name: savedGeofence.name },
+      ...audit,
     });
 
     return {
@@ -242,7 +244,7 @@ export class GeofencesService {
     return { success: true, message: 'Geofences updated atomically' };
   }
 
-  async delete(id: number, userId: number) {
+  async delete(id: number, userId: number, audit?: AuditRequestMeta) {
     const geofence = await this.geofenceRepository.findOne({ where: { id } });
     if (!geofence) {
       throw new Error('Geofence not found');
@@ -258,6 +260,7 @@ export class GeofencesService {
       entityType: 'geofence',
       entityId: id,
       dataJson: { name: geofence.name },
+      ...audit,
     });
 
     this.webSocketGateway.broadcastGameAreaUpdate({

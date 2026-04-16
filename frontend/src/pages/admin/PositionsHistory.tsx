@@ -12,11 +12,20 @@ import {
   FiZap,
   FiAlertCircle,
 } from 'react-icons/fi';
-import { FaSortUp, FaSortDown } from 'react-icons/fa6';
 import MwPairFilterGrid from '../../components/MwPairFilterGrid';
 import MwDateTimePicker from '../../components/MwDateTimePicker';
 import PositionsTraceMapModal from '../../components/PositionsTraceMapModal';
 import PositionRowMapPreview from '../../components/PositionRowMapPreview';
+import {
+  AdminDataTableCard,
+  AdminTableEmptyRow,
+  AdminTableLoadingState,
+} from '../../components/admin/AdminDataTableCard';
+import {
+  AdminTableShell,
+  AdminTableSortTh,
+  AdminTablePaginationFooter,
+} from '../../components/admin/AdminTableKit';
 import { DateTimeStackCell, formatDateTimeBudapestParts } from '../../utils/formatDateTimeBudapest';
 import { useSocket } from '../../hooks/useSocket';
 import type { Pair } from '../../types';
@@ -257,30 +266,17 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
     }));
   };
 
-  const getSortIcon = (key: SortKey) => {
-    const isActive = sortConfig.key === key;
-    return (
-      <div className="flex flex-col ml-1">
-        <FaSortUp
-          className={`w-3 h-3 -mb-3 ${isActive && sortConfig.direction === 'asc' ? 'text-orange-500' : 'text-gray-500 opacity-60'}`}
-        />
-        <FaSortDown
-          className={`w-3 h-3 ${isActive && sortConfig.direction === 'desc' ? 'text-orange-500' : 'text-gray-500 opacity-60'}`}
-        />
-      </div>
-    );
-  };
-
   const thSort = (key: SortKey, label: string, className = '') => (
-    <th
-      className={`text-center py-4 px-3 cursor-pointer group hover:bg-white/5 transition-colors ${className}`}
-      onClick={() => handleSort(key)}
+    <AdminTableSortTh
+      key={String(key)}
+      align="center"
+      className={`px-3 ${className}`.trim()}
+      onSort={() => handleSort(key)}
+      active={sortConfig.key === key}
+      direction={sortConfig.direction}
     >
-      <div className="flex items-center justify-center gap-1 text-gray-400 group-hover:text-white">
-        {label}
-        {getSortIcon(key)}
-      </div>
-    </th>
+      {label}
+    </AdminTableSortTh>
   );
 
   const openSingleModal = (row: AdminPositionRow) => {
@@ -455,52 +451,48 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
         </div>
       )}
 
-      <div className="mw-card p-0 overflow-hidden flex flex-col">
-        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
-          <h3 className="text-xl font-bold text-white flex items-center gap-3 flex-wrap">
-            <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400">
-              <FiMapPin className="w-6 h-6" />
-            </div>
-            Mentett pozíciók
-            <span className="text-sm font-normal text-gray-500 ml-2 py-1 px-3 bg-white/5 rounded-full border border-white/5">
-              {loading ? '…' : `${totalFiltered} találat`}
-            </span>
-          </h3>
-        </div>
-
-        <div className="overflow-x-auto custom-scrollbar">
-          {loading && allRows.length === 0 ? (
-            <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
-              <span className="inline-block w-5 h-5 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin mr-2" />
-              Betöltés…
-            </div>
-          ) : (
-            <table className="mw-table">
-              <thead>
-                <tr>
-                  {thSort('id', '#', 'w-16')}
-                  {thSort('pairId', 'Pár')}
-                  {thSort('timestamp', 'Idő')}
-                  {thSort('location', 'Lokáció', 'hidden lg:table-cell')}
-                  {thSort('speed', 'Sebesség', 'hidden xl:table-cell')}
-                  {thSort('vehicleMode', 'Jármű', 'hidden md:table-cell')}
-                  {thSort('ruleViolation', 'Szabályszegés', 'hidden xl:table-cell')}
-                  <th className="text-center py-4 px-2 text-gray-400">Megtekintés</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
+      <AdminDataTableCard
+        title="Mentett pozíciók"
+        icon={<FiMapPin className="w-6 h-6" />}
+        iconTone="blue"
+        countBadge={loading ? '…' : `${totalFiltered} találat`}
+        footer={
+          <AdminTablePaginationFooter
+            totalFiltered={totalFiltered}
+            fromIdx={fromIdx}
+            toIdx={toIdx}
+            page={page}
+            totalPages={totalPages}
+            loading={loading}
+            onPrev={() => setPage((p) => Math.max(1, p - 1))}
+            onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+          />
+        }
+      >
+        {loading && allRows.length === 0 ? (
+          <AdminTableLoadingState />
+        ) : (
+          <AdminTableShell
+            headerRow={
+              <tr>
+                {thSort('id', '#', 'w-16')}
+                {thSort('pairId', 'Pár')}
+                {thSort('timestamp', 'Idő')}
+                {thSort('location', 'Lokáció', 'hidden lg:table-cell')}
+                {thSort('speed', 'Sebesség', 'hidden xl:table-cell')}
+                {thSort('vehicleMode', 'Jármű', 'hidden md:table-cell')}
+                {thSort('ruleViolation', 'Szabályszegés', 'hidden xl:table-cell')}
+                <th className="text-center py-4 px-2 text-gray-400">Megtekintés</th>
+              </tr>
+            }
+          >
                 {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="p-0 border-b-0">
-                      <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2">
-                        <FiMapPin className="w-8 h-8 opacity-30" />
-                        <p className="font-medium text-sm">Nincs megjeleníthető mentett pozíció.</p>
-                        <p className="text-xs text-gray-600 max-w-md text-center">
-                          Próbáljon más időintervallumot, vagy várjon, amíg a játék során új adat kerül rögzítésre.
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
+                  <AdminTableEmptyRow
+                    colSpan={8}
+                    icon={FiMapPin}
+                    title="Nincs megjeleníthető mentett pozíció."
+                    hint="Próbáljon más időintervallumot, vagy várjon, amíg a játék során új adat kerül rögzítésre."
+                  />
                 ) : (
                   rows.map((row) => {
                     const liveMw = mostWantedByPairId.has(row.pairId)
@@ -536,7 +528,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                           </div>
                         </td>
                         <td className="text-center py-4 align-middle text-sm text-gray-400 hidden xl:table-cell">
-                          {row.speed != null ? `${Number(row.speed).toFixed(1)} km/h` : '—'}
+                          {row.speed != null ? `${(Number(row.speed) < 5 ? 0 : Number(row.speed)).toFixed(1)} km/h` : '—'}
                         </td>
                         <td className="text-center py-4 align-middle hidden md:table-cell">
                           {row.vehicleMode ? (
@@ -576,47 +568,9 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                     );
                   })
                 )}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {totalFiltered > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-white/10 bg-white/[0.02] text-sm">
-            <span className="text-gray-500">
-              <span className="text-gray-400 font-mono text-xs">
-                {fromIdx}–{toIdx}
-              </span>
-              <span className="mx-1">/</span>
-              <span className="font-mono text-xs">{totalFiltered}</span>
-              <span className="ml-2 hidden sm:inline">
-                · Oldal {safePage} / {totalPages}
-              </span>
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={safePage <= 1 || loading}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="mw-btn mw-btn-secondary py-1.5 px-3 text-xs disabled:opacity-40"
-              >
-                Előző
-              </button>
-              <span className="text-gray-500 font-mono text-xs px-2 sm:hidden">
-                {safePage}/{totalPages}
-              </span>
-              <button
-                type="button"
-                disabled={safePage >= totalPages || loading}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="mw-btn mw-btn-secondary py-1.5 px-3 text-xs disabled:opacity-40"
-              >
-                Következő
-              </button>
-            </div>
-          </div>
+          </AdminTableShell>
         )}
-      </div>
+      </AdminDataTableCard>
 
       {mapConfig && (
         <PositionsTraceMapModal

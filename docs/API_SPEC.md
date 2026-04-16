@@ -30,7 +30,9 @@ Content-Type: application/json
 ### Devices (Android App)
 - **`POST /api/devices/login`**
   - Telefonos alkalmazás bejelentkezése.
-  - **Body**: `{ "username": "1", "password": "1" }`
+  - **Body** (kötelező mezők: `username`, `password`, `deviceId`; opcionális: `fcmToken`):
+    - `deviceId`: stabil eszközazonosító a szerver `devices.imei_or_device_id` mezőjéhez (Android kliensen jellemzően `Settings.Secure.ANDROID_ID`).
+  - **Példa**: `{ "username": "1", "password": "1", "deviceId": "android_id_…", "fcmToken": "…" }`
   - **Response**: JWT token és device info.
 - **`GET /api/devices/me`** - Visszaadja a bejelentkezett eszköz adatait.
 - **`GET /api/devices`** - Kilistázza az összes regisztrált eszközt (Admin).
@@ -66,7 +68,8 @@ Content-Type: application/json
   - **`lastPosition` a válaszban** (összefoglalva):
     - Futó időzítő és `lastLocationUpdate` mellett, ha a pár szerepel a ciklus „már küldött” listájában: alapból a **ciklus első** PG-s mintája; ha van **újabb** sor ugyanahhoz a párhez a `positions` táblában (pl. visszalépéskor mentett pont), akkor az kerül vissza.
     - Aktív, meg nem oldott **játékterület-elhagyás** szabályszegésnél: ha van élő Redis-pozíció, a `lastPosition` onnan jön (folyamatos követés).
-    - Egyébként (nincs időzítő feltétel vagy nincs megjeleníthető minta) a mező lehet `null`. A pontos feltételek a `PairsService` és a játékbeállítások összjátékától függnek.
+    - Ha a fenti speciális esetek egyike sem ad pozíciót, de van legutóbbi mentett sor a `positions` táblában a párhez: **az** kerül vissza (pl. frissen indított számláló, még nincs `lastLocationUpdate`, vagy a pár még nem küldött a ciklusban — így a térkép és a pár modál nem marad üres).
+    - Csak akkor `null`, ha egyáltalán nincs mentett pozíció a párhez. A részletes ágak a `PairsService` és a játékbeállítások összjátékától függnek.
 - **`POST /api/pairs`** - Új pár létrehozása (Admin).
 - **`PUT /api/pairs/:id`** - Pár adatainak (pl. aktív státusz) módosítása.
 - **`DELETE /api/pairs/:id`** - Pár törlése.

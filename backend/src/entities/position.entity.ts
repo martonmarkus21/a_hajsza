@@ -2,12 +2,29 @@ import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
-  CreateDateColumn,
   ManyToOne,
   JoinColumn,
   Index,
+  CreateDateColumn,
 } from 'typeorm';
 import { Pair } from './pair.entity';
+
+/** Mentéskor beágyazott egyedi (scenario) kör — a geofence sor később törölhető. */
+export type SavedScenarioZone = {
+  name?: string;
+  lat: number;
+  lon: number;
+  radiusM: number;
+};
+
+/**
+ * Mentéskor: aktív fix játékterület geofence ID-k (a geofences táblából olvasható) +
+ * egyedi körök adatai (beágyazva, mert törölhetők).
+ */
+export type SavedAreaContext = {
+  gameAreaGeofenceIds: number[];
+  scenarioZones: SavedScenarioZone[];
+};
 
 @Entity('positions')
 @Index(['pairId', 'timestamp'])
@@ -48,17 +65,9 @@ export class Position {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  /** Mentéskor aktív játékterület(ek) pillanatképe (admin térképnézet). */
-  @Column({ type: 'jsonb', nullable: true, name: 'game_area_snapshot_json' })
-  gameAreaSnapshotJson: Record<string, unknown>[] | null;
-
-  /** Mentéskor volt-e fel nem oldott szabályszegése a párnak (pillanatkép, nem változik). */
   @Column({ default: false, name: 'had_rule_violation_at_save' })
   hadRuleViolationAtSave: boolean;
+
+  @Column({ type: 'jsonb', nullable: true, name: 'saved_area_context_json' })
+  savedAreaContextJson: SavedAreaContext | null;
 }
-
-
-
-
-
-

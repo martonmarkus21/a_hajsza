@@ -1,8 +1,17 @@
 import { useState } from 'react';
 import { FiSmartphone, FiTrash2, FiLogOut, FiWifi, FiWifiOff, FiCheckCircle, FiXCircle, FiAlertCircle } from 'react-icons/fi';
-import { FaSortUp, FaSortDown } from 'react-icons/fa6';
 import { DateTimeStackCell } from '../../utils/formatDateTimeBudapest';
 import MwTableSearchInput from '../../components/MwTableSearchInput';
+import {
+    AdminDataTableCard,
+    AdminTableEmptyRow,
+} from '../../components/admin/AdminDataTableCard';
+import {
+    AdminTableShell,
+    AdminTableSortTh,
+    AdminTablePaginationFooter,
+} from '../../components/admin/AdminTableKit';
+import { DEFAULT_ADMIN_TABLE_PAGE_SIZE, useAdminListPagination } from '../../hooks/useAdminListPagination';
 
 /** Egyetlen megjelenített időpont: kijelentkezett eszköznél a kijelentkezés, különben az utolsó szerverkapcsolat. */
 function deviceListTimestampIso(device: { loggedOutAt?: string | null; lastSeenAt?: string | null }): string | null {
@@ -83,21 +92,17 @@ export default function DeviceManagement({
         }
     });
 
+    const pagination = useAdminListPagination(
+        filteredDevices,
+        DEFAULT_ADMIN_TABLE_PAGE_SIZE,
+        `${searchTerm}|${filterStatus}`,
+    );
+
     const handleSort = (key: any) => {
         setSortConfig(current => ({
             key,
             direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
         }));
-    };
-
-    const getSortIcon = (key: string) => {
-        const isActive = sortConfig.key === key;
-        return (
-            <div className="flex flex-col ml-1">
-                <FaSortUp className={`w-3 h-3 -mb-3 ${isActive && sortConfig.direction === 'asc' ? 'text-orange-500' : 'text-gray-500 opacity-60'}`} />
-                <FaSortDown className={`w-3 h-3 ${isActive && sortConfig.direction === 'desc' ? 'text-orange-500' : 'text-gray-500 opacity-60'}`} />
-            </div>
-        );
     };
 
     return (
@@ -143,68 +148,79 @@ export default function DeviceManagement({
                 </div>
             </div>
 
-            <div className="mw-card p-0 overflow-hidden flex flex-col">
-                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-3 flex-wrap">
-                        <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500">
-                            <FiSmartphone className="w-6 h-6" />
-                        </div>
-                        Eszközök listája
-                        <span className="text-sm font-normal text-gray-500 ml-2 py-1 px-3 bg-white/5 rounded-full border border-white/5">
-                            {filteredDevices.length} találat
-                        </span>
-                    </h3>
-                </div>
-
-                <div className="overflow-x-auto">
-                    <table className="mw-table">
-                        <thead>
-                            <tr>
-
-                                <th className="text-left py-4 pl-6 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('imei')}>
-                                    <div className="flex items-center gap-1 text-gray-400 group-hover:text-white">
-                                        Eszköz (IMEI) {getSortIcon('imei')}
-                                    </div>
-                                </th>
-                                <th className="text-left py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('pair')}>
-                                    <div className="flex items-center gap-1 text-gray-400 group-hover:text-white">
-                                        Hozzárendelt Pár {getSortIcon('pair')}
-                                    </div>
-                                </th>
-                                <th
-                                    className="text-center py-4 cursor-pointer group hover:bg-white/5 transition-colors"
-                                    onClick={() => handleSort('lastSeen')}
-                                    title="Munkamenet alatt: utolsó szerverkapcsolat. Kijelentkezés után: kijelentkezés ideje."
-                                >
-                                    <div className="flex items-center justify-center gap-1 text-gray-400 group-hover:text-white">
-                                        Legutóbb aktív {getSortIcon('lastSeen')}
-                                    </div>
-                                </th>
-                                <th className="text-center py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('status')}>
-                                    <div className="flex items-center justify-center gap-1 text-gray-400 group-hover:text-white">
-                                        Státusz {getSortIcon('status')}
-                                    </div>
-                                </th>
-                                <th className="text-center py-4 cursor-pointer group hover:bg-white/5 transition-colors" onClick={() => handleSort('fcm')}>
-                                    <div className="flex items-center justify-center gap-1 text-gray-400 group-hover:text-white">
-                                        FCM {getSortIcon('fcm')}
-                                    </div>
-                                </th>
-                                <th className="text-right py-4 pr-6">Műveletek</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                            {filteredDevices.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="p-0">
-                                        <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2">
-                                            <FiSmartphone className="w-8 h-8 opacity-30" />
-                                            <p className="font-medium text-sm">Nincs megjeleníthető eszköz.</p>
-                                        </div>
-                                    </td>
-                                </tr>
+            <AdminDataTableCard
+                title="Eszközök listája"
+                icon={<FiSmartphone className="w-6 h-6" />}
+                countBadge={`${pagination.totalFiltered} találat`}
+                scrollClassName="overflow-x-auto"
+                footer={
+                    <AdminTablePaginationFooter
+                        totalFiltered={pagination.totalFiltered}
+                        fromIdx={pagination.fromIdx}
+                        toIdx={pagination.toIdx}
+                        page={pagination.page}
+                        totalPages={pagination.totalPages}
+                        onPrev={() => pagination.setPage((p) => Math.max(1, p - 1))}
+                        onNext={() => pagination.setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                    />
+                }
+            >
+                <AdminTableShell
+                    headerRow={
+                        <tr>
+                            <AdminTableSortTh
+                                paddedStart
+                                onSort={() => handleSort('imei')}
+                                active={sortConfig.key === 'imei'}
+                                direction={sortConfig.direction}
+                            >
+                                IMEI
+                            </AdminTableSortTh>
+                            <AdminTableSortTh
+                                onSort={() => handleSort('pair')}
+                                active={sortConfig.key === 'pair'}
+                                direction={sortConfig.direction}
+                            >
+                                Hozzárendelt Pár
+                            </AdminTableSortTh>
+                            <AdminTableSortTh
+                                align="center"
+                                title="Munkamenet alatt: utolsó szerverkapcsolat. Kijelentkezés után: kijelentkezés ideje."
+                                onSort={() => handleSort('lastSeen')}
+                                active={sortConfig.key === 'lastSeen'}
+                                direction={sortConfig.direction}
+                            >
+                                Legutóbb aktív
+                            </AdminTableSortTh>
+                            <AdminTableSortTh
+                                align="center"
+                                onSort={() => handleSort('status')}
+                                active={sortConfig.key === 'status'}
+                                direction={sortConfig.direction}
+                            >
+                                Státusz
+                            </AdminTableSortTh>
+                            <AdminTableSortTh
+                                align="center"
+                                onSort={() => handleSort('fcm')}
+                                active={sortConfig.key === 'fcm'}
+                                direction={sortConfig.direction}
+                            >
+                                FCM
+                            </AdminTableSortTh>
+                            <th className="text-right py-4 pr-6">Műveletek</th>
+                        </tr>
+                    }
+                >
+                            {pagination.totalFiltered === 0 ? (
+                                <AdminTableEmptyRow
+                                    colSpan={6}
+                                    icon={FiSmartphone}
+                                    title="Nincs megjeleníthető eszköz."
+                                    hint="Próbáljon más keresőkifejezést vagy szűrést, vagy várjon, amíg egy eszköz csatlakozik és bejelentkezik."
+                                />
                             ) : (
-                                filteredDevices.map((device) => {
+                                pagination.slice.map((device) => {
                                     const isActive = activeDevices.some(d => d.imeiOrDeviceId === device.imeiOrDeviceId);
                                     const hasPair = device.pairId || device.pairNumber;
                                     const pairViolation =
@@ -327,10 +343,8 @@ export default function DeviceManagement({
                                     );
                                 })
                             )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                </AdminTableShell>
+            </AdminDataTableCard>
         </div>
     );
 }

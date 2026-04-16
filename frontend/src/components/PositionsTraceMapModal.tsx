@@ -140,8 +140,49 @@ function LeafletPopupClose({ className }: { className?: string }) {
   );
 }
 
+function SavedGameAreaPopupBody({
+  name,
+  label = 'Játékterület',
+  radiusM,
+}: {
+  name: string;
+  label?: string;
+  radiusM?: number;
+}) {
+  return (
+    <div className="mw-ga-popup-inner flex max-w-[min(92vw,256px)] min-w-[184px] flex-col px-3 pt-3 pb-0.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400 shadow-[0_0_10px] shadow-sky-500" />
+          <div className="min-w-0 flex-1 text-left">
+            <div className="text-[10px] font-bold uppercase leading-none tracking-wider text-sky-400/90">{label}</div>
+            <div className="mt-1 text-sm font-bold leading-tight text-white break-words">{name}</div>
+          </div>
+        </div>
+        <LeafletPopupClose className="-mr-1 -mt-1 shrink-0" />
+      </div>
+      <div className="mt-1.5 border-t border-white/10 pt-0 pb-0">
+        <p className={`m-0 text-[11.5px] leading-[1.15] text-gray-400 ${typeof radiusM === 'number' ? 'mt-1' : ''}`}>
+          {typeof radiusM === 'number' && <div className="text-[11px] tabular-nums text-gray-400">Sugár: {Math.round(radiusM)} m</div>}
+          {typeof radiusM === 'number' ? 'Mentéskor rögzített pillanatkép.' : 'A pozíció mentésekor érvényes határ (pillanatkép).'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function labelForSnapshot(g: GeofenceMapShape): string {
+  if (g.metadataJson?.countyCode || g.metadataJson?.countyName) {
+    return g.name === 'Budapest' ? 'Főváros' : 'Vármegye';
+  }
+  if (g.geofenceType === 'game_area') return 'Játékterület';
+  return 'Zóna';
+}
+
 function SavedGameAreaLayer({ geofences }: { geofences: GeofenceMapShape[] }) {
-  const list = geofences.filter((g) => g.geofenceType === 'game_area');
+  // Mentéskori pillanatkép: lehet játékterület, vármegye vagy egyedi zóna is.
+  // Itt NEM szűrünk geofenceType-ra, különben a custom zónák eltűnnek.
+  const list = geofences;
   return (
     <>
       {list.map((g) => {
@@ -159,22 +200,8 @@ function SavedGameAreaLayer({ geofences }: { geofences: GeofenceMapShape[] }) {
                 opacity: 0.85,
               }}
             >
-              <Popup className="custom-popup-dark" closeButton={false}>
-                <div className="mw-ga-popup-inner flex max-w-[min(92vw,280px)] min-w-[200px] flex-col p-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400 shadow-[0_0_10px] shadow-sky-500" />
-                    <div className="min-w-0 flex-1 flex flex-col justify-center gap-1 text-left">
-                      <div className="text-[10px] font-bold uppercase leading-none tracking-wider text-sky-400/90">
-                        Játékterület
-                      </div>
-                      <div className="text-sm font-bold leading-tight text-white break-words pb-0.5">{g.name}</div>
-                    </div>
-                    <LeafletPopupClose className="shrink-0" />
-                  </div>
-                  <p className="m-0 mt-3 border-t border-white/10 pt-3 text-[11px] leading-snug text-gray-400">
-                    A pozíció mentésekor érvényes határ (pillanatkép).
-                  </p>
-                </div>
+              <Popup className="custom-popup-dark mw-ga-popup" closeButton={false}>
+                <SavedGameAreaPopupBody name={g.name} label={labelForSnapshot(g)} />
               </Popup>
             </Polygon>
           );
@@ -192,23 +219,8 @@ function SavedGameAreaLayer({ geofences }: { geofences: GeofenceMapShape[] }) {
               opacity: 0.85,
             }}
           >
-            <Popup className="custom-popup-dark" closeButton={false}>
-              <div className="mw-ga-popup-inner flex max-w-[min(92vw,280px)] min-w-[200px] flex-col p-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400 shadow-[0_0_10px] shadow-sky-500" />
-                  <div className="min-w-0 flex-1 flex flex-col justify-center gap-1 text-left">
-                    <div className="text-[10px] font-bold uppercase leading-none tracking-wider text-sky-400/90">
-                      Játékterület
-                    </div>
-                    <div className="text-sm font-bold leading-tight text-white break-words pb-0.5">{g.name}</div>
-                  </div>
-                  <LeafletPopupClose className="shrink-0" />
-                </div>
-                <div className="mt-3 border-t border-white/10 pt-3">
-                  <div className="text-[11px] tabular-nums text-gray-400">Sugár: {Math.round(g.radiusM)} m</div>
-                  <p className="m-0 mt-1.5 text-[11px] leading-snug text-gray-400">Mentéskor rögzített pillanatkép.</p>
-                </div>
-              </div>
+            <Popup className="custom-popup-dark mw-ga-popup" closeButton={false}>
+              <SavedGameAreaPopupBody name={g.name} label={labelForSnapshot(g)} radiusM={g.radiusM} />
             </Popup>
           </Circle>
         );
@@ -218,6 +230,9 @@ function SavedGameAreaLayer({ geofences }: { geofences: GeofenceMapShape[] }) {
 }
 
 function PositionPopupBody({ row }: { row: TracePosition }) {
+  const speedKmH = row.speed != null ? Number(row.speed) : null;
+  // GPS zaj: álló helyzetben is tud 1–4 km/h-t “mérni”
+  const displaySpeedKmH = speedKmH != null && speedKmH < 5 ? 0 : speedKmH;
   return (
     <div className="min-w-[220px] space-y-2 p-3 font-sans text-xs">
       <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
@@ -236,9 +251,9 @@ function PositionPopupBody({ row }: { row: TracePosition }) {
           Pontosság: <span className="text-gray-300">{Math.round(row.accuracy)} m</span>
         </div>
       )}
-      {row.speed != null && (
+      {displaySpeedKmH != null && (
         <div className="text-gray-500">
-          Sebesség: <span className="text-gray-300">{Number(row.speed).toFixed(1)} km/h</span>
+          Sebesség: <span className="text-gray-300">{displaySpeedKmH.toFixed(1)} km/h</span>
         </div>
       )}
       {row.vehicleMode != null && (

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { FcmService } from '../fcm/fcm.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import type { AuditRequestMeta } from '../common/audit-request.util';
 
 @Injectable()
 export class MessagesService {
@@ -10,7 +11,7 @@ export class MessagesService {
     private auditLogsService: AuditLogsService,
   ) {}
 
-  async sendMessage(sendMessageDto: SendMessageDto, userId: number) {
+  async sendMessage(sendMessageDto: SendMessageDto, userId: number, audit?: AuditRequestMeta) {
     if (sendMessageDto.pairId) {
       // Send to specific pair
       const result = await this.fcmService.sendToPair(sendMessageDto.pairId, {
@@ -24,6 +25,7 @@ export class MessagesService {
         entityType: 'pair',
         entityId: sendMessageDto.pairId,
         dataJson: { title: sendMessageDto.title, body: sendMessageDto.body },
+        ...audit,
       });
 
       return result;
@@ -39,6 +41,7 @@ export class MessagesService {
         actionType: 'message_sent',
         entityType: 'all_pairs',
         dataJson: { title: sendMessageDto.title, body: sendMessageDto.body },
+        ...audit,
       });
 
       return result;

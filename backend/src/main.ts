@@ -7,6 +7,11 @@ import { seedDatabase } from './database/seed';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const httpServer = app.getHttpAdapter().getInstance() as { set?: (k: string, v: unknown) => void };
+  if (typeof httpServer?.set === 'function') {
+    httpServer.set('trust proxy', 1);
+  }
+
   // CORS
   app.enableCors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:3001',

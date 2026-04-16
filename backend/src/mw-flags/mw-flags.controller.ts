@@ -2,6 +2,7 @@ import { Controller, Post, Delete, Param, Body, UseGuards, Request } from '@nest
 import { MwFlagsService } from './mw-flags.service';
 import { CreateMwFlagDto } from './dto/create-mw-flag.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { auditMetaFromRequest } from '../common/audit-request.util';
 
 @Controller('api/mw')
 @UseGuards(JwtAuthGuard)
@@ -10,10 +11,13 @@ export class MwFlagsController {
 
   @Post()
   async create(@Body() createMwFlagDto: CreateMwFlagDto, @Request() req: any) {
-    return await this.mwFlagsService.create({
-      ...createMwFlagDto,
-      userId: req.user.userId,
-    });
+    return await this.mwFlagsService.create(
+      {
+        ...createMwFlagDto,
+        userId: req.user.userId,
+      },
+      auditMetaFromRequest(req),
+    );
   }
 
   @Delete(':pairId')

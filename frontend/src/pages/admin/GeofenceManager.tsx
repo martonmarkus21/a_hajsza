@@ -702,11 +702,16 @@ export default function GeofenceManager({
                     <div className="space-y-1 px-4 pb-4">
                         {activeTab === 'counties' ? (
                             filteredAllCounties.length === 0 ? (
-                                <div className="text-center py-12 opacity-50">
-                                    <div className="bg-white/5 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-                                        <FiMapPin className="w-6 h-6 text-gray-500" />
-                                    </div>
-                                    <div className="text-sm text-gray-400">Nincs találat</div>
+                                <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2 px-2">
+                                    <FiMapPin className="w-8 h-8 opacity-30" />
+                                    <p className="font-medium text-sm">
+                                        {searchTerm.trim() ? 'Nincs találat a keresésre.' : 'Nincs megjeleníthető vármegye.'}
+                                    </p>
+                                    <p className="text-xs text-gray-600 max-w-md text-center">
+                                        {searchTerm.trim()
+                                            ? 'Próbáljon más keresőkifejezést, vagy törölje a szűrést a mező kiürítésével.'
+                                            : 'Győződjön meg róla, hogy a szerver fut és betöltötte a megyeadatokat — szükség esetén frissítse az oldalt.'}
+                                    </p>
                                 </div>
                             ) : (
                                 filteredAllCounties.map((county) => (
@@ -754,11 +759,16 @@ export default function GeofenceManager({
                                 </div>
 
                                 {filteredCustomGeofences.length === 0 ? (
-                                    <div className="text-center py-12 opacity-50">
-                                        <div className="bg-white/5 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-                                            <FiTarget className="w-6 h-6 text-gray-500" />
-                                        </div>
-                                        <div className="text-sm text-gray-400">{searchTerm ? 'Nincs találat' : 'Nincs zóna'}</div>
+                                    <div className="flex flex-col items-center justify-center py-16 text-gray-500 gap-2 px-2">
+                                        <FiTarget className="w-8 h-8 opacity-30" />
+                                        <p className="font-medium text-sm">
+                                            {searchTerm.trim() ? 'Nincs találat a keresésre.' : 'Nincs létrehozott egyedi zóna.'}
+                                        </p>
+                                        <p className="text-xs text-gray-600 max-w-md text-center">
+                                            {searchTerm.trim()
+                                                ? 'Próbáljon más keresőkifejezést a név alapján, vagy törölje a szűrést a mező kiürítésével.'
+                                                : 'Használja az „Új zóna létrehozása” gombot, majd jelölje ki a középpontot a térképen — a lista itt fog megjelenni.'}
+                                        </p>
                                     </div>
                                 ) : (
                                     filteredCustomGeofences.map((geo) => (

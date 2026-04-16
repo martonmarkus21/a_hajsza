@@ -7,6 +7,7 @@ import { CreateCaptureDto } from './dto/create-capture.dto';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { FcmService } from '../fcm/fcm.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import type { AuditRequestMeta } from '../common/audit-request.util';
 import { GameDaysService } from '../game-days/game-days.service';
 
 @Injectable()
@@ -22,7 +23,7 @@ export class CapturesService {
     private gameDaysService: GameDaysService,
   ) {}
 
-  async create(createCaptureDto: CreateCaptureDto) {
+  async create(createCaptureDto: CreateCaptureDto, audit?: AuditRequestMeta) {
     // Check if within time window (8:00-16:00, or 10:00-14:00 on final day)
     const isWithinTime = await this.gameDaysService.isWithinTimeWindow();
     if (!isWithinTime) {
@@ -75,6 +76,7 @@ export class CapturesService {
       entityType: 'pair',
       entityId: createCaptureDto.pairId,
       dataJson: { captureId: savedCapture.id },
+      ...audit,
     });
 
     return {

@@ -15,11 +15,15 @@ export class GameSettingsController {
   async getCountdown() {
     const countdown = await this.gameSettingsService.getCountdown();
     const settings = await this.gameSettingsService.getSettings();
-    
+
     return {
       countdown,
       isTimerRunning: settings.isTimerRunning,
-      allowPositionUpdatesForMap: settings.allowPositionUpdatesForMap,
+      allowPositionUpdatesForMap: settings.allowPositionUpdatesForMap ?? false,
+      locationUpdateIntervalMinutes: settings.locationUpdateIntervalMinutes,
+      lastLocationUpdate: settings.lastLocationUpdate
+        ? new Date(settings.lastLocationUpdate).toISOString()
+        : null,
     };
   }
 
