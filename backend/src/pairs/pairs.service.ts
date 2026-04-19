@@ -145,7 +145,7 @@ export class PairsService {
               lon: parseFloat(firstPositionInCycle.lon.toString()),
               timestamp: firstPositionInCycle.timestamp.toISOString(),
             };
-            // pl. játékterület-visszalépéskor mentett újabb sor a positions táblában — térkép frissítéshez ez kell
+            // Ha ugyanebben a ciklusban újabb PG-s sor készült az elsőnél, a legfrissebbet használjuk.
             if (lastPosition) {
               const tFirst = new Date(firstPositionInCycle.timestamp).getTime();
               const tLatest = new Date(lastPosition.timestamp).getTime();

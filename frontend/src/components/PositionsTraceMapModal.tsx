@@ -481,50 +481,52 @@ export default function PositionsTraceMapModal({
             {latLngs.length > 0 && <FitTraceBounds points={latLngs} />}
           </MapContainer>
         </div>
-        <div className="px-4 sm:px-6 py-3 border-t border-white/5 bg-white/[0.02] space-y-1 shrink-0">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-gray-500">
-            {positions.length > 1 && (
-              <>
-                <span className="inline-flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-green-500 border border-white/30" /> Kezdőpont
+        {positions.length > 0 && (
+          <div className="px-4 sm:px-6 py-3 border-t border-white/5 bg-black/30 space-y-1 shrink-0">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-gray-500">
+              {positions.length > 1 && (
+                <>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-green-500 border border-white/30" /> Kezdőpont
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-orange-500 border border-white/30" /> Utolsó pont
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-blue-400 border border-white/30" /> Köztes pontok
+                  </span>
+                </>
+              )}
+              {positions.length === 1 && (
+                <span className="text-gray-400">
+                  {variant === 'single'
+                    ? 'A kiválasztott mentett pozíció látható — kattintson a jelölőre a részletekért.'
+                    : 'Egy pont esetén a nyomvonal nem rajzolódik, csak a jelölő.'}
                 </span>
-                <span className="inline-flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-orange-500 border border-white/30" /> Utolsó pont
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-blue-400 border border-white/30" /> Köztes pontok
-                </span>
-              </>
+              )}
+              {variant === 'trace' && positions.length > 1 && (
+                <>
+                  <span className="hidden sm:inline text-white/25 select-none" aria-hidden>
+                    ·
+                  </span>
+                  <span className="text-gray-500">
+                    {positions.length} pont (legfeljebb 5000 a szűrőnek megfelelően).
+                  </span>
+                </>
+              )}
+            </div>
+            {variant === 'single' && !showSavedGameArea && (
+              <p className="text-[11px] text-gray-600 leading-relaxed border-t border-white/5 pt-2 mt-2">
+                Ehhez a mentéshez nem áll rendelkezésre játékterület-pillanatkép (régebbi adat vagy üres mentés).
+              </p>
             )}
-            {positions.length === 1 && (
-              <span className="text-gray-400">
-                {variant === 'single'
-                  ? 'A kiválasztott mentett pozíció látható — kattintson a jelölőre a részletekért.'
-                  : 'Egy pont esetén a nyomvonal nem rajzolódik, csak a jelölő.'}
-              </span>
-            )}
-            {variant === 'trace' && positions.length > 1 && (
-              <>
-                <span className="hidden sm:inline text-white/25 select-none" aria-hidden>
-                  ·
-                </span>
-                <span className="text-gray-500">
-                  {positions.length} pont (legfeljebb 5000 a szűrőnek megfelelően).
-                </span>
-              </>
+            {variant === 'single' && showSavedGameArea && (
+              <p className="text-[11px] text-gray-600 leading-relaxed border-t border-white/5 pt-2 mt-2">
+                A kék körvonal a pozíció <span className="text-gray-400">mentésekor</span> érvényes játékterületét mutatja.
+              </p>
             )}
           </div>
-          {variant === 'single' && !showSavedGameArea && (
-            <p className="text-[11px] text-gray-600 leading-relaxed border-t border-white/5 pt-2 mt-2">
-              Ehhez a mentéshez nem áll rendelkezésre játékterület-pillanatkép (régebbi adat vagy üres mentés).
-            </p>
-          )}
-          {variant === 'single' && showSavedGameArea && (
-            <p className="text-[11px] text-gray-600 leading-relaxed border-t border-white/5 pt-2 mt-2">
-              A kék körvonal a pozíció <span className="text-gray-400">mentésekor</span> érvényes játékterületét mutatja.
-            </p>
-          )}
-        </div>
+        )}
       </div>
     </Modal>
   );

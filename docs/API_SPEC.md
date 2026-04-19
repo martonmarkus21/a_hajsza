@@ -53,20 +53,22 @@ Content-Type: application/json
   - **Body**: `{ "deviceId": "string", "pairId": 1, "lat": 47.4, "lon": 19.0, "accuracy": 10, "speed": 0, "timestamp": "...", "vehicleMode": false, "vehicleSessionRemaining": 0 }`
   - **Viselkedés (Redis + PostgreSQL)**:
     - Minden fogadott minta bekerül a **Redis** „élő pozíció” kulcsba (pár szerint), így a játéktér / szabályszegés ellenőrzés és a scheduler ebből is tud dolgozni.
-    - **PostgreSQL** `positions` táblába nem minden kérés ír: sor akkor keletkezik, ha a játékidőzítő logikája szerint az adott pár **ebben a ciklusban először** küld térképes pozíciót (`pairsSentPositionThisCycle`), illetve a szabályszegés-kezelés (pl. játékterületre visszalépés) külön menthet sort.
+    - **PostgreSQL** `positions` táblába nem minden kérés ír: sor a játékidőzítő és az `allowPositionUpdatesForMap` / ciklus-szabályok szerint keletkezik (lásd `PositionsService`). A `game_area_exit` szabályszegés lezáródásakor (pár vissza a játékterületre) **nem** jön létre önálló `positions` sor.
     - Amikor új `positions` sor keletkezik, a szerver elmenti a **mentéskor aktív játékterület(ek) pillanatképét** (`game_area_snapshot_json`) és azt, hogy **volt-e meg nem oldott szabályszegése** a párnak (`had_rule_violation_at_save`).
-    - **WebSocket**: `distanceUpdate` gyakrabban megy ki (távolságszámítás a kliensen); `positionUpdate` csak akkor, ha a térképen szabad frissíteni (pl. nyitott „pozíció ablak”, vagy aktív `game_area_exit` folyamatos követés). Új PG-s minta után globálisan kimegy a `savedPositionSample` esemény is (`pairId`, `id`).
+    - **WebSocket**: `distanceUpdate` gyakrabban megy ki (távolságszámítás a kliensen); `positionUpdate` csak akkor, ha a térképen szabad frissíteni (pl. nyitott „pozíció ablak”, vagy aktív `game_area_exit` folyamatos követés). Új PG-s minta után globálisan kimegy a `savedPositionSample` esemény is (`pairId`, `id`). Admin törlés után: `savedPositionsDeleted` (`pairId`, `deleted`) — a kliensek frissíthetik a mentett pozíciók listáját.
 - **`GET /api/positions/admin/list`** (Admin JWT)
   - Mentett (PostgreSQL) pozíciók lapozott listája szűréssel és rendezéssel.
   - **Query**: `pairId` (opcionális), `from` / `to` (ISO timestamp, inkluzív), `page`, `pageSize` (max 5000), `sortBy` (`timestamp` | `id` | `pairId`), `sortDir` (`asc` | `desc`).
   - **Response**: `{ items: [...], total, page, pageSize }` — az elemek tartalmazzák a pár azonosítókat, koordinátákat, `gameAreaSnapshot`, `hadRuleViolationAtSave` mezőket.
+- **`DELETE /api/positions/admin/pair/:pairId`** (Admin JWT) — a megadott pár **összes** mentett pozíciójának törlése a `positions` táblából. **Response**: `{ "deleted": number }`. WebSocket: `savedPositionsDeleted`.
+- **`POST /api/positions/admin/delete-by-ids`** (Admin JWT) — **Body**: `{ "pairId": number, "ids": number[] }` (minden ID-nek létező, ehhez a `pairId`-hez tartozó sornak kell lennie). **Response**: `{ "deleted": number }`. WebSocket: `savedPositionsDeleted`.
 - **`GET /api/positions/pair/:pairId/latest-saved`** (JWT: **admin** vagy **officer**)
   - A megadott pár **legutóbbi mentett** pozíciósora (vagy `null`), ugyanazzal a mezőkészlettel, mint a list API elemek (pl. térkép modál / pár részletek).
 
 ### Párok
 - **`GET /api/pairs`** - Összes pár lekérése (opcionális `?active=true` szűréssel).
   - **`lastPosition` a válaszban** (összefoglalva):
-    - Futó időzítő és `lastLocationUpdate` mellett, ha a pár szerepel a ciklus „már küldött” listájában: alapból a **ciklus első** PG-s mintája; ha van **újabb** sor ugyanahhoz a párhez a `positions` táblában (pl. visszalépéskor mentett pont), akkor az kerül vissza.
+    - Futó időzítő és `lastLocationUpdate` mellett, ha a pár szerepel a ciklus „már küldött” listájában: alapból a **ciklus első** PG-s mintája; ha van **újabb** sor ugyanahhoz a párhez a `positions` táblában ugyanazon ciklusban (több időzítő szerinti mentés), akkor az kerül vissza.
     - Aktív, meg nem oldott **játékterület-elhagyás** szabályszegésnél: ha van élő Redis-pozíció, a `lastPosition` onnan jön (folyamatos követés).
     - Ha a fenti speciális esetek egyike sem ad pozíciót, de van legutóbbi mentett sor a `positions` táblában a párhez: **az** kerül vissza (pl. frissen indított számláló, még nincs `lastLocationUpdate`, vagy a pár még nem küldött a ciklusban — így a térkép és a pár modál nem marad üres).
     - Csak akkor `null`, ha egyáltalán nincs mentett pozíció a párhez. A részletes ágak a `PairsService` és a játékbeállítások összjátékától függnek.

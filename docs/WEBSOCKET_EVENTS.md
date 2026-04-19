@@ -67,6 +67,16 @@ Egyenes vonalú távolságszámításhoz használt friss koordináta — **gyakr
 }
 ```
 
+### `savedPositionsDeleted`
+Admin törölte a **PostgreSQL** `positions` táblából a mentett pontokat (egész pár vagy kiválasztott ID-k). Globális broadcast; az admin „Mentett pozíciók” felület újratölti a listát.
+
+```json
+{
+  "pairId": 1,
+  "deleted": 78
+}
+```
+
 ### `capture`
 Pár elfogva.
 

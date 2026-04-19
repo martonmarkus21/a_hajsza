@@ -407,6 +407,44 @@ export class PositionsService {
     };
   }
 
+  /** Admin: egy pár összes mentett pozíciójának törlése (PostgreSQL). */
+  async deleteAllSavedPositionsForPair(pairId: number): Promise<{ deleted: number }> {
+    const result = await this.positionRepository.delete({ pairId });
+    const deleted = result.affected ?? 0;
+    this.webSocketGateway.broadcastSavedPositionsDeleted({ pairId, deleted });
+    return { deleted };
+  }
+
+  /**
+   * Admin: megadott ID-k törlése, ha mindegyik ehhez a párhez tartozik.
+   * Duplikált ID-k egyszer számítanak.
+   */
+  async deleteSavedPositionsByIdsForPair(
+    pairId: number,
+    ids: number[],
+  ): Promise<{ deleted: number }> {
+    const uniq = [...new Set(ids.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1))];
+    if (uniq.length === 0) {
+      throw new BadRequestException('Legalább egy érvényes pozíció-ID megadása kötelező.');
+    }
+
+    const rows = await this.positionRepository.find({
+      where: { pairId, id: In(uniq) },
+      select: ['id'],
+    });
+
+    if (rows.length !== uniq.length) {
+      throw new BadRequestException(
+        'Egy vagy több megadott pozíció nem található, vagy nem ehhez a párhez tartozik.',
+      );
+    }
+
+    const del = await this.positionRepository.delete({ id: In(uniq), pairId });
+    const deleted = del.affected ?? uniq.length;
+    this.webSocketGateway.broadcastSavedPositionsDeleted({ pairId, deleted });
+    return { deleted };
+  }
+
   /** Legutóbbi mentett pozíció egy párhoz (pár részletei / térkép modál). */
   async getLatestSavedPositionForPair(pairId: number) {
     const p = await this.positionRepository.findOne({

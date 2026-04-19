@@ -11,7 +11,6 @@ import { GameDaysService } from '../game-days/game-days.service';
 import { FcmService } from '../fcm/fcm.service';
 import { Pair } from '../entities/pair.entity';
 import { MwFlag } from '../entities/mw-flag.entity';
-import { Position } from '../entities/position.entity';
 
 @Injectable()
 export class RuleViolationsService {
@@ -25,8 +24,6 @@ export class RuleViolationsService {
     private pairRepository: Repository<Pair>,
     @InjectRepository(MwFlag)
     private mwFlagRepository: Repository<MwFlag>,
-    @InjectRepository(Position)
-    private positionRepository: Repository<Position>,
     private webSocketGateway: WebSocketGateway,
     private gameDaysService: GameDaysService,
     private fcmService: FcmService,
@@ -308,17 +305,7 @@ export class RuleViolationsService {
         });
 
         if (existingViolation) {
-          const reentryRow = this.positionRepository.create({
-            pairId,
-            lat: position.lat,
-            lon: position.lon,
-            accuracy: position.accuracy ?? undefined,
-            speed: position.speed ?? undefined,
-            vehicleMode: position.vehicleMode ?? false,
-            vehicleSessionRemaining: position.vehicleSessionRemaining ?? undefined,
-            timestamp: position.timestamp,
-          });
-          await this.positionRepository.save(reentryRow);
+          // Nem mentünk positions sort visszatéréskor: a tábla csak az időzítő szerinti mintákat tartja.
 
           await this.ruleViolationRepository.update(
             {

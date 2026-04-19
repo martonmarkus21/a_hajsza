@@ -4,18 +4,21 @@ import {
   FiNavigation,
   FiLayers,
   FiCrosshair,
-  FiRefreshCw,
+  FiDownload,
   FiX,
   FiCheckCircle,
   FiXCircle,
   FiUsers,
   FiZap,
   FiAlertCircle,
+  FiTrash2,
+  FiCheckSquare,
 } from 'react-icons/fi';
 import MwPairFilterGrid from '../../components/MwPairFilterGrid';
 import MwDateTimePicker from '../../components/MwDateTimePicker';
 import PositionsTraceMapModal from '../../components/PositionsTraceMapModal';
 import PositionRowMapPreview from '../../components/PositionRowMapPreview';
+import ConfirmationModal from '../../components/ConfirmationModal';
 import {
   AdminDataTableCard,
   AdminTableEmptyRow,
@@ -28,6 +31,7 @@ import {
 } from '../../components/admin/AdminTableKit';
 import { DateTimeStackCell, formatDateTimeBudapestParts } from '../../utils/formatDateTimeBudapest';
 import { useSocket } from '../../hooks/useSocket';
+import { useNotification } from '../../contexts/NotificationContext';
 import type { Pair } from '../../types';
 
 export interface AdminPositionRow {
@@ -103,8 +107,16 @@ function compareNullableNum(
   return (a - b) * dir;
 }
 
+function csvEscape(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  const s = String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
 export default function PositionsHistory({ pairs, onSelectPairById }: PositionsHistoryProps) {
   const { socket } = useSocket();
+  const { addNotification } = useNotification();
   const [allRows, setAllRows] = useState<AdminPositionRow[]>([]);
   const [page, setPage] = useState(1);
   const pageSize = 20;
@@ -125,6 +137,15 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
 
   const [mapOpen, setMapOpen] = useState(false);
   const [mapConfig, setMapConfig] = useState<MapConfig | null>(null);
+
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const selectAllHeaderRef = useRef<HTMLInputElement>(null);
+  const deleteInFlightRef = useRef(false);
+
+  const [confirmDeleteAllOpen, setConfirmDeleteAllOpen] = useState(false);
+  const [confirmDeleteSelectedOpen, setConfirmDeleteSelectedOpen] = useState(false);
+  const [deletingPositions, setDeletingPositions] = useState(false);
 
   const fromIso = useMemo(() => localInputToIso(fromLocal), [fromLocal]);
   const toIso = useMemo(() => localInputToIso(toLocal), [toLocal]);
@@ -191,14 +212,25 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
       void loadRef.current();
     };
     socket.on('savedPositionSample', onSaved);
+    socket.on('savedPositionsDeleted', onSaved);
     return () => {
       socket.off('savedPositionSample', onSaved);
+      socket.off('savedPositionsDeleted', onSaved);
     };
   }, [socket]);
 
   useEffect(() => {
     setPage(1);
   }, [pairFilter, fromLocal, toLocal, sortConfig.key, sortConfig.direction]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  }, [pairFilter]);
+
+  useEffect(() => {
+    if (!selectionMode) setSelectedIds(new Set());
+  }, [selectionMode]);
 
   const filteredRows = useMemo(() => {
     let list = allRows;
@@ -251,10 +283,79 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
     return arr;
   }, [filteredRows, sortConfig]);
 
+  const exportFilteredCsv = useCallback(() => {
+    if (sortedRows.length === 0) {
+      addNotification('info', 'Nincs exportálható sor a jelenlegi szűréssel.');
+      return;
+    }
+    const header = [
+      'id',
+      'pair_id',
+      'assigned_number',
+      'pair_name',
+      'lat',
+      'lon',
+      'accuracy_m',
+      'speed_kmh',
+      'vehicle_mode',
+      'vehicle_session_remaining_s',
+      'had_rule_violation_at_save',
+      'timestamp_iso',
+      'created_at_iso',
+    ];
+    const lines = [header.join(',')];
+    for (const r of sortedRows) {
+      const cols = [
+        r.id,
+        r.pairId,
+        r.assignedNumber ?? '',
+        r.pairName ?? '',
+        r.lat,
+        r.lon,
+        r.accuracy ?? '',
+        r.speed ?? '',
+        r.vehicleMode ? '1' : '0',
+        r.vehicleSessionRemaining ?? '',
+        r.hadRuleViolationAtSave ? '1' : '0',
+        r.timestamp,
+        r.createdAt,
+      ];
+      lines.push(cols.map(csvEscape).join(','));
+    }
+    const body = lines.join('\r\n');
+    const bom = '\uFEFF';
+    const blob = new Blob([bom + body], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    try {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mentett-poziciok_${stamp}.csv`;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      addNotification('success', `${sortedRows.length} sor exportálva (CSV).`);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }, [sortedRows, addNotification]);
+
   const totalFiltered = sortedRows.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
   const safePage = Math.min(page, totalPages);
   const rows = sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const allFilteredIds = useMemo(() => sortedRows.map((r) => r.id), [sortedRows]);
+  const allFilteredSelected =
+    allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedIds.has(id));
+  const someFilteredSelected =
+    allFilteredIds.some((id) => selectedIds.has(id)) && !allFilteredSelected;
+
+  useEffect(() => {
+    const el = selectAllHeaderRef.current;
+    if (el) el.indeterminate = someFilteredSelected;
+  }, [someFilteredSelected]);
 
   const fromIdx = totalFiltered === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const toIdx = Math.min(safePage * pageSize, totalFiltered);
@@ -313,6 +414,139 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
     window.setTimeout(() => setMapConfig(null), 220);
   };
 
+  const selectedPairId = pairFilter ? Number.parseInt(pairFilter, 10) : NaN;
+  const selectedPair = Number.isFinite(selectedPairId)
+    ? pairs.find((x) => x.id === selectedPairId)
+    : undefined;
+  const selectedPairLabel = selectedPair
+    ? `Pár #${selectedPair.assignedNumber}${selectedPair.name?.trim() ? ` (${selectedPair.name.trim()})` : ''}`
+    : pairFilter
+      ? `Pár #${pairFilter}`
+      : '';
+
+  const toggleSelectId = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(allFilteredIds));
+  };
+
+  const runDeleteAllForPair = async () => {
+    if (!Number.isFinite(selectedPairId) || deleteInFlightRef.current) return;
+    deleteInFlightRef.current = true;
+    setDeletingPositions(true);
+    setError(null);
+    try {
+      const res = await fetch(`http://localhost:3000/api/positions/admin/pair/${selectedPairId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (!res.ok) {
+        let msg = 'A törlés nem sikerült.';
+        if (res.status === 403) {
+          msg = 'Nincs jogosultsága a törléshez (csak adminisztrátor).';
+        } else {
+          const t = await res.text().catch(() => '');
+          if (t) msg = t;
+        }
+        addNotification('error', msg);
+        return;
+      }
+      let deleted = 0;
+      try {
+        const data = (await res.json()) as { deleted?: number };
+        if (typeof data.deleted === 'number') deleted = data.deleted;
+      } catch {
+        /* ignore */
+      }
+      if (deleted === 0) {
+        addNotification(
+          'info',
+          `Ehhez a párhoz nem volt törölhető mentett pozíció (${selectedPairLabel}).`,
+        );
+      } else {
+        addNotification('success', `Sikeresen törölve: ${deleted} mentett pozíció · ${selectedPairLabel}`);
+      }
+      setConfirmDeleteAllOpen(false);
+      setSelectionMode(false);
+      await loadAll();
+    } catch {
+      addNotification('error', 'Hálózati hiba történt a törlés során.');
+    } finally {
+      deleteInFlightRef.current = false;
+      setDeletingPositions(false);
+    }
+  };
+
+  const runDeleteSelected = async () => {
+    if (!Number.isFinite(selectedPairId) || selectedIds.size === 0 || deleteInFlightRef.current) return;
+    const ids = [...selectedIds];
+    deleteInFlightRef.current = true;
+    setDeletingPositions(true);
+    setError(null);
+    try {
+      const res = await fetch('http://localhost:3000/api/positions/admin/delete-by-ids', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pairId: selectedPairId, ids }),
+      });
+      if (!res.ok) {
+        let msg = 'A törlés nem sikerült.';
+        if (res.status === 403) {
+          msg = 'Nincs jogosultsága a törléshez (csak adminisztrátor).';
+        } else {
+          try {
+            const j = await res.json();
+            if (Array.isArray(j?.message)) msg = j.message.join(' ');
+            else if (typeof j?.message === 'string') msg = j.message;
+          } catch {
+            /* ignore */
+          }
+        }
+        addNotification('error', msg);
+        return;
+      }
+      let deleted = 0;
+      try {
+        const data = (await res.json()) as { deleted?: number };
+        if (typeof data.deleted === 'number') deleted = data.deleted;
+      } catch {
+        /* ignore */
+      }
+      if (deleted === 0) {
+        addNotification('info', 'Nem történt törlés — ellenőrizze a kijelölést, vagy frissítse a listát.');
+      } else {
+        addNotification(
+          'success',
+          `Sikeresen törölve: ${deleted} kijelölt mentett pozíció · ${selectedPairLabel}`,
+        );
+      }
+      setConfirmDeleteSelectedOpen(false);
+      setSelectedIds(new Set());
+      await loadAll();
+    } catch {
+      addNotification('error', 'Hálózati hiba történt a törlés során.');
+    } finally {
+      deleteInFlightRef.current = false;
+      setDeletingPositions(false);
+    }
+  };
+
+  const tableColSpan = 8 + (selectionMode && pairFilter ? 1 : 0);
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -338,7 +572,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
             <p className="text-gray-300 text-sm leading-relaxed">
               Itt a szerver által <span className="text-white font-medium">rögzített</span> helymeghatározási adatok láthatók —
               ugyanazok, amelyek a játék során a térképen is megjelentek. Az adatok automatikusan frissülnek, ha új mentés
-              érkezik.
+              érkezik. Az <span className="text-white font-medium">exportálás</span> a táblázat szűrőjének és rendezésének megfelelő sorokat menti le (CSV fájl).
             </p>
           </div>
         </div>
@@ -384,13 +618,13 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
           <div className="flex flex-wrap items-center gap-2 shrink-0 lg:pb-0.5">
             <button
               type="button"
-              onClick={() => void loadAll()}
-              className="mw-btn mw-btn-primary inline-flex items-center justify-center gap-2 text-sm px-4"
-              disabled={loading}
-              title="Adatok frissítése a szerverről"
+              onClick={exportFilteredCsv}
+              disabled={totalFiltered === 0}
+              title="Letöltés: a jelenlegi szűrésnek és táblázat-rendezésnek megfelelő összes betöltött sor (legfeljebb 5000), CSV formátumban"
+              className="mw-btn mw-btn-primary inline-flex items-center justify-center gap-2 text-sm px-4 transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed"
             >
-              <FiRefreshCw className={`w-4 h-4 shrink-0 ${loading ? 'animate-spin opacity-70' : ''}`} />
-              Szinkronizálás
+              <FiDownload className="w-4 h-4 shrink-0" />
+              Exportálás
             </button>
             <button
               type="button"
@@ -422,19 +656,108 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
             }}
             className={`border-t border-white/5 pt-3 ${quickPanelExiting ? 'animate-content-hide' : 'animate-content-reveal'}`}
           >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="flex shrink-0 items-center gap-1.5 text-xs text-gray-400">
-                <FiZap className="h-3.5 w-3.5 shrink-0 text-orange-400/90" />
-                Gyors műveletek a kiválasztott párhoz:
-              </p>
-              <button
-                type="button"
-                onClick={openMapFromToolbar}
-                className="mw-btn inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-400/25 bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-blue-950/30 transition-colors hover:bg-blue-500 sm:ml-auto sm:w-auto"
-              >
-                <FiMapPin className="h-4 w-4 shrink-0" />
-                Nyomvonal a térképen
-              </button>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <p className="flex shrink-0 items-center gap-1.5 text-xs text-gray-400">
+                  <FiZap className="h-3.5 w-3.5 shrink-0 text-orange-400/90" />
+                  Gyors műveletek a kiválasztott párhoz:
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-2">
+                  <button
+                    type="button"
+                    onClick={openMapFromToolbar}
+                    className={`mw-btn inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-400/25 bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-blue-950/30 transition-[color,background-color,border-color,opacity,transform] duration-200 hover:bg-blue-500 sm:w-auto ${
+                      selectionMode
+                        ? 'opacity-[0.88] ring-1 ring-inset ring-white/15 scale-[0.99] hover:opacity-100 hover:scale-100'
+                        : ''
+                    }`}
+                  >
+                    <FiMapPin className="h-4 w-4 shrink-0" />
+                    Nyomvonal a térképen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteAllOpen(true)}
+                    className={`mw-btn inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/35 bg-red-600/90 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-red-950/25 transition-[color,background-color,border-color,opacity,transform] duration-200 hover:bg-red-500 sm:w-auto ${
+                      selectionMode
+                        ? 'opacity-[0.88] ring-1 ring-inset ring-white/15 scale-[0.99] hover:opacity-100 hover:scale-100'
+                        : ''
+                    }`}
+                    title="Az adatbázisban ehhez a párhoz tartozó összes mentett pozíció törlése"
+                  >
+                    <FiTrash2 className="h-4 w-4 shrink-0" />
+                    Összes pozíció törlése
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectionMode((v) => !v)}
+                    className={`mw-btn inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold shadow-none transition-[color,background-color,border-color,opacity] duration-200 outline-none ring-0 focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0 sm:w-auto ${
+                      selectionMode
+                        ? 'border-amber-400/55 bg-amber-600/30 text-amber-50 hover:bg-amber-600/40'
+                        : 'border-white/15 bg-white/5 text-gray-200 hover:bg-white/10'
+                    }`}
+                    title="Több sor kijelölése, majd csak ezek törlése"
+                  >
+                    <FiCheckSquare className="h-4 w-4 shrink-0" />
+                    {selectionMode ? 'Kijelölés mód kikapcsolása' : 'Kijelöléses törlés'}
+                  </button>
+                </div>
+              </div>
+              {selectionMode && (
+                <div className="flex flex-col gap-2 rounded-xl border border-amber-500/25 bg-amber-950/20 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-2">
+                  <p className="text-xs text-gray-400">
+                    <span className="font-semibold text-amber-100/95">{selectedIds.size}</span> kijelölve
+                    {totalFiltered > 0 ? (
+                      <>
+                        {' '}
+                        · sorok a jelenlegi szűréssel:{' '}
+                        <span className="font-mono text-gray-300">{totalFiltered}</span>
+                      </>
+                    ) : null}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={totalFiltered === 0}
+                      onClick={toggleSelectAllFiltered}
+                      title="A táblázatban a szűrőnek megfelelő összes sor (minden lap) egyszerre"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-gray-200 hover:bg-white/10 disabled:opacity-40"
+                    >
+                      {allFilteredSelected ? (
+                        <>
+                          <FiX className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                          Összes kijelölés feloldása
+                        </>
+                      ) : (
+                        <>
+                          <FiCheckSquare className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                          Mind kijelölése
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={selectedIds.size === 0}
+                      onClick={() => setSelectedIds(new Set())}
+                      title="Összes pipa eltávolítása"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-gray-200 hover:bg-white/10 disabled:opacity-40"
+                    >
+                      <FiXCircle className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                      Kijelölés ürítése
+                    </button>
+                    <button
+                      type="button"
+                      disabled={selectedIds.size === 0}
+                      onClick={() => setConfirmDeleteSelectedOpen(true)}
+                      title="A kijelölt sorok törlése az adatbázisból"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-500/40 bg-red-600/80 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500 disabled:opacity-40"
+                    >
+                      <FiTrash2 className="h-3.5 w-3.5 shrink-0 opacity-95" />
+                      Kijelöltek törlése
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -475,6 +798,19 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
           <AdminTableShell
             headerRow={
               <tr>
+                {selectionMode && pairFilter ? (
+                  <th className="text-center py-4 px-2 w-12 text-gray-400">
+                    <span className="sr-only">Kijelölés</span>
+                    <input
+                      ref={selectAllHeaderRef}
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAllFiltered}
+                      className="h-4 w-4 rounded border-white/20 bg-black/40 text-orange-500 focus:ring-orange-500/50"
+                      title="A jelenlegi szűrésnek megfelelő összes sor kijelölése vagy feloldása (minden lap)"
+                    />
+                  </th>
+                ) : null}
                 {thSort('id', '#', 'w-16')}
                 {thSort('pairId', 'Pár')}
                 {thSort('timestamp', 'Idő')}
@@ -488,7 +824,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
           >
                 {rows.length === 0 ? (
                   <AdminTableEmptyRow
-                    colSpan={8}
+                    colSpan={tableColSpan}
                     icon={FiMapPin}
                     title="Nincs megjeleníthető mentett pozíció."
                     hint="Próbáljon más időintervallumot, vagy várjon, amíg a játék során új adat kerül rögzítésre."
@@ -501,6 +837,17 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                     const timeParts = formatDateTimeBudapestParts(row.timestamp);
                     return (
                       <tr key={row.id} className="group transition-colors hover:bg-white/5">
+                        {selectionMode && pairFilter ? (
+                          <td className="text-center py-4 align-middle">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(row.id)}
+                              onChange={() => toggleSelectId(row.id)}
+                              className="h-4 w-4 rounded border-white/20 bg-black/40 text-orange-500 focus:ring-orange-500/50"
+                              aria-label={`Pozíció #${row.id} kijelölése`}
+                            />
+                          </td>
+                        ) : null}
                         <td className="text-center py-4 align-middle text-sm font-mono text-gray-400">{row.id}</td>
                         <td className="text-center py-4 align-middle">
                           <button
@@ -552,7 +899,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                           ) : (
                             <span className="inline-flex items-center gap-1 text-emerald-400/95 bg-emerald-500/10 px-2 py-1 rounded-lg text-xs font-bold">
                               <FiCheckCircle className="w-3 h-3 shrink-0" />
-                              Rendben (mentéskor)
+                              Rendben volt
                             </span>
                           )}
                         </td>
@@ -584,6 +931,28 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
           toIso={toIso}
         />
       )}
+
+      <ConfirmationModal
+        isOpen={confirmDeleteAllOpen}
+        title="Összes mentett pozíció törlése"
+        message={`Biztosan törli ${selectedPairLabel} összes mentett pozícióját az adatbázisból?\n\nA dátum- és egyéb táblázat-szűrők nem korlátozzák ezt: a szerveren ehhez a párhoz tartozó minden mentett sor véglegesen törlődik. A művelet nem vonható vissza.`}
+        confirmLabel={deletingPositions ? 'Törlés…' : 'Összes törlése'}
+        cancelLabel="Mégse"
+        isDangerous
+        onCancel={() => !deletingPositions && setConfirmDeleteAllOpen(false)}
+        onConfirm={() => void runDeleteAllForPair()}
+      />
+
+      <ConfirmationModal
+        isOpen={confirmDeleteSelectedOpen}
+        title="Kijelölt pozíciók törlése"
+        message={`A kijelölés alapján ${selectedIds.size} db, korábban mentett GPS-pozíció törlődik véglegesen az adatbázisból — ${selectedPairLabel}.\n\nBiztosan folytatja? A művelet nem vonható vissza.`}
+        confirmLabel={deletingPositions ? 'Törlés…' : 'Törlés'}
+        cancelLabel="Mégse"
+        isDangerous
+        onCancel={() => !deletingPositions && setConfirmDeleteSelectedOpen(false)}
+        onConfirm={() => void runDeleteSelected()}
+      />
     </div>
   );
 }

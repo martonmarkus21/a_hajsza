@@ -100,4 +100,9 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
   broadcastSavedPositionSample(data: { pairId: number; id: number }) {
     this.server.emit('savedPositionSample', data);
   }
+
+  /** Admin törlés után: minden kliens frissítse a mentett pozíciók listáját. */
+  broadcastSavedPositionsDeleted(data: { pairId: number; deleted: number }) {
+    this.server.emit('savedPositionsDeleted', data);
+  }
 }

@@ -150,7 +150,6 @@ export class GameAreaService implements OnModuleInit {
       name: this.counties[code].name,
       polygon: this.counties[code].polygon,
     }));
-    console.log(`Returning ${counties.length} available counties`);
     return counties;
   }
 

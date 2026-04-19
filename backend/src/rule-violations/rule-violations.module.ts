@@ -9,11 +9,10 @@ import { FcmModule } from '../fcm/fcm.module';
 import { Pair } from '../entities/pair.entity';
 import { MwFlag } from '../entities/mw-flag.entity';
 import { RuleViolationsController } from './rule-violations.controller';
-import { Position } from '../entities/position.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RuleViolation, GeofenceCompletion, Pair, MwFlag, Position]),
+    TypeOrmModule.forFeature([RuleViolation, GeofenceCompletion, Pair, MwFlag]),
     WebSocketModule,
     GameDaysModule,
     FcmModule,

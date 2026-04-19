@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FiCalendar, FiChevronDown, FiChevronLeft, FiChevronRight, FiClock } from 'react-icons/fi';
+import { MwTimeScrollWheel } from './MwTimeScrollWheel';
 
 const PANEL_CLOSE_MS = 200;
 const VIEWPORT_PAD = 8;
@@ -99,9 +100,6 @@ interface MwDateTimePickerProps {
   maxLocal?: string;
 }
 
-const timeInputClass =
-  'w-full rounded-lg bg-[#0c0c0c] border border-white/12 px-2.5 py-2 text-sm font-medium text-white tabular-nums shadow-inner focus:outline-none focus:ring-2 focus:ring-orange-500/40 focus:border-orange-500/30';
-
 export default function MwDateTimePicker({
   label,
   value,
@@ -149,16 +147,17 @@ export default function MwDateTimePicker({
     return `${parsed.y}. ${MONTHS_HU[parsed.mo - 1]} ${parsed.d}. · ${pad2(parsed.h)}:${pad2(parsed.mi)}`;
   }, [parsed]);
 
-  const panelWidth = 300;
+  /** Naptár + görgős idő egymás mellett. */
+  const panelWidth = 464;
 
   const updatePosition = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const w = Math.min(Math.max(280, panelWidth), window.innerWidth - VIEWPORT_PAD * 2);
+    const w = Math.min(Math.max(300, panelWidth), window.innerWidth - VIEWPORT_PAD * 2);
     const left = clampPanelLeft(r.left, w);
     setCoords({ top: r.bottom + 6, left, width: w });
-  }, []);
+  }, [panelWidth]);
 
   useEffect(() => {
     if (open) {
@@ -279,6 +278,16 @@ export default function MwDateTimePicker({
     setViewMonth(n.getMonth() + 1);
   };
 
+  /** Mai nap, 00:00 — a naptár oszlop kis „Ma” gombja. */
+  const setTodayMidnight = () => {
+    const n = new Date();
+    emit(
+      partsToLocalDatetimeString(n.getFullYear(), n.getMonth() + 1, n.getDate(), 0, 0),
+    );
+    setViewYear(n.getFullYear());
+    setViewMonth(n.getMonth() + 1);
+  };
+
   const clear = () => {
     onChange('');
     setOpen(false);
@@ -295,7 +304,7 @@ export default function MwDateTimePicker({
       <div
         ref={panelRef}
         id={panelListId}
-        className={`fixed z-[10000] overflow-hidden rounded-xl border border-white/10 bg-[#141414] shadow-[0_24px_48px_-12px_rgba(0,0,0,0.75)] ring-1 ring-white/[0.06] flex flex-col origin-top max-h-[min(92vh,560px)] ${
+        className={`fixed z-[10000] max-h-[min(92vh,560px)] overflow-x-hidden overflow-y-auto rounded-xl border border-white/10 bg-[#141414] shadow-[0_24px_48px_-12px_rgba(0,0,0,0.75)] ring-1 ring-white/[0.06] flex flex-col origin-top ${
           open && panelEnter
             ? 'opacity-100 translate-y-0 scale-100 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]'
             : 'opacity-0 -translate-y-1 scale-[0.98] pointer-events-none transition-[opacity,transform] duration-150 ease-out'
@@ -307,7 +316,7 @@ export default function MwDateTimePicker({
           transformOrigin: 'top center',
         }}
       >
-        <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-1.5 border-b border-white/5 px-2 py-2 [&>button:nth-child(3)]:self-center">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-1.5 border-b border-white/5 px-2 py-2">
           <button
             type="button"
             className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 shrink-0 flex items-center justify-center"
@@ -326,13 +335,6 @@ export default function MwDateTimePicker({
           </span>
           <button
             type="button"
-            onClick={setTodayNow}
-            className="inline-grid h-8 w-[3.25rem] shrink-0 cursor-pointer select-none place-items-center rounded-lg border border-orange-500/30 bg-orange-500/15 text-[11px] font-bold uppercase leading-none tracking-wide text-orange-100 [font-feature-settings:normal] hover:bg-orange-500/25 hover:text-white"
-          >
-            Ma
-          </button>
-          <button
-            type="button"
             className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 shrink-0 flex items-center justify-center"
             onClick={() => {
               if (viewMonth >= 12) {
@@ -345,84 +347,114 @@ export default function MwDateTimePicker({
             <FiChevronRight className="w-5 h-5" />
           </button>
         </div>
-        <div className="px-2.5 pt-2 pb-1.5">
-          <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] font-bold text-gray-500 mb-1 uppercase leading-none">
-            {WEEKDAY_LABELS.map((wd) => (
-              <span key={wd.key}>{wd.label}</span>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-0.5">
-            {gridDays.map((cell, idx) => {
-              if (!cell) return <div key={`e-${idx}`} className="h-7" />;
-              const selected =
-                parsed && parsed.y === viewYear && parsed.mo === viewMonth && parsed.d === cell.day;
-              return (
+
+        <div className="flex min-h-0 flex-col items-stretch border-t border-white/5 sm:flex-row sm:items-stretch">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col px-3 pb-3 pt-2 sm:pr-2">
+            <div className="flex min-h-8 shrink-0 items-center justify-between gap-2">
+              <div className="flex min-h-8 min-w-0 items-center gap-2 text-[10px] font-semibold uppercase leading-none tracking-wider text-gray-500">
+                <FiCalendar className="h-3.5 w-3.5 shrink-0 text-gray-400 opacity-80" />
+                Dátum
+              </div>
+              <span className="inline-grid h-7 max-w-max shrink-0 auto-cols-max grid-cols-1 grid-rows-[1.75rem]">
                 <button
-                  key={cell.day}
                   type="button"
-                  onClick={() => pickDay(cell.day)}
-                  className={`h-7 rounded-md text-xs font-medium transition-colors leading-none ${
-                    selected
-                      ? 'bg-orange-500 text-white shadow-md shadow-orange-900/25'
-                      : 'text-gray-300 hover:bg-white/10'
-                  }`}
+                  onMouseUp={(e) => e.currentTarget.blur()}
+                  onClick={setTodayMidnight}
+                  className="group relative col-start-1 row-start-1 grid h-full min-h-0 w-full place-items-center overflow-hidden rounded-lg border-0 bg-white/[0.04] px-3 text-[11px]/[14px] font-semibold [font-synthesis:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/45 focus-visible:ring-offset-0 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-lg before:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] before:content-[''] after:pointer-events-none after:absolute after:inset-0 after:z-[1] after:rounded-lg after:bg-orange-500/10 after:shadow-[inset_0_0_0_1px_rgba(249,115,22,0.35)] after:opacity-0 after:transition-opacity after:content-[''] hover:after:opacity-100"
+                  aria-label="Ugrás a mai napra, éjfél (00:00)"
                 >
-                  {cell.day}
+                  <span className="relative z-10 block translate-y-0 text-center text-gray-300 transition-colors group-hover:text-white">
+                    Ma
+                  </span>
                 </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="space-y-3 border-t border-white/5 px-3 pb-3 pt-3">
-          <div className="flex items-center justify-center gap-2 text-[10px] font-semibold uppercase leading-none tracking-wider text-gray-500">
-            <FiClock className="h-3.5 w-3.5 shrink-0 text-gray-400 opacity-80" />
-            Idő
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-[10px] text-gray-500">Óra (0–23)</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={23}
-                value={hVal}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (Number.isNaN(v)) return;
-                  setTime(Math.min(23, Math.max(0, v)), miVal);
-                }}
-                className={timeInputClass}
-              />
+              </span>
             </div>
-            <div>
-              <label className="mb-1 block text-[10px] text-gray-500">Perc (0–59)</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={59}
-                value={miVal}
-                onChange={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (Number.isNaN(v)) return;
-                  setTime(hVal, Math.min(59, Math.max(0, v)));
-                }}
-                className={timeInputClass}
-              />
+            <div className="mt-1 grid shrink-0 grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase leading-none tracking-wide text-gray-500">
+              {WEEKDAY_LABELS.map((wd) => (
+                <span key={wd.key} className="flex h-5 items-center justify-center leading-none">
+                  {wd.label}
+                </span>
+              ))}
+            </div>
+            <div className="mt-1 flex min-h-0 min-w-0 flex-1 flex-col">
+              <div className="grid h-full min-h-0 w-full grid-cols-7 gap-1 auto-rows-[minmax(2rem,1fr)] content-stretch">
+                {gridDays.map((cell, idx) => {
+                  if (!cell)
+                    return <div key={`e-${idx}`} className="min-h-0 min-w-0" aria-hidden />;
+                  const selected =
+                    parsed && parsed.y === viewYear && parsed.mo === viewMonth && parsed.d === cell.day;
+                  return (
+                    <button
+                      key={cell.day}
+                      type="button"
+                      onClick={() => pickDay(cell.day)}
+                      className={`flex h-full min-h-[2rem] w-full min-w-0 items-center justify-center rounded-lg text-sm font-medium tabular-nums leading-none transition-colors ${
+                        selected
+                          ? 'bg-orange-500 text-white shadow-md shadow-orange-900/25'
+                          : 'text-gray-300 hover:bg-white/10'
+                      }`}
+                    >
+                      {cell.day}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          <div className="flex justify-end pt-0.5">
-            <button
-              type="button"
-              onClick={clear}
-              className="text-xs font-medium text-gray-500 hover:text-red-400 transition-colors"
-            >
-              Időpont törlése
-            </button>
+          <div className="flex min-h-0 w-full shrink-0 flex-col self-stretch border-t border-white/5 px-3 pb-3 pt-2 sm:w-[208px] sm:border-l sm:border-t-0 sm:pl-3 sm:pr-3">
+            <div className="mb-2 flex min-h-8 shrink-0 items-center justify-between gap-2">
+              <div className="flex min-h-8 min-w-0 items-center gap-2 text-[10px] font-semibold uppercase leading-none tracking-wider text-gray-500">
+                <FiClock className="h-3.5 w-3.5 shrink-0 text-gray-400 opacity-80" />
+                Idő
+              </div>
+              <span className="inline-grid h-7 max-w-max shrink-0 auto-cols-max grid-cols-1 grid-rows-[1.75rem]">
+                <button
+                  type="button"
+                  onMouseUp={(e) => e.currentTarget.blur()}
+                  onClick={() => {
+                    const n = new Date();
+                    if (parsed) {
+                      emit(
+                        partsToLocalDatetimeString(
+                          parsed.y,
+                          parsed.mo,
+                          parsed.d,
+                          n.getHours(),
+                          n.getMinutes(),
+                        ),
+                      );
+                    } else {
+                      setTodayNow();
+                    }
+                  }}
+                  className="group relative col-start-1 row-start-1 grid h-full min-h-0 w-full place-items-center overflow-hidden rounded-lg border-0 bg-white/[0.04] px-3 text-[11px]/[14px] font-semibold [font-synthesis:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/45 focus-visible:ring-offset-0 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-lg before:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] before:content-[''] after:pointer-events-none after:absolute after:inset-0 after:z-[1] after:rounded-lg after:bg-orange-500/10 after:shadow-[inset_0_0_0_1px_rgba(249,115,22,0.35)] after:opacity-0 after:transition-opacity after:content-[''] hover:after:opacity-100"
+                >
+                  <span className="relative z-10 block translate-y-0 text-center text-gray-300 transition-colors group-hover:text-white">
+                    Most
+                  </span>
+                </button>
+              </span>
+            </div>
+
+            <div className="flex shrink-0 justify-center">
+              <MwTimeScrollWheel
+                hour={hVal}
+                minute={miVal}
+                onHourChange={(h) => setTime(h, miVal)}
+                onMinuteChange={(m) => setTime(hVal, m)}
+              />
+            </div>
+
+            <div className="mt-auto flex shrink-0 justify-end pt-2">
+              <button
+                type="button"
+                onClick={clear}
+                className="text-xs font-medium text-gray-500 hover:text-red-400 transition-colors"
+              >
+                Időpont törlése
+              </button>
+            </div>
           </div>
         </div>
       </div>,
