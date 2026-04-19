@@ -1,4 +1,6 @@
-import { Controller, Delete, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
+import { auditMetaFromRequest } from '../common/audit-request.util';
 import { RuleViolationsService } from './rule-violations.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -45,8 +47,11 @@ export class RuleViolationsController {
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  async remove(@Param('id') id: string) {
-    const ok = await this.ruleViolationsService.deleteViolationById(parseInt(id, 10));
+  async remove(@Param('id') id: string, @Req() req: Request & { user: { userId: number } }) {
+    const ok = await this.ruleViolationsService.deleteViolationById(parseInt(id, 10), {
+      userId: req.user.userId,
+      ...auditMetaFromRequest(req),
+    });
     return { success: ok };
   }
 }

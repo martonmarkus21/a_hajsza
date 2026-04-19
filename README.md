@@ -59,6 +59,7 @@ Nyisd meg: `http://localhost:3001`
 - ✅ Bilincs, MW, Név hozzárendelés, Üzenetküldés
 - ✅ Pár részletek modal
 - ✅ Admin panel (teljes funkcionalitással)
+- ✅ Admin **Eseménynapló** (audit lista, szűrés, CSV export, törlés; menü csak **admin** számára)
 - ✅ Admin listák: közös táblázat-kártya (`AdminDataTableCard`), `AdminTableKit` (egységes `mw-table` váz, lapozó, rendezhető fejléc), lapozás a párok / eszközök / felhasználók tábláin is
 - ✅ Modern UI (fekete-narancs színséma)
 

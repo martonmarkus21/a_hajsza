@@ -1,5 +1,15 @@
 import { useState } from 'react';
-import { FiSmartphone, FiTrash2, FiLogOut, FiWifi, FiWifiOff, FiCheckCircle, FiXCircle, FiAlertCircle } from 'react-icons/fi';
+import {
+    FiSmartphone,
+    FiTrash2,
+    FiLogOut,
+    FiWifi,
+    FiWifiOff,
+    FiCheckCircle,
+    FiXCircle,
+    FiAlertCircle,
+    FiActivity,
+} from 'react-icons/fi';
 import { DateTimeStackCell } from '../../utils/formatDateTimeBudapest';
 import MwTableSearchInput from '../../components/MwTableSearchInput';
 import {
@@ -107,50 +117,65 @@ export default function DeviceManagement({
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="mw-card">
-                    <h3 className="text-gray-400 text-sm font-bold uppercase mb-2">Összes eszköz</h3>
-                    <div className="text-3xl font-bold text-white">{devices.length} db</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="mw-card relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <FiSmartphone className="w-20 h-20 text-violet-400" />
+                    </div>
+                    <div className="relative z-10">
+                        <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Regisztrált eszközök</div>
+                        <div className="text-3xl font-bold text-white tabular-nums mb-1">{devices.length}</div>
+                        <div className="text-gray-500 text-sm leading-relaxed">Összes felvett telefon vagy eszköz-ID a rendszerben.</div>
+                    </div>
                 </div>
-                <div className="mw-card">
-                    <h3 className="text-gray-400 text-sm font-bold uppercase mb-2">Aktív eszközök</h3>
-                    <div className="text-3xl font-bold text-green-500">{activeDevices.length} db</div>
+                <div className="mw-card relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <FiActivity className="w-20 h-20 text-emerald-400" />
+                    </div>
+                    <div className="relative z-10">
+                        <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Online most</div>
+                        <div className="text-3xl font-bold text-emerald-400 tabular-nums mb-1">{activeDevices.length}</div>
+                        <div className="text-gray-500 text-sm leading-relaxed">Élő szerverkapcsolattal rendelkező eszközök.</div>
+                    </div>
                 </div>
             </div>
 
-            {/* Top Bar with Search & Filters */}
-            <div className="mw-card flex flex-col md:flex-row items-center justify-between gap-6">
-                <MwTableSearchInput
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                    placeholder="Keresés IMEI vagy Pár alapján..."
-                    className="w-full md:w-96"
-                />
-                <div className="flex gap-2 w-full md:w-auto">
-                    {[
-                        { id: 'all', label: 'Összes', icon: null },
-                        { id: 'online', label: 'Online', icon: FiWifi },
-                        { id: 'offline', label: 'Offline', icon: FiWifiOff },
-                    ].map(filter => (
-                        <button
-                            key={filter.id}
-                            onClick={() => setFilterStatus(filter.id as any)}
-                            onMouseUp={(e) => e.currentTarget.blur()}
-                            className={`mw-btn flex-1 md:flex-none ${filterStatus === filter.id
-                                ? 'mw-btn-primary'
-                                : 'mw-btn-secondary text-gray-400 hover:text-white'
-                                }`}
-                        >
-                            {filter.icon && <filter.icon className="w-4 h-4" />}
-                            {filter.label}
-                        </button>
-                    ))}
+            <div className="mw-card p-4 sm:p-5 space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+                    <MwTableSearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        placeholder="Keresés IMEI vagy pár alapján…"
+                        className="w-full md:max-w-md md:flex-1 md:min-w-0"
+                    />
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        {[
+                            { id: 'all', label: 'Összes', icon: null },
+                            { id: 'online', label: 'Online', icon: FiWifi },
+                            { id: 'offline', label: 'Offline', icon: FiWifiOff },
+                        ].map((filter) => (
+                            <button
+                                key={filter.id}
+                                type="button"
+                                onClick={() => setFilterStatus(filter.id as 'all' | 'online' | 'offline')}
+                                onMouseUp={(e) => e.currentTarget.blur()}
+                                className={`mw-btn flex-1 min-w-[5.5rem] md:flex-none md:min-w-0 ${filterStatus === filter.id
+                                    ? 'mw-btn-primary'
+                                    : 'mw-btn-secondary text-gray-400 hover:text-white'
+                                    }`}
+                            >
+                                {filter.icon && <filter.icon className="w-4 h-4 shrink-0" />}
+                                {filter.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
             <AdminDataTableCard
                 title="Eszközök listája"
                 icon={<FiSmartphone className="w-6 h-6" />}
+                iconTone="blue"
                 countBadge={`${pagination.totalFiltered} találat`}
                 scrollClassName="overflow-x-auto"
                 footer={

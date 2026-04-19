@@ -1,9 +1,10 @@
 import type { ComponentType, ReactNode } from 'react';
 
-const ICON_TONE_CLASS: Record<'orange' | 'red' | 'blue', string> = {
+const ICON_TONE_CLASS: Record<'orange' | 'red' | 'blue' | 'green', string> = {
   orange: 'bg-orange-500/20 text-orange-500',
   red: 'bg-red-500/20 text-red-400',
   blue: 'bg-blue-500/20 text-blue-400',
+  green: 'bg-emerald-500/20 text-emerald-400',
 };
 
 export type AdminDataTableIconTone = keyof typeof ICON_TONE_CLASS;

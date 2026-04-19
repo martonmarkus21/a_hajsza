@@ -47,6 +47,15 @@ Content-Type: application/json
 - **`PUT /api/users/:id`** - Felhasználó módosítása.
 - **`DELETE /api/users/:id`** - Felhasználó törlése.
 
+### Eseménynapló (audit_logs, Admin JWT)
+- **`GET /api/audit-logs/admin/meta`** — egyedi `action_type` és `entity_type` értékek a szűrőkhöz, valamint az összes sor száma. **Response**: `{ "actionTypes": string[], "entityTypes": string[], "totalRecords": number }`.
+- **`GET /api/audit-logs/admin/list`** — lapozott lista az `audit_logs` táblából, felhasználónévvel (`user` join).
+  - **Query**: `page`, `pageSize` (max 500), `sortBy` (`timestamp` | `id` | `actionType` | `username` | `entityType` | `entityId` | `ipAddress`), `sortDir`, opcionálisan `userId`, `actionType`, `entityType` (üres vagy `all` = nincs szűrés), `from` / `to` (ISO), `q` (keresés: IP, user-agent, JSON szöveg, felhasználónév — ILIKE).
+  - **Response**: `{ items: [...], total, page, pageSize }` — elemek: `id`, `userId`, `username`, `actionType`, `entityType`, `entityId`, `dataJson`, `ipAddress`, `userAgent`, `timestamp` (ISO).
+- **`GET /api/audit-logs/admin/export`** — CSV letöltés (UTF-8 BOM), ugyanazok a szűrők és rendezés, mint a listánál; legfeljebb 8000 sor.
+- **`DELETE /api/audit-logs/admin/:id`** — egy naplósor törlése; a törlés maga is naplózásra kerül (`audit_log_delete`), **kivéve** ha a törölt sor maga is `audit_log_delete` típusú volt (így nem keletkezik „örök” bejegyzés).
+- **`POST /api/audit-logs/admin/bulk-delete`** — tömeges törlés. **Body**: `{ "scope": "filtered" | "all" }`. A `filtered` esetén a **query** ugyanaz, mint a listánál (szűrők, rendezés — a lapozás nem számít); az összes egyező sor törlődik. A `all` esetén a teljes `audit_logs` tábla ürül. Egy összefoglaló napló: `audit_log_bulk_delete`.
+
 ### Pozíciók
 - **`POST /api/position`**
   - Menekülő app küldi a pozíciót.
@@ -99,7 +108,7 @@ Content-Type: application/json
 - **`PUT /api/geofence/:id/deactivate`** - Geofence deaktiválása.
 - **`DELETE /api/geofence/:id`** - Geofence törlése.
 - **`PUT /api/geofence/bulk-status`** - Több geofence atomikus aktiválása/deaktiválása (Admin).
-  - **Body**: `{ "ids": [1, 2, 3], "active": true }`
+  - **Body**: `{ "activateIds": number[], "deactivateIds": number[] }` (üres tömbök megengedettek).
 
 ### Játéktér (Belső területek/Megyék)
 - **`GET /api/game-area`** - Jelenlegi játéktér és szabályok lekérése.
@@ -112,20 +121,19 @@ Content-Type: application/json
 - **`POST /api/game-days`** - Versenynap létrehozása/módosítása.
 
 ### Game Settings (Játék beállítások & Időzítők)
-- **`GET /api/game-settings`** - Globális játékbeállítások lekérése.
-- **`PUT /api/game-settings`** - Beállítások frissítése.
-- **`GET /api/game-settings/countdown`** - Visszaszámláló infó.
-- **`POST /api/game-settings/timer/start`** - Játékidő / stopper indítása.
-- **`POST /api/game-settings/timer/stop`** - Globális időzítő leállítása.
+- **`GET /api/game-settings/countdown`** - Visszaszámláló és nyilvános mezők (JWT: bejelentkezett felhasználó, admin vagy officer).
+- **`GET /api/game-settings`** - Teljes globális beállítások + countdown (JWT: **csak admin**).
+- **`PUT /api/game-settings`** - Beállítások frissítése (JWT: **csak admin**). Sikeres mentés után napló: `game_settings_update` (`audit_logs`).
+- **`POST /api/game-settings/timer/start`** — időzítő indítás (JWT: **csak admin**). Napló: `game_settings_timer_start`.
+- **`POST /api/game-settings/timer/stop`** — időzítő leállítás (JWT: **csak admin**). Napló: `game_settings_timer_stop`.
+
+> **Megjegyzés**: További admin műveletek is bekerülnek az eseménynaplóba (payload a `data_json` mezőben), például geofence aktiválás / deaktiválás / tömeges státusz (`geofence_activate`, `geofence_deactivate`, `geofence_bulk_status`), mentett pozíciók törlése (`position_delete_pair`, `position_delete_batch`), lezárt szabályszegés törlése (`rule_violation_delete`).
 
 ### Szabályszegések (Rule Violations)
 - **`GET /api/rule-violations/active-game-area`** - Aktív játékterület-elhagyás szabályszegések lekérése.
 - **`GET /api/rule-violations/list`** - Szabályszegések lapozott listája szűréssel és rendezéssel (Admin).
   - **Query params**: `page`, `pageSize`, `type` (`all` | `game_area_exit` | `vehicle_time_exceeded`), `status` (`all` | `active` | `resolved`), `search`, `sortBy`, `sortDir`.
 - **`DELETE /api/rule-violations/:id`** - Lezárt szabályszegés törlése (Admin).
-
-### Audit log
-- **`GET /api/audit-logs`** - Rendszernaplók lekérése (Admin).
 
 ---
 

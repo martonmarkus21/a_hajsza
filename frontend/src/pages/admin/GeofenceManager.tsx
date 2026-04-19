@@ -604,11 +604,16 @@ export default function GeofenceManager({
                 <div className="w-[400px] flex flex-col h-full flex-shrink-0">
                     {/* Header - Spacious (Reverted) */}
                 <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-orange-500/20 text-orange-500">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-xl shrink-0 bg-orange-500/20 text-orange-500">
                             <FiMap className="w-6 h-6" />
                         </div>
-                        Térképkezelés
+                        <span className="min-w-0 leading-tight">
+                            <span className="block truncate">Zónák listája</span>
+                            <span className="mt-0.5 block text-xs font-medium text-gray-500">
+                                Vármegyék, játékterület, egyedi körzetek
+                            </span>
+                        </span>
                     </h3>
                 </div>
 
@@ -691,7 +696,7 @@ export default function GeofenceManager({
 
                     {/* Section Label */}
                     {/* Section Label */}
-                    <div className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center justify-between">
+                    <div className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center justify-between">
                         <span>{activeTab === 'counties' ? 'Vármegyék listája' : 'Létrehozott zónák'}</span>
                         <span className="bg-white/5 px-2 py-1 rounded text-[10px] text-gray-400">
                             {activeTab === 'counties' ? filteredAllCounties.length : filteredCustomGeofences.length}

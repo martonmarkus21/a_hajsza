@@ -15,6 +15,8 @@ import { PositionSnapshot } from './position-snapshot';
 import { logVerbose } from '../common/verbose-log';
 import { parsePairsSentIds } from '../common/pairs-sent.util';
 import { QueryAdminPositionsDto } from './dto/query-admin-positions.dto';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import type { AuditRequestMeta } from '../common/audit-request.util';
 
 function parseOptionalDateInput(raw?: string): Date | undefined {
   if (raw == null || String(raw).trim() === '') return undefined;
@@ -42,6 +44,7 @@ export class PositionsService {
     private ruleViolationsService: RuleViolationsService,
     private redisPositionService: RedisPositionService,
     private recentDevicePairIdsService: RecentDevicePairIdsService,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   /** Mentéskor: fix game_area geofence ID-k + scenario körök — egy jsonb oszlopban. */
@@ -408,10 +411,24 @@ export class PositionsService {
   }
 
   /** Admin: egy pár összes mentett pozíciójának törlése (PostgreSQL). */
-  async deleteAllSavedPositionsForPair(pairId: number): Promise<{ deleted: number }> {
+  async deleteAllSavedPositionsForPair(
+    pairId: number,
+    audit?: { userId?: number } & AuditRequestMeta,
+  ): Promise<{ deleted: number }> {
     const result = await this.positionRepository.delete({ pairId });
     const deleted = result.affected ?? 0;
     this.webSocketGateway.broadcastSavedPositionsDeleted({ pairId, deleted });
+    if (audit?.userId != null && deleted > 0) {
+      await this.auditLogsService.log({
+        userId: audit.userId,
+        actionType: 'position_delete_pair',
+        entityType: 'pair',
+        entityId: pairId,
+        dataJson: { deleted },
+        ipAddress: audit.ipAddress,
+        userAgent: audit.userAgent,
+      });
+    }
     return { deleted };
   }
 
@@ -422,6 +439,7 @@ export class PositionsService {
   async deleteSavedPositionsByIdsForPair(
     pairId: number,
     ids: number[],
+    audit?: { userId?: number } & AuditRequestMeta,
   ): Promise<{ deleted: number }> {
     const uniq = [...new Set(ids.map((n) => Number(n)).filter((n) => Number.isInteger(n) && n >= 1))];
     if (uniq.length === 0) {
@@ -442,6 +460,17 @@ export class PositionsService {
     const del = await this.positionRepository.delete({ id: In(uniq), pairId });
     const deleted = del.affected ?? uniq.length;
     this.webSocketGateway.broadcastSavedPositionsDeleted({ pairId, deleted });
+    if (audit?.userId != null && deleted > 0) {
+      await this.auditLogsService.log({
+        userId: audit.userId,
+        actionType: 'position_delete_batch',
+        entityType: 'pair',
+        entityId: pairId,
+        dataJson: { deleted, positionIds: uniq },
+        ipAddress: audit.ipAddress,
+        userAgent: audit.userAgent,
+      });
+    }
     return { deleted };
   }
 

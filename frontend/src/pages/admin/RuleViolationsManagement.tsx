@@ -84,11 +84,11 @@ interface RuleViolationsManagementProps {
   onOpenGameAreaDetails: (row: AdminRuleViolationRow) => void;
   onSelectPairById: (pairId: number) => void;
   onActiveViolationsNeedRefresh?: () => void | Promise<void>;
-  /** Élő MW státusz a párok listájából (socket), a szám-kör színezéséhez */
+  /** Élő Most Wanted státusz a párok listájából (friss lista), a szám-kör színezéséhez */
   pairs?: Pair[];
 }
 
-/** Egy szinkron a szerverrel (mount + socket), mint a párok listája a usePairs adatával: szűrés/rendezés/lapozás kizárólag kliensen */
+/** Lista betöltése a szerverről; szűrés, rendezés és lapozás csak a böngészőben történik */
 const FETCH_PAGE_SIZE = 5000;
 
 export default function RuleViolationsManagement({
@@ -326,36 +326,69 @@ export default function RuleViolationsManagement({
 
   return (
     <div className="space-y-6">
-      <div className="mw-card flex flex-col md:flex-row items-stretch md:items-center justify-between gap-6">
-        <MwTableSearchInput
-          value={searchInput}
-          onChange={setSearchInput}
-          placeholder="Keresés pár, típus vagy leírás szerint…"
-          className="w-full shrink-0 md:w-96"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="mw-card relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <FiAlertTriangle className="w-20 h-20 text-red-400" />
+          </div>
+          <div className="relative z-10">
+            <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Naplózott események</div>
+            <div className="text-3xl font-bold text-white tabular-nums mb-1">
+              {loading ? '…' : stats.total}
+            </div>
+            <div className="text-gray-500 text-sm leading-relaxed">
+              <span className="text-amber-200/90 font-medium">{stats.active}</span> aktív ·{' '}
+              <span className="text-gray-400 font-medium">{stats.resolved}</span> lezárt
+            </div>
+          </div>
+        </div>
+        <div className="mw-card relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <FiInfo className="w-20 h-20 text-orange-400" />
+          </div>
+          <div className="relative z-10 pr-2">
+            <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Tájékoztató</div>
+            <p className="text-gray-300 text-sm leading-relaxed">
+              A bejegyzések a rendszerből töltődnek, és <span className="text-white font-medium">automatikusan frissülnek</span>, ha új szabályszegés
+              történik a játék során. A keresés, a szűrők és a rendezés csak ezen az oldalon módosítja a megjelenítést — a találatok száma a táblázat
+              fejlécében látható.
+            </p>
+          </div>
+        </div>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:flex-1 md:min-w-0 md:justify-end">
-          {STATUS_FILTERS.map((filter) => (
-            <button
-              key={filter.id}
-              type="button"
-              onClick={() => setStatusFilter(filter.id)}
-              onMouseUp={(e) => e.currentTarget.blur()}
-              className={`mw-btn justify-center inline-flex items-center gap-2 flex-1 min-w-[5.5rem] sm:flex-initial sm:min-w-0 w-full sm:w-auto md:w-auto ${statusFilter === filter.id ? 'mw-btn-primary' : 'mw-btn-secondary text-gray-400 hover:text-white'}`}
-            >
-              {filter.icon && <filter.icon className="w-4 h-4 shrink-0" />}
-              {filter.label}
-            </button>
-          ))}
-
-          <MwDropdownSelect
-            value={typeFilter}
-            onChange={setTypeFilter}
-            ariaLabel="Típus szűrő"
-            minPanelWidth={188}
-            className="min-w-0 w-[min(100%,9.25rem)] shrink max-w-[min(100%,9.25rem)] sm:w-44 sm:max-w-none md:w-52"
-            options={TYPE_FILTER_OPTIONS}
+      <div className="mw-card p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+          <MwTableSearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            placeholder="Keresés pár, típus vagy leírás szerint…"
+            className="w-full shrink-0 lg:max-w-md lg:flex-1 lg:min-w-0"
           />
+
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:shrink-0 lg:min-w-0 lg:justify-end">
+            {STATUS_FILTERS.map((filter) => (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => setStatusFilter(filter.id)}
+                onMouseUp={(e) => e.currentTarget.blur()}
+                className={`mw-btn justify-center inline-flex items-center gap-2 flex-1 min-w-[5.5rem] sm:flex-initial sm:min-w-0 sm:w-auto ${statusFilter === filter.id ? 'mw-btn-primary' : 'mw-btn-secondary text-gray-400 hover:text-white'}`}
+              >
+                {filter.icon && <filter.icon className="w-4 h-4 shrink-0" />}
+                {filter.label}
+              </button>
+            ))}
+
+            <MwDropdownSelect
+              value={typeFilter}
+              onChange={setTypeFilter}
+              ariaLabel="Típus szűrő"
+              minPanelWidth={188}
+              className="min-w-0 w-full shrink max-w-none sm:w-44 sm:max-w-none md:w-52 lg:w-52"
+              options={TYPE_FILTER_OPTIONS}
+            />
+          </div>
         </div>
       </div>
 

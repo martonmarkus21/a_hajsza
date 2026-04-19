@@ -548,7 +548,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
   const tableColSpan = 8 + (selectionMode && pairFilter ? 1 : 0);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="mw-card relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">

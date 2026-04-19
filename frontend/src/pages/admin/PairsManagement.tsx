@@ -1,6 +1,6 @@
 
-import { useState } from 'react';
-import { FiUsers, FiPlus, FiTrash2, FiMail, FiShield, FiEdit3, FiMinus, FiCheckCircle, FiXCircle, FiAlertCircle } from 'react-icons/fi';
+import { useMemo, useState } from 'react';
+import { FiUsers, FiPlus, FiTrash2, FiMail, FiShield, FiEdit3, FiMinus, FiCheckCircle, FiXCircle, FiAlertCircle, FiTarget } from 'react-icons/fi';
 import { FaHandcuffs } from 'react-icons/fa6';
 import Modal from '../../components/Modal';
 import MwTableSearchInput from '../../components/MwTableSearchInput';
@@ -54,6 +54,13 @@ export default function PairsManagement({
     const { addNotification } = useNotification();
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'captured' | 'mw'>('all');
+
+    const pairStats = useMemo(() => {
+        const total = pairs.length;
+        const active = pairs.filter((p) => p.active && !p.captured).length;
+        const captured = pairs.filter((p) => p.captured).length;
+        return { total, active, captured };
+    }, [pairs]);
     const [renamingPair, setRenamingPair] = useState<{ id: number; name: string } | null>(null);
     const [sortConfig, setSortConfig] = useState<{ key: 'assignedNumber' | 'name' | 'status' | 'mw' | 'location', direction: 'asc' | 'desc' }>({ key: 'assignedNumber', direction: 'asc' });
 
@@ -115,42 +122,71 @@ export default function PairsManagement({
 
     return (
         <div className="space-y-6">
-            {/* Top Bar with Search & Actions */}
-            <div className="mw-card flex flex-col md:flex-row items-center justify-between gap-6">
-                <MwTableSearchInput
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                    placeholder="Keresés név vagy sorszám alapján..."
-                    className="w-full md:w-96"
-                />
-
-                <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 w-full md:w-auto">
-                    {[
-                        { id: 'all', label: 'Összes', icon: null },
-                        { id: 'active', label: 'Aktív', icon: FiCheckCircle },
-                        { id: 'captured', label: 'Elfogva', icon: FaHandcuffs },
-                        { id: 'mw', label: 'Most Wanted', icon: FiShield },
-                    ].map(filter => (
-                        <button
-                            key={filter.id}
-                            onClick={() => setFilterStatus(filter.id as any)}
-                            onMouseUp={(e) => e.currentTarget.blur()}
-                            className={`mw-btn justify-center w-full md:w-auto ${filterStatus === filter.id
-                                ? 'mw-btn-primary'
-                                : 'mw-btn-secondary text-gray-400 hover:text-white'
-                                }`}
-                        >
-                            {filter.icon && <filter.icon className="w-4 h-4" />}
-                            {filter.label}
-                        </button>
-                    ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="mw-card relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <FiUsers className="w-20 h-20 text-blue-400" />
+                    </div>
+                    <div className="relative z-10">
+                        <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Párok összesen</div>
+                        <div className="text-3xl font-bold text-white tabular-nums mb-1">{pairStats.total}</div>
+                        <div className="text-gray-500 text-sm leading-relaxed">
+                            <span className="text-emerald-300/90 font-medium">{pairStats.active}</span> aktív ·{' '}
+                            <span className="text-gray-400 font-medium">{pairStats.captured}</span> elfogva
+                        </div>
+                    </div>
+                </div>
+                <div className="mw-card relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <FiTarget className="w-20 h-20 text-orange-400" />
+                    </div>
+                    <div className="relative z-10 pr-2">
+                        <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Tájékoztató</div>
+                        <p className="text-gray-300 text-sm leading-relaxed">
+                            Szűrhet név vagy sorszám szerint; a táblázatban sorra <span className="text-white font-medium">üzenet</span>,{' '}
+                            <span className="text-white font-medium">elfogás</span> és egyéb műveletek érhetők el.
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            {/* Pairs Grid/Table */}
+            <div className="mw-card p-4 sm:p-5 space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+                    <MwTableSearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        placeholder="Keresés név vagy sorszám alapján…"
+                        className="w-full md:max-w-md md:flex-1 md:min-w-0"
+                    />
+                    <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:shrink-0 md:justify-end">
+                        {[
+                            { id: 'all', label: 'Összes', icon: null },
+                            { id: 'active', label: 'Aktív', icon: FiCheckCircle },
+                            { id: 'captured', label: 'Elfogva', icon: FaHandcuffs },
+                            { id: 'mw', label: 'Most Wanted', icon: FiShield },
+                        ].map((filter) => (
+                            <button
+                                key={filter.id}
+                                type="button"
+                                onClick={() => setFilterStatus(filter.id as 'all' | 'active' | 'captured' | 'mw')}
+                                onMouseUp={(e) => e.currentTarget.blur()}
+                                className={`mw-btn justify-center md:w-auto ${filterStatus === filter.id
+                                    ? 'mw-btn-primary'
+                                    : 'mw-btn-secondary text-gray-400 hover:text-white'
+                                    }`}
+                            >
+                                {filter.icon && <filter.icon className="w-4 h-4 shrink-0" />}
+                                {filter.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
             <AdminDataTableCard
                 title="Párok listája"
                 icon={<FiUsers className="w-6 h-6" />}
+                iconTone="orange"
                 countBadge={`${pagination.totalFiltered} találat`}
                 footer={
                     <AdminTablePaginationFooter

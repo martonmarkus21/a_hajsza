@@ -15,6 +15,7 @@ import UserManagement from './admin/UserManagement';
 import GeofenceManager from './admin/GeofenceManager';
 import RuleViolationsManagement from './admin/RuleViolationsManagement';
 import PositionsHistory from './admin/PositionsHistory';
+import AuditLogsManagement from './admin/AuditLogsManagement';
 import type { AdminRuleViolationRow } from './admin/RuleViolationsManagement';
 import PairDetails from '../components/PairDetails';
 import PositionsTraceMapModal, { type SinglePositionRow } from '../components/PositionsTraceMapModal';
@@ -429,6 +430,12 @@ export default function Admin() {
       return false;
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'audit_logs' && !checkAdminRole()) {
+      setActiveTab('dashboard');
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     loadData();
@@ -1099,6 +1106,12 @@ export default function Admin() {
             handleEditUser={handleEditUser}
           />
         );
+      case 'audit_logs':
+        return (
+          <AuditLogsManagement
+            users={users.map((u) => ({ id: u.id, username: u.username }))}
+          />
+        );
       case 'geofences':
         return (
           <GeofenceManager
@@ -1134,6 +1147,7 @@ export default function Admin() {
       loading={loading}
       onLogout={handleLogout}
       headerActions={headerActions}
+      showAuditNav={checkAdminRole()}
     >
       {(sidebarOpen: boolean) => (
         <>

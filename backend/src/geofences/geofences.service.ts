@@ -88,7 +88,7 @@ export class GeofencesService {
     };
   }
 
-  async activate(id: number) {
+  async activate(id: number, userId?: number, audit?: AuditRequestMeta) {
     const geofence = await this.geofenceRepository.findOne({ where: { id } });
     if (!geofence) {
       throw new Error('Geofence not found');
@@ -128,6 +128,17 @@ export class GeofencesService {
     this.webSocketGateway.broadcastGameAreaUpdate({
       timestamp: new Date().toISOString(),
     });
+
+    if (userId != null) {
+      await this.auditLogsService.log({
+        userId,
+        actionType: 'geofence_activate',
+        entityType: 'geofence',
+        entityId: id,
+        dataJson: { name: geofence.name },
+        ...audit,
+      });
+    }
 
     return { success: true, message: 'Geofence activated' };
   }
@@ -174,7 +185,7 @@ export class GeofencesService {
     return (degrees * Math.PI) / 180;
   }
 
-  async deactivate(id: number) {
+  async deactivate(id: number, userId?: number, audit?: AuditRequestMeta) {
     const geofence = await this.geofenceRepository.findOne({ where: { id } });
     if (!geofence) {
       throw new Error('Geofence not found');
@@ -189,11 +200,27 @@ export class GeofencesService {
       timestamp: new Date().toISOString(),
     });
 
+    if (userId != null) {
+      await this.auditLogsService.log({
+        userId,
+        actionType: 'geofence_deactivate',
+        entityType: 'geofence',
+        entityId: id,
+        dataJson: { name: geofence.name },
+        ...audit,
+      });
+    }
+
     return { success: true, message: 'Geofence deactivated' };
   }
 
-  async bulkUpdateStatus(data: { activateIds: number[], deactivateIds: number[] }) {
-    const { activateIds, deactivateIds } = data;
+  async bulkUpdateStatus(
+    data: { activateIds: number[]; deactivateIds: number[] },
+    userId?: number,
+    audit?: AuditRequestMeta,
+  ) {
+    const activateIds = data.activateIds ?? [];
+    const deactivateIds = data.deactivateIds ?? [];
 
     if (activateIds.length > 0) {
       await this.geofenceRepository
@@ -240,6 +267,16 @@ export class GeofencesService {
     this.webSocketGateway.broadcastGameAreaUpdate({
       timestamp: new Date().toISOString(),
     });
+
+    if (userId != null && (activateIds.length > 0 || deactivateIds.length > 0)) {
+      await this.auditLogsService.log({
+        userId,
+        actionType: 'geofence_bulk_status',
+        entityType: 'geofence',
+        dataJson: { activateIds, deactivateIds },
+        ...audit,
+      });
+    }
 
     return { success: true, message: 'Geofences updated atomically' };
   }

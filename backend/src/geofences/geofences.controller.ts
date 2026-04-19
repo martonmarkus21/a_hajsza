@@ -26,22 +26,33 @@ export class GeofencesController {
   @Put(':id/activate')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  async activate(@Param('id') id: string) {
-    return await this.geofencesService.activate(parseInt(id));
+  async activate(@Param('id') id: string, @Request() req: any) {
+    return await this.geofencesService.activate(
+      parseInt(id, 10),
+      req.user.userId,
+      auditMetaFromRequest(req),
+    );
   }
 
   @Put(':id/deactivate')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  async deactivate(@Param('id') id: string) {
-    return await this.geofencesService.deactivate(parseInt(id));
+  async deactivate(@Param('id') id: string, @Request() req: any) {
+    return await this.geofencesService.deactivate(
+      parseInt(id, 10),
+      req.user.userId,
+      auditMetaFromRequest(req),
+    );
   }
 
   @Put('bulk-status')
   @UseGuards(RolesGuard)
   @Roles('admin')
-  async bulkUpdateStatus(@Body() body: { activateIds: number[], deactivateIds: number[] }) {
-    return await this.geofencesService.bulkUpdateStatus(body);
+  async bulkUpdateStatus(
+    @Body() body: { activateIds: number[]; deactivateIds: number[] },
+    @Request() req: any,
+  ) {
+    return await this.geofencesService.bulkUpdateStatus(body, req.user.userId, auditMetaFromRequest(req));
   }
 
   @Delete(':id')

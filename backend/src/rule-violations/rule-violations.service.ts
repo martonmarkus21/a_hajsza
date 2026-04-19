@@ -11,6 +11,8 @@ import { GameDaysService } from '../game-days/game-days.service';
 import { FcmService } from '../fcm/fcm.service';
 import { Pair } from '../entities/pair.entity';
 import { MwFlag } from '../entities/mw-flag.entity';
+import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import type { AuditRequestMeta } from '../common/audit-request.util';
 
 @Injectable()
 export class RuleViolationsService {
@@ -27,6 +29,7 @@ export class RuleViolationsService {
     private webSocketGateway: WebSocketGateway,
     private gameDaysService: GameDaysService,
     private fcmService: FcmService,
+    private auditLogsService: AuditLogsService,
   ) {}
 
   async getActiveGameAreaViolations() {
@@ -225,13 +228,28 @@ export class RuleViolationsService {
     };
   }
 
-  async deleteViolationById(id: number): Promise<boolean> {
+  async deleteViolationById(
+    id: number,
+    audit?: { userId?: number } & AuditRequestMeta,
+  ): Promise<boolean> {
     const row = await this.ruleViolationRepository.findOne({ where: { id } });
     if (!row || !row.resolved) {
       return false;
     }
     const res = await this.ruleViolationRepository.delete({ id });
-    return (res.affected ?? 0) > 0;
+    const ok = (res.affected ?? 0) > 0;
+    if (ok && audit?.userId != null) {
+      await this.auditLogsService.log({
+        userId: audit.userId,
+        actionType: 'rule_violation_delete',
+        entityType: 'rule_violation',
+        entityId: id,
+        dataJson: { pairId: row.pairId, violationType: row.violationType },
+        ipAddress: audit.ipAddress,
+        userAgent: audit.userAgent,
+      });
+    }
+    return ok;
   }
 
   async checkViolations(

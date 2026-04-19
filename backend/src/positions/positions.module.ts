@@ -15,6 +15,8 @@ import { WebSocketModule } from '../websocket/websocket.module';
 import { RuleViolationsModule } from '../rule-violations/rule-violations.module';
 import { DeviceAuthGuard } from '../auth/device-auth.guard';
 import { JwtModule } from '@nestjs/jwt';
+import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -27,6 +29,7 @@ import { JwtModule } from '@nestjs/jwt';
     ]),
     WebSocketModule,
     RuleViolationsModule,
+    AuditLogsModule,
     ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

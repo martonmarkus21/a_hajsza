@@ -1,7 +1,7 @@
 
 import { ReactNode, useState } from 'react';
 import { FiSettings, FiUsers, FiMap, FiClock, FiLogOut, FiArrowLeft, FiSmartphone, FiChevronRight, FiAlertTriangle } from 'react-icons/fi';
-import { UserCog, MapPinned } from 'lucide-react';
+import { UserCog, MapPinned, ScrollText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import logoImage from '../../assets/images/most_wanted_logo_raw.png';
 import MWLoader from '../../components/MWLoader';
@@ -13,9 +13,19 @@ interface AdminLayoutProps {
     loading: boolean;
     onLogout?: () => void;
     headerActions?: ReactNode;
+    /** Ha false, az audit napló menüpont rejtve (pl. officer). */
+    showAuditNav?: boolean;
 }
 
-export default function AdminLayout({ children, activeTab, setActiveTab, loading, onLogout, headerActions }: AdminLayoutProps) {
+export default function AdminLayout({
+    children,
+    activeTab,
+    setActiveTab,
+    loading,
+    onLogout,
+    headerActions,
+    showAuditNav = true,
+}: AdminLayoutProps) {
     const navigate = useNavigate();
     const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -49,10 +59,10 @@ export default function AdminLayout({ children, activeTab, setActiveTab, loading
             description: 'Regisztrált eszközök és kapcsolatok felügyelete'
         },
         {
-            id: 'rule_violations',
-            label: 'Szabályszegések',
-            icon: FiAlertTriangle,
-            description: 'Aktív és korábbi szabályszegések áttekintése és naplózása'
+            id: 'geofences',
+            label: 'Térkép & zónák',
+            icon: FiMap,
+            description: 'Térképes áttekintés, keresés és zónák bekapcsolása vagy szerkesztése'
         },
         {
             id: 'positions',
@@ -61,18 +71,24 @@ export default function AdminLayout({ children, activeTab, setActiveTab, loading
             description: 'Mentett GPS-minták visszakeresése párok és idő szerint'
         },
         {
+            id: 'rule_violations',
+            label: 'Szabályszegések',
+            icon: FiAlertTriangle,
+            description: 'Aktív és korábbi szabályszegések áttekintése és naplózása'
+        },
+        {
             id: 'users',
             label: 'Felhasználók',
             icon: UserCog,
             description: 'Adminisztrátorok és tisztek kezelése'
         },
         {
-            id: 'geofences',
-            label: 'Térkép & zónák',
-            icon: FiMap,
-            description: 'Játékterület, vármegyék és egyedi zónák beállítása'
+            id: 'audit_logs',
+            label: 'Eseménynapló',
+            icon: ScrollText,
+            description: 'Rendszeresemények és admin műveletek visszakeresése'
         },
-    ];
+    ].filter((item) => (showAuditNav ? true : item.id !== 'audit_logs'));
 
     return (
         <div className="flex h-screen bg-gradient-to-br from-[#1a1a1a] via-[#0f0f0f] to-black overflow-hidden relative">
@@ -207,7 +223,7 @@ export default function AdminLayout({ children, activeTab, setActiveTab, loading
                         )}
                     </div>
 
-                    <div className="animate-fade-in delay-100">
+                    <div key={activeTab} className="animate-fade-in">
                         {typeof children === 'function' ? children(sidebarOpen) : children}
                     </div>
                 </div>

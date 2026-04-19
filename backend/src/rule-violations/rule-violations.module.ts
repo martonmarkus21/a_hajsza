@@ -9,6 +9,7 @@ import { FcmModule } from '../fcm/fcm.module';
 import { Pair } from '../entities/pair.entity';
 import { MwFlag } from '../entities/mw-flag.entity';
 import { RuleViolationsController } from './rule-violations.controller';
+import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { RuleViolationsController } from './rule-violations.controller';
     WebSocketModule,
     GameDaysModule,
     FcmModule,
+    AuditLogsModule,
   ],
   controllers: [RuleViolationsController],
   providers: [RuleViolationsService],

@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FiUser, FiTrash2, FiEdit, FiPlus, FiCheckCircle, FiXCircle, FiShield, FiUsers } from 'react-icons/fi';
 import { UserCog } from 'lucide-react';
 import Modal from '../../components/Modal';
@@ -36,6 +36,8 @@ export default function UserManagement({
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: 'username' | 'email' | 'role' | 'status', direction: 'asc' | 'desc' }>({ key: 'username', direction: 'asc' });
+
+    const activeUsersCount = useMemo(() => users.filter((u) => u.active).length, [users]);
 
     // Filter users
     const filteredUsers = users.filter(user =>
@@ -80,27 +82,52 @@ export default function UserManagement({
 
     return (
         <div className="space-y-6">
-            {/* Top Bar */}
-            <div className="mw-card flex flex-col md:flex-row items-center justify-between gap-6">
-                <MwTableSearchInput
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                    placeholder="Keresés felhasználók között..."
-                    className="w-full md:w-96"
-                />
-                <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="mw-btn mw-btn-primary w-full md:w-auto"
-                >
-                    <FiPlus className="w-5 h-5" />
-                    Új felhasználó
-                </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="mw-card relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <UserCog className="w-20 h-20 text-orange-400" />
+                    </div>
+                    <div className="relative z-10">
+                        <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Fiókok</div>
+                        <div className="text-3xl font-bold text-white tabular-nums mb-1">{users.length}</div>
+                        <div className="text-gray-500 text-sm leading-relaxed">Admin és officer felhasználók együtt.</div>
+                    </div>
+                </div>
+                <div className="mw-card relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <FiCheckCircle className="w-20 h-20 text-emerald-400" />
+                    </div>
+                    <div className="relative z-10">
+                        <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Aktív fiókok</div>
+                        <div className="text-3xl font-bold text-emerald-400 tabular-nums mb-1">{activeUsersCount}</div>
+                        <div className="text-gray-500 text-sm leading-relaxed">Bejelentkezésre jogosult, nem letiltott felhasználók.</div>
+                    </div>
+                </div>
             </div>
 
-            {/* Users List */}
+            <div className="mw-card p-4 sm:p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                    <MwTableSearchInput
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        placeholder="Keresés felhasználónév vagy e-mail szerint…"
+                        className="w-full sm:max-w-md sm:flex-1 sm:min-w-0"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setShowCreateModal(true)}
+                        className="mw-btn mw-btn-primary inline-flex w-full shrink-0 items-center justify-center gap-2 sm:w-auto"
+                    >
+                        <FiPlus className="w-5 h-5 shrink-0" />
+                        Új felhasználó
+                    </button>
+                </div>
+            </div>
+
             <AdminDataTableCard
                 title="Felhasználók listája"
                 icon={<UserCog className="w-6 h-6" />}
+                iconTone="orange"
                 countBadge={`${pagination.totalFiltered} találat`}
                 scrollClassName="overflow-x-auto"
                 footer={

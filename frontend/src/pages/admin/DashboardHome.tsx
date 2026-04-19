@@ -19,18 +19,18 @@ export default function DashboardHome({
     stopTimer
 }: DashboardHomeProps) {
     return (
-        <div className="space-y-6 animate-fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                 {/* Game Status Card */}
                 <div className="mw-card relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <FiActivity className="w-24 h-24 text-orange-500" />
                     </div>
                     <div className="relative z-10">
-                        <div className="text-gray-400 text-sm font-semibold uppercase tracking-wider mb-2">Játék státusz</div>
+                        <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Játék státusz</div>
                         <div className="flex items-center gap-3 mb-4">
                             <div className={`w-3 h-3 rounded-full ${gameSettings?.isTimerRunning ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                            <span className={`text-2xl font-bold ${gameSettings?.isTimerRunning ? 'text-white' : 'text-gray-400'}`}>
+                            <span className={`text-2xl font-bold tabular-nums ${gameSettings?.isTimerRunning ? 'text-white' : 'text-gray-400'}`}>
                                 {gameSettings?.isTimerRunning ? 'AKTÍV' : 'LEÁLLÍTVA'}
                             </span>
                         </div>
@@ -58,9 +58,9 @@ export default function DashboardHome({
                         <FiUsers className="w-24 h-24 text-blue-500" />
                     </div>
                     <div className="relative z-10">
-                        <div className="text-gray-400 text-sm font-semibold uppercase tracking-wider mb-2">Aktív párok</div>
-                        <div className="text-4xl font-bold text-white mb-2">{activePairsCount}</div>
-                        <div className="text-gray-500 text-sm">Jelenleg a pályán</div>
+                        <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Aktív párok</div>
+                        <div className="text-4xl font-bold text-white tabular-nums mb-1">{activePairsCount}</div>
+                        <div className="text-gray-500 text-sm leading-relaxed">Jelenleg a pályán.</div>
                     </div>
                 </div>
 
@@ -70,9 +70,9 @@ export default function DashboardHome({
                         <FiSmartphone className="w-24 h-24 text-purple-500" />
                     </div>
                     <div className="relative z-10">
-                        <div className="text-gray-400 text-sm font-semibold uppercase tracking-wider mb-2">Eszközök</div>
-                        <div className="text-4xl font-bold text-white mb-2">{activeDevicesCount}</div>
-                        <div className="text-gray-500 text-sm">Aktív kapcsolat</div>
+                        <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Eszközök</div>
+                        <div className="text-4xl font-bold text-white tabular-nums mb-1">{activeDevicesCount}</div>
+                        <div className="text-gray-500 text-sm leading-relaxed">Aktív szerverkapcsolat.</div>
                     </div>
                 </div>
 
@@ -82,9 +82,9 @@ export default function DashboardHome({
                         <FiMap className="w-24 h-24 text-emerald-500" />
                     </div>
                     <div className="relative z-10">
-                        <div className="text-gray-400 text-sm font-semibold uppercase tracking-wider mb-2">Zónák</div>
-                        <div className="text-4xl font-bold text-white mb-2">{activeGeofencesCount}</div>
-                        <div className="text-gray-500 text-sm">Aktív geofence</div>
+                        <div className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">Zónák</div>
+                        <div className="text-4xl font-bold text-white tabular-nums mb-1">{activeGeofencesCount}</div>
+                        <div className="text-gray-500 text-sm leading-relaxed">Aktív geokerítés a térképen.</div>
                     </div>
                 </div>
             </div>
