@@ -44,7 +44,10 @@ export class FcmService implements OnModuleInit {
     }
   }
 
-  async sendToPair(pairId: number, message: { title: string; body: string }) {
+  async sendToPair(
+    pairId: number,
+    message: { title: string; body: string; data?: Record<string, string> },
+  ) {
     if (!this.firebaseApp) {
       console.warn('FCM not initialized, skipping push notification');
       return { success: false, message: 'FCM not initialized' };
@@ -67,6 +70,7 @@ export class FcmService implements OnModuleInit {
         title: message.title,
         body: message.body,
       },
+      data: message.data || {},
       tokens,
     };
 

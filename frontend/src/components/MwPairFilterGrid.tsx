@@ -129,10 +129,13 @@ export default function MwPairFilterGrid({ pairs, value, onChange, className = '
   };
 
   /** Kompakt badge: eredeti narancs keret; csak nyitott (primary) gombnál sötétebb keret. */
-  const pairBadgeClass = (mw: boolean, compact: boolean) => {
+  const pairBadgeClass = (mw: boolean, captured: boolean, compact: boolean) => {
     const base = compact
       ? 'w-6 h-6 shrink-0 rounded-full flex items-center justify-center font-bold text-xs border-2 border-orange-500 text-white shadow-sm transition-colors duration-300'
       : 'w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold text-sm border-[3px] border-orange-500 text-white shadow-sm transition-colors duration-300';
+    if (captured) {
+      return `${base.replace('border-orange-500', 'border-red-600')} bg-red-600`;
+    }
     return `${base} ${mw ? 'bg-orange-500' : 'bg-[#2a2a2a]'}`;
   };
 
@@ -193,7 +196,7 @@ export default function MwPairFilterGrid({ pairs, value, onChange, className = '
                       : 'border-white/10 bg-[#1a1a1a] hover:border-white/20 hover:bg-white/[0.04]'
                   }`}
                 >
-                  <span className={pairBadgeClass(!!p.mostWanted, false)}>{p.assignedNumber}</span>
+                  <span className={pairBadgeClass(!!p.mostWanted, !!p.captured, false)}>{p.assignedNumber}</span>
                 </button>
               );
             })}
@@ -225,7 +228,7 @@ export default function MwPairFilterGrid({ pairs, value, onChange, className = '
               className={
                 open
                   ? 'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-orange-800 bg-orange-950/90 font-bold text-xs text-white shadow-inner transition-none'
-                  : pairBadgeClass(!!selectedPair.mostWanted, true)
+                  : pairBadgeClass(!!selectedPair.mostWanted, !!selectedPair.captured, true)
               }
             >
               {selectedPair.assignedNumber}

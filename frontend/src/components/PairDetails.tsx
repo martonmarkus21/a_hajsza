@@ -1,10 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { Pair } from '../types';
-import { FiNavigation, FiLock, FiShield, FiInfo, FiCheckCircle, FiXCircle, FiCrosshair, FiSend, FiX, FiExternalLink, FiAlertCircle } from 'react-icons/fi';
+import {
+  FiNavigation,
+  FiLock,
+  FiShield,
+  FiInfo,
+  FiCheckCircle,
+  FiCrosshair,
+  FiSend,
+  FiX,
+  FiExternalLink,
+  FiAlertCircle,
+} from 'react-icons/fi';
 import { FaMapMarkerAlt, FaWaze } from 'react-icons/fa';
+import { FaHandcuffs } from 'react-icons/fa6';
 import { HiPencil } from 'react-icons/hi2';
 import Modal from './Modal';
 import ConfirmationModal from './ConfirmationModal';
+import CaptureDetailsModal from './CaptureDetailsModal';
 import { useNotification } from '../contexts/NotificationContext';
 
 interface PairDetailsProps {
@@ -41,6 +54,7 @@ export default function PairDetails({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showCaptureInfoModal, setShowCaptureInfoModal] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
   // Track previous pair ID to detect actual pair switch vs just data update
@@ -108,7 +122,13 @@ export default function PairDetails({
             <div className="flex items-center gap-5 p-4 bg-white/5 rounded-2xl border border-white/5 relative group">
               {/* Status Badge */}
               {/* Status Badge - Updated style to match sidebar */}
-              <div className={`flex items-center justify-center w-20 h-20 rounded-full text-white font-bold text-4xl shadow-lg transition-all duration-300 border-[4px] border-orange-500 pb-1 ${isMw ? 'bg-orange-500' : 'bg-[#222]'}`}>
+              <div className={`flex items-center justify-center w-20 h-20 rounded-full text-white font-bold text-4xl shadow-lg transition-all duration-300 border-[4px] pb-1 ${
+                pair.captured
+                  ? 'border-red-600 bg-red-600'
+                  : isMw
+                    ? 'border-orange-500 bg-orange-500'
+                    : 'border-orange-500 bg-[#222]'
+              }`}>
                 {pair.assignedNumber}
               </div>
 
@@ -164,9 +184,14 @@ export default function PairDetails({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {pair.captured && (
-                    <span className="mw-badge captured">
-                      <FiXCircle className="w-3.5 h-3.5" /> Elfogva
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCaptureInfoModal(true)}
+                      className="mw-badge captured hover:bg-red-500/20 transition-colors"
+                      title="Elfogás részletei"
+                    >
+                      <FaHandcuffs className="w-3.5 h-3.5" /> Elfogva
+                    </button>
                   )}
                   {isMw && (
                     <span className="mw-badge mw">
@@ -347,6 +372,12 @@ export default function PairDetails({
         onCancel={() => setShowConfirmModal(false)}
         confirmLabel="Elfogás"
         isDangerous={true}
+      />
+
+      <CaptureDetailsModal
+        pair={pair}
+        isOpen={showCaptureInfoModal}
+        onClose={() => setShowCaptureInfoModal(false)}
       />
     </>
   );

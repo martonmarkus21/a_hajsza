@@ -61,8 +61,8 @@ export class GeofencesService {
     for (const pair of pairs.pairs) {
       if (pair.active && !pair.captured) {
         await this.fcmService.sendToPair(pair.id, {
-          title: 'Új feladat!',
-          body: `${createGeofenceDto.name}: ${createGeofenceDto.radiusM / 1000} km körzetben ${createGeofenceDto.activeUntil ? `időpontig: ${new Date(createGeofenceDto.activeUntil).toLocaleString('hu-HU')}` : ''}`,
+          title: 'Új feladat',
+          body: `${createGeofenceDto.name} — nézzetek rá az alkalmazásban.`,
         });
       }
     }

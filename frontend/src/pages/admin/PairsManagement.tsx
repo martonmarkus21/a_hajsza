@@ -28,11 +28,14 @@ interface PairsManagementProps {
     handleSendMessage: (pair: any) => void;
     handleMw: (pairId: number) => void;
     handleCapture: (pairId: number) => void;
+    handleCaptureRevert: (pairId: number) => void;
     showCreateModal: boolean;
     setShowCreateModal: (show: boolean) => void;
     onPairSelect?: (pair: any) => void;
     activeGameAreaExitViolations?: Record<number, boolean>;
     onOpenViolationDetails?: (pairId: number) => void;
+    /** Elfogás részletei modál (csak elfogás), a párok listájából */
+    onOpenCaptureDetails?: (pair: any) => void;
 }
 
 export default function PairsManagement({
@@ -45,11 +48,13 @@ export default function PairsManagement({
     handleSendMessage,
     handleMw,
     handleCapture,
+    handleCaptureRevert,
     showCreateModal,
     setShowCreateModal,
     onPairSelect,
     activeGameAreaExitViolations,
-    onOpenViolationDetails
+    onOpenViolationDetails,
+    onOpenCaptureDetails,
 }: PairsManagementProps) {
     const { addNotification } = useNotification();
     const [searchTerm, setSearchTerm] = useState('');
@@ -260,9 +265,11 @@ export default function PairsManagement({
                                         <td className="text-center py-4">
                                             <div 
                                                 onClick={() => onPairSelect && onPairSelect(pair)}
-                                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] border-orange-500 text-white transition-colors duration-300 ${pair.mostWanted
-                                                ? 'bg-orange-500 hover:bg-orange-400'
-                                                : 'bg-[#2a2a2a] hover:bg-[#383838]'
+                                                className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] text-white transition-colors duration-300 ${pair.captured
+                                                ? 'border-red-600 bg-red-600 hover:bg-red-500'
+                                                : pair.mostWanted
+                                                ? 'border-orange-500 bg-orange-500 hover:bg-orange-400'
+                                                : 'border-orange-500 bg-[#2a2a2a] hover:bg-[#383838]'
                                                 }`}
                                                 title="Pár részleteinek megtekintése"
                                             >
@@ -290,9 +297,16 @@ export default function PairsManagement({
                                                 )}
                                             </div>
                                             {pair.captured && (
-                                                <div className="flex items-center gap-1 text-xs text-red-500 font-bold uppercase tracking-wider mt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onOpenCaptureDetails?.(pair);
+                                                    }}
+                                                    className="flex items-center gap-1 text-xs text-red-500 font-bold uppercase tracking-wider mt-1 bg-transparent border-0 p-0 cursor-pointer hover:text-red-300 transition-colors text-left w-fit"
+                                                >
                                                     <FaHandcuffs className="w-3 h-3" /> Elfogva
-                                                </div>
+                                                </button>
                                             )}
                                         </td>
                                         <td className="text-center py-4">
@@ -354,13 +368,21 @@ export default function PairsManagement({
                                                 >
                                                     <FiEdit3 className="w-4 h-4" />
                                                 </button>
-                                                {!pair.captured && (
+                                                {!pair.captured ? (
                                                     <button
                                                         onClick={() => handleCapture(pair.id)}
                                                         className="p-2 text-red-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors"
                                                         title="Elfogás rögzítése"
                                                     >
                                                         <FaHandcuffs className="w-4 h-4" />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleCaptureRevert(pair.id)}
+                                                        className="p-2 text-amber-400 hover:text-white hover:bg-amber-500/20 rounded-lg transition-colors"
+                                                        title="Elfogás visszavonása"
+                                                    >
+                                                        <FiCheckCircle className="w-4 h-4" />
                                                     </button>
                                                 )}
                                                 <button

@@ -166,6 +166,11 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
     for (const p of pairs) m.set(p.id, !!p.mostWanted);
     return m;
   }, [pairs]);
+  const capturedByPairId = useMemo(() => {
+    const m = new Map<number, boolean>();
+    for (const p of pairs) m.set(p.id, !!p.captured);
+    return m;
+  }, [pairs]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -834,6 +839,9 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                     const liveMw = mostWantedByPairId.has(row.pairId)
                       ? !!mostWantedByPairId.get(row.pairId)
                       : false;
+                    const liveCaptured = capturedByPairId.has(row.pairId)
+                      ? !!capturedByPairId.get(row.pairId)
+                      : false;
                     const timeParts = formatDateTimeBudapestParts(row.timestamp);
                     return (
                       <tr key={row.id} className="group transition-colors hover:bg-white/5">
@@ -854,8 +862,12 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                             type="button"
                             onClick={() => onSelectPairById(row.pairId)}
                             title="Pár részleteinek megtekintése"
-                            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] border-orange-500 text-white transition-colors duration-300 ${
-                              liveMw ? 'bg-orange-500 hover:bg-orange-400' : 'bg-[#2a2a2a] hover:bg-[#383838]'
+                            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] text-white transition-colors duration-300 ${
+                              liveCaptured
+                                ? 'border-red-600 bg-red-600 hover:bg-red-500'
+                                : liveMw
+                                  ? 'border-orange-500 bg-orange-500 hover:bg-orange-400'
+                                  : 'border-orange-500 bg-[#2a2a2a] hover:bg-[#383838]'
                             }`}
                           >
                             {row.assignedNumber ?? '?'}

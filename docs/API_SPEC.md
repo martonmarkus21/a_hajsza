@@ -76,6 +76,7 @@ Content-Type: application/json
 
 ### Párok
 - **`GET /api/pairs`** - Összes pár lekérése (opcionális `?active=true` szűréssel).
+  - Elfogással kapcsolatos mezők a listaelemekben (ha releváns): pl. `captured`, `captureNote`, `captureTimestamp`, `captureLocation`, `capturedByUsername`, `hasActiveDevice` — a `captureNote` rövid magyarázat az aktuális követhetőségről / munkamenetről.
   - **`lastPosition` a válaszban** (összefoglalva):
     - Futó időzítő és `lastLocationUpdate` mellett, ha a pár szerepel a ciklus „már küldött” listájában: alapból a **ciklus első** PG-s mintája; ha van **újabb** sor ugyanahhoz a párhez a `positions` táblában ugyanazon ciklusban (több időzítő szerinti mentés), akkor az kerül vissza.
     - Aktív, meg nem oldott **játékterület-elhagyás** szabályszegésnél: ha van élő Redis-pozíció, a `lastPosition` onnan jön (folyamatos követés).
@@ -87,9 +88,16 @@ Content-Type: application/json
 - **`PUT /api/pairs/:id/name`** - Pár nevének beállítása.
 
 ### Capture (Bilincs)
-- **`POST /api/capture`**
-  - Celebrendőr elfog egy párt.
-  - **Body**: `{ "pairId": 1, "userId": 1 }`
+- **`POST /api/capture`** (JWT: **admin** vagy **officer**; a rögzítő a tokenben lévő felhasználó)
+  - Elfogás rögzítése egy párra (validáció: aktív pár + frissen látott eszköz, cooldown, idempotencia, opcionális kliens időbélyeg).
+  - **Body** (JSON):
+    - `pairId` (number, kötelező)
+    - `requestId` (string, opcionális, max 100 karakter) — ugyanazzal az értékkel megismételt kérés **idempotens** siker választ ad (nem hoz létre duplikátumot).
+    - `clientTimestamp` (string, ISO 8601, opcionális) — ha megvan, a szerver ellenőrzi a megengedett tartományt (`CLIENT_TIMESTAMP_INVALID` hiba, ha nem OK).
+    - `pairLat`, `pairLon` (number, opcionális, **együtt** kell küldeni vagy egyik sem) — az üldözői felületen a rögzítéskor mutatott WGS‑84 koordináta; ha nincs, a szerver **Redis élő pozícióból**, majd szükség esetén a **legutóbbi mentett** `positions` sorból tölti ki a rögzített elfogási helyet.
+  - **Siker** (200): `{ "success": true, "message": "...", "idempotent"?: boolean, "capture": { "id", "pairId", "capturedBy", "timestamp" } }`
+  - **Gyakori hibakódok** (strukturált válasz `code` mezővel): `PAIR_NOT_FOUND`, `PAIR_INACTIVE`, `ALREADY_CAPTURED`, `COOLDOWN_ACTIVE`, `CAPTURE_COORDS_INCOMPLETE`, `CLIENT_TIMESTAMP_INVALID`.
+- **`DELETE /api/capture/:pairId`** (JWT: **admin** vagy **officer**) — az adott párhoz tartozó elfogás törlése / visszavonása (ha nincs rögzítés: `CAPTURE_NOT_FOUND`; siker: `CAPTURE_REVERTED`).
 
 ### Most Wanted (MW)
 - **`POST /api/mw`** - MW jelzés beállítása egy párra.

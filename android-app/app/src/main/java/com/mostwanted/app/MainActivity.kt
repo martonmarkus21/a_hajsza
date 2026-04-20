@@ -14,13 +14,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.mostwanted.app.service.FcmService
 import com.mostwanted.app.service.LocationService
 import com.mostwanted.app.util.PreferencesHelper
 import com.mostwanted.app.viewmodel.MainViewModel
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
     private lateinit var viewModel: MainViewModel
@@ -43,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private val forceLogoutReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             android.util.Log.d("MainActivity", "Force logout broadcast received")
+            prefs.setLoggingOut(true)
             // Stop location service
             val serviceIntent = Intent(this@MainActivity, LocationService::class.java)
             stopService(serviceIntent)
@@ -159,29 +162,33 @@ class MainActivity : AppCompatActivity() {
         }
 
         logoutButton.setOnClickListener {
-            // Stop location service first
+            prefs.setLoggingOut(true)
             val serviceIntent = Intent(this, LocationService::class.java)
             stopService(serviceIntent)
-            
-            // Call logout API (before clearing preferences, so token is still available)
-            CoroutineScope(Dispatchers.Main).launch {
+
+            // applicationContext + IO so this is not cancelled if the activity is torn down by a 401 broadcast
+            val appCtx = applicationContext
+            lifecycleScope.launch(Dispatchers.IO) {
                 try {
-                    val apiService = com.mostwanted.app.api.ApiService.create(this@MainActivity)
+                    val apiService = com.mostwanted.app.api.ApiService.create(appCtx)
                     val response = apiService.deviceLogout()
-                    android.util.Log.d("MainActivity", "Logout API called successfully: ${response.success}, message: ${response.message}")
+                    android.util.Log.d(
+                        "MainActivity",
+                        "Logout API: ${response.success}, message: ${response.message}",
+                    )
                 } catch (e: Exception) {
                     android.util.Log.e("MainActivity", "Logout error: ${e.message}", e)
-                    // Even if logout fails, we should still clear local data and redirect
-                    // The device will be marked as inactive on the server side eventually
                 } finally {
-                    // Clear preferences and redirect only after API call completes (or fails)
-                    prefs.clear()
-                    
-                    // Go back to login
-                    val intent = Intent(this@MainActivity, LoginActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    startActivity(intent)
-                    finish()
+                    withContext(NonCancellable + Dispatchers.Main) {
+                        prefs.clear()
+                        val intent = Intent(appCtx, LoginActivity::class.java)
+                        intent.flags =
+                            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        appCtx.startActivity(intent)
+                        if (!isFinishing && !isDestroyed) {
+                            finish()
+                        }
+                    }
                 }
             }
         }

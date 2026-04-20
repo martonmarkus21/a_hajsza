@@ -185,7 +185,7 @@ export class GameSettingsService implements OnModuleInit {
       if (device.fcmToken) {
         await this.fcmService.sendToDevice(device.fcmToken, {
           title: 'Lokációfrissítés',
-          body: 'Kérjük, frissítse a pozícióját.',
+          body: 'Ideje frissíteni a pozíciótokat — nyissátok meg az alkalmazást.',
           data: {
             type: 'location_update_request',
             action: 'update_location',

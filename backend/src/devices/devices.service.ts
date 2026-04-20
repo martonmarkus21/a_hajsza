@@ -1,16 +1,16 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, Not, IsNull } from 'typeorm';
+import { Repository, MoreThan, Not, IsNull, QueryFailedError } from 'typeorm';
 import { Device } from '../entities/device.entity';
 import { Pair } from '../entities/pair.entity';
 import { DeviceLoginDto } from './dto/device-login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { FcmService } from '../fcm/fcm.service';
-import * as bcrypt from 'bcryptjs';
 import { logVerbose } from '../common/verbose-log';
 import { RecentDevicePairIdsService } from '../device-activity/recent-device-pair-ids.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
+import { RedisPositionService } from '../redis/redis-position.service';
 
 @Injectable()
 export class DevicesService {
@@ -23,19 +23,22 @@ export class DevicesService {
     private fcmService: FcmService,
     private recentDevicePairIdsService: RecentDevicePairIdsService,
     private auditLogsService: AuditLogsService,
+    private redisPositionService: RedisPositionService,
   ) {}
 
   async login(deviceLoginDto: DeviceLoginDto) {
-    // Find pair by assigned number (username is pair number)
-    const pairNumber = parseInt(deviceLoginDto.username);
+    const pairNumber = parseInt(deviceLoginDto.username, 10);
     if (isNaN(pairNumber)) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // CRITICAL: Don't load 'devices' relation to avoid TypeORM issues when saving pair
+    const incomingImei = String(deviceLoginDto.deviceId ?? '').trim();
+    if (!incomingImei) {
+      throw new UnauthorizedException('Device ID is required');
+    }
+
     const pair = await this.pairRepository.findOne({
       where: { assignedNumber: pairNumber },
-      // Don't load relations to avoid TypeORM automatically updating devices
     });
 
     if (!pair) {
@@ -43,7 +46,6 @@ export class DevicesService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // CRITICAL: Validate pair.id immediately after fetching
     if (!pair.id || pair.id === null || pair.id === undefined) {
       console.error(`[Device] Pair found but pair.id is null/undefined! pair:`, JSON.stringify(pair, null, 2));
       throw new UnauthorizedException('Invalid pair: missing ID');
@@ -57,111 +59,88 @@ export class DevicesService {
 
     logVerbose(`[Device] Login attempt: pairNumber=${pairNumber}, pair.id=${pair.id}, validPairId=${validPairId}`);
 
-    // Simple password check (in production, use proper device credentials)
-    // For now, password is the pair number as string
     if (deviceLoginDto.password !== pairNumber.toString()) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check if device with this deviceId already exists (possibly for another pair)
-    // Don't load relations to avoid issues with deleted pairs
-    let device = await this.deviceRepository.findOne({
-      where: { imeiOrDeviceId: deviceLoginDto.deviceId },
+    const deviceByImei = await this.deviceRepository.findOne({
+      where: { imeiOrDeviceId: incomingImei },
     });
-
-    // Check if pair has any existing devices
-    const existingDeviceForPair = await this.deviceRepository.findOne({
+    const deviceByPair = await this.deviceRepository.findOne({
       where: { pairId: validPairId },
     });
 
-    if (device) {
-      // Device exists - check if it's for the same pair
-      // Handle null pairId (pair was deleted)
-      if (device.pairId === validPairId) {
-        // Device already belongs to this pair - just update it
-        // Use raw query to avoid TypeORM relation issues
-        if (deviceLoginDto.fcmToken) {
-          await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, last_seen_at = $2, fcm_token = $3, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
-            [validPairId, new Date(), deviceLoginDto.fcmToken, device.id]
-          );
-        } else {
-          await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, last_seen_at = $2, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
-            [validPairId, new Date(), device.id]
-          );
-        }
-        device = await this.deviceRepository.findOne({ where: { id: device.id } });
+    if (deviceByPair && deviceByPair.imeiOrDeviceId !== incomingImei) {
+      logVerbose(
+        `[Device] Login rejected: pair ${validPairId} already bound to device ${deviceByPair.imeiOrDeviceId}, got ${incomingImei}`,
+      );
+      throw new ConflictException(
+        'Ez a pár szám már egy másik eszközhöz van kötve. Csak az elsőként bejelentkezett telefon használhatja ezt a számot.',
+      );
+    }
+
+    if (deviceByImei && deviceByImei.pairId !== validPairId) {
+      logVerbose(
+        `[Device] Login rejected: device ${incomingImei} is bound to pair ${deviceByImei.pairId}, attempted ${validPairId}`,
+      );
+      throw new ConflictException(
+        'Ez az eszköz már egy másik pár számhoz van kötve. Válasszátok azt a számot, vagy kérjetek adminisztrátori feloldást.',
+      );
+    }
+
+    let device: Device | null = null;
+
+    if (deviceByImei && deviceByImei.pairId === validPairId) {
+      if (deviceLoginDto.fcmToken) {
+        await this.deviceRepository.query(
+          `UPDATE devices SET pair_id = $1, last_seen_at = $2, fcm_token = $3, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
+          [validPairId, new Date(), deviceLoginDto.fcmToken, deviceByImei.id],
+        );
       } else {
-        // Device belongs to a different pair (or pair was deleted and pairId is invalid/null)
-        // If pair already has a device, delete the old one and update this device
-        // Otherwise, just update this device to point to the new pair
-        if (existingDeviceForPair && existingDeviceForPair.id !== device.id) {
-          // Pair has a different device - delete it and use this device
-          logVerbose(`[Device] Pair ${validPairId} already has device ${existingDeviceForPair.imeiOrDeviceId}, replacing with ${device.imeiOrDeviceId}`);
-          await this.deviceRepository.remove(existingDeviceForPair);
-        }
-        // Update device to point to this pair
-        // CRITICAL: Use raw query to avoid TypeORM relation issues
-        logVerbose(`[Device] Moving device ${device.imeiOrDeviceId} from pair ${device.pairId || 'none (deleted)'} to pair ${validPairId}`);
-        if (deviceLoginDto.fcmToken) {
-          await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, last_seen_at = $2, fcm_token = $3, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
-            [validPairId, new Date(), deviceLoginDto.fcmToken, device.id]
-          );
-        } else {
-          await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, last_seen_at = $2, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
-            [validPairId, new Date(), device.id]
-          );
-        }
-        device = await this.deviceRepository.findOne({ where: { id: device.id } });
+        await this.deviceRepository.query(
+          `UPDATE devices SET pair_id = $1, last_seen_at = $2, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
+          [validPairId, new Date(), deviceByImei.id],
+        );
       }
-    } else {
-      // Device doesn't exist
-      if (existingDeviceForPair) {
-        // Pair already has a device - update it with new deviceId
-        logVerbose(`[Device] Pair ${validPairId} already has device ${existingDeviceForPair.imeiOrDeviceId}, updating to ${deviceLoginDto.deviceId}`);
-        const newDeviceId = deviceLoginDto.deviceId || `device_${pairNumber}_${Date.now()}`;
-        if (deviceLoginDto.fcmToken) {
-          await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, imei_or_device_id = $2, last_seen_at = $3, fcm_token = $4, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $5`,
-            [validPairId, newDeviceId, new Date(), deviceLoginDto.fcmToken, existingDeviceForPair.id]
-          );
-        } else {
-          await this.deviceRepository.query(
-            `UPDATE devices SET pair_id = $1, imei_or_device_id = $2, last_seen_at = $3, logged_out_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
-            [validPairId, newDeviceId, new Date(), existingDeviceForPair.id]
-          );
-        }
-        device = await this.deviceRepository.findOne({ where: { id: existingDeviceForPair.id } });
-      } else {
-        // Create new device - CRITICAL: pair.id must be valid number, not null
-        // Use insert() instead of create()+save() to avoid relation issues
+      device = await this.deviceRepository.findOne({ where: { id: deviceByImei.id } });
+    } else if (!deviceByImei && !deviceByPair) {
+      try {
         const insertResult = await this.deviceRepository.insert({
           pairId: validPairId,
-          imeiOrDeviceId: deviceLoginDto.deviceId || `device_${pairNumber}_${Date.now()}`,
+          imeiOrDeviceId: incomingImei,
           lastSeenAt: new Date(),
           loggedOutAt: null,
           fcmToken: deviceLoginDto.fcmToken || null,
         });
-        // Fetch the created device
         device = await this.deviceRepository.findOne({
-          where: { id: insertResult.identifiers[0].id }
+          where: { id: insertResult.identifiers[0].id },
         });
-        if (!device) {
-          throw new UnauthorizedException('Failed to create device');
+      } catch (e) {
+        const code = e instanceof QueryFailedError ? (e as QueryFailedError & { driverError?: { code?: string } }).driverError?.code : undefined;
+        if (code === '23505') {
+          throw new ConflictException(
+            'Ez a pár szám már egy másik eszközhöz van kötve. Csak az elsőként bejelentkezett telefon használhatja ezt a számot.',
+          );
         }
+        throw e;
       }
+      if (!device) {
+        throw new UnauthorizedException('Failed to create device');
+      }
+    } else {
+      logVerbose(`[Device] Login rejected: unexpected device state for pair ${validPairId}, imei ${incomingImei}`);
+      throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Activate pair when device logs in
-    // CRITICAL: Use raw SQL to avoid TypeORM relation issues that set device.pair_id to null
+    if (!device) {
+      throw new UnauthorizedException('Failed to resolve device');
+    }
+
     if (!pair.active) {
       logVerbose(`[Device] Activating pair ${validPairId} (assignedNumber: ${pair.assignedNumber})`);
       await this.pairRepository.query(
         `UPDATE pairs SET active = $1, "updatedAt" = CURRENT_TIMESTAMP WHERE id = $2`,
-        [true, validPairId]
+        [true, validPairId],
       );
     }
 
@@ -315,6 +294,14 @@ export class DevicesService {
     const loggedOutAt = new Date();
     device.loggedOutAt = loggedOutAt;
     await this.deviceRepository.save(device);
+    if (device.pairId) {
+      try {
+        await this.redisPositionService.deleteLivePosition(device.pairId);
+        logVerbose(`[Device] Cleared Redis live position for pairId ${device.pairId} after logout`);
+      } catch (e) {
+        console.error('[Device] Failed to clear Redis live position on logout:', e);
+      }
+    }
     this.recentDevicePairIdsService.invalidateSnapshot();
     logVerbose(
       `[Device] Logout ${deviceId} (${isForceLogout ? 'force ' : ''}); lastSeenAt kept: ${lastActiveAt}`,
@@ -369,9 +356,12 @@ export class DevicesService {
   }
 
   async delete(id: number) {
+    if (!Number.isFinite(id) || id < 1) {
+      throw new NotFoundException('Device not found');
+    }
     const device = await this.deviceRepository.findOne({ where: { id } });
     if (!device) {
-      throw new Error('Device not found');
+      throw new NotFoundException('Device not found');
     }
     await this.deviceRepository.remove(device);
     this.recentDevicePairIdsService.invalidateSnapshot();

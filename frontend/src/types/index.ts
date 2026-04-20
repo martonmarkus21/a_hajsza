@@ -17,6 +17,13 @@ export interface Pair {
   } | null;
   distanceToNearestOfficer: number | null;
   hasActiveDevice?: boolean;
+  captureNote?: string | null;
+  captureTimestamp?: string | null;
+  captureId?: number | null;
+  capturedByUserId?: number | null;
+  capturedByUsername?: string | null;
+  capturedByRole?: string | null;
+  captureLocation?: { lat: number; lon: number } | null;
 }
 
 

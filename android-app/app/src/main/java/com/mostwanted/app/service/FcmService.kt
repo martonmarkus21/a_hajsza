@@ -76,7 +76,8 @@ class FcmService : FirebaseMessagingService() {
 
     private fun handleForceLogout() {
         val prefs = PreferencesHelper(this)
-        
+        prefs.setLoggingOut(true)
+
         // Stop location service
         val serviceIntent = Intent(this, com.mostwanted.app.service.LocationService::class.java)
         stopService(serviceIntent)

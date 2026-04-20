@@ -16,7 +16,15 @@ class PreferencesHelper(context: Context) {
         private const val KEY_VEHICLE_MODE = "vehicle_mode"
         private const val KEY_VEHICLE_START_TIME = "vehicle_start_time"
         private const val KEY_FCM_TOKEN = "fcm_token"
+        /** True while explicit logout runs — blocks position calls and 401 storm. */
+        private const val KEY_LOGGING_OUT = "logging_out"
     }
+
+    fun setLoggingOut(value: Boolean) {
+        prefs.edit().putBoolean(KEY_LOGGING_OUT, value).apply()
+    }
+
+    fun isLoggingOut(): Boolean = prefs.getBoolean(KEY_LOGGING_OUT, false)
 
     fun saveToken(token: String) {
         prefs.edit().putString(KEY_TOKEN, token).apply()

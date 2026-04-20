@@ -9,9 +9,9 @@ export class DeviceLoginDto {
   @IsString()
   password: string;
 
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  deviceId?: string;
+  deviceId: string;
 
   @IsOptional()
   @IsString()

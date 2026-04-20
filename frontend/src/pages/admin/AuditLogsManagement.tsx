@@ -70,6 +70,8 @@ const ACTION_LABELS: Record<string, string> = {
   geofence_bulk_status: 'Geokerítések tömeges állapot',
   game_area_update: 'Játékterület frissítve',
   capture: 'Elfogás',
+  capture_rejected: 'Elfogás elutasítva',
+  capture_revert: 'Elfogás visszavonva',
   message_sent: 'Üzenet küldve',
   device_logout: 'Eszköz kijelentkezés',
   device_force_logout: 'Eszköz kényszer-kijelentkezés',
@@ -96,7 +98,7 @@ function actionBadgeClass(actionType: string): string {
   if (actionType.startsWith('game_settings')) return 'bg-indigo-500/15 text-indigo-200 border-indigo-500/25';
   if (actionType.startsWith('device_')) return 'bg-slate-500/20 text-slate-200 border-slate-500/30';
   if (actionType.startsWith('message')) return 'bg-amber-500/15 text-amber-200 border-amber-500/30';
-  if (actionType === 'capture') return 'bg-red-500/15 text-red-200 border-red-500/30';
+  if (actionType.startsWith('capture')) return 'bg-red-500/15 text-red-200 border-red-500/30';
   if (actionType.startsWith('mw_')) return 'bg-orange-500/15 text-orange-200 border-orange-500/30';
   if (actionType.startsWith('position_')) return 'bg-teal-500/15 text-teal-200 border-teal-500/25';
   if (actionType.startsWith('rule_violation')) return 'bg-rose-500/12 text-rose-200 border-rose-500/25';

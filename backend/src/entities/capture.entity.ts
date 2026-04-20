@@ -21,7 +21,7 @@ export class Capture {
   pair: Pair;
 
   @Column({ name: 'pair_id' })
-  @Index()
+  @Index('UQ_captures_pair_id_unique', { unique: true })
   pairId: number;
 
   @ManyToOne(() => User)
@@ -38,10 +38,25 @@ export class Capture {
   @Column({ nullable: true, name: 'location_id' })
   locationId: number;
 
-  @CreateDateColumn({ name: 'timestamp' })
+  @Column({ name: 'request_id', type: 'varchar', length: 100, nullable: true })
+  @Index('UQ_captures_request_id_unique', { unique: true })
+  requestId: string | null;
+
+  @Column({ name: 'client_timestamp', type: 'timestamp', nullable: true })
+  clientTimestamp: Date | null;
+
+  /** Elfogás rögzítésének pillanata (UTC, DB: timestamptz). */
+  @Column({ name: 'timestamp', type: 'timestamptz' })
   timestamp: Date;
 
-  @CreateDateColumn({ name: 'created_at' })
+  /** A rögzítés pillanatában mentett hely (nem feltétlenül egyezik a legutóbbi PG positions sorral). */
+  @Column({ name: 'captured_lat', type: 'double precision', nullable: true })
+  capturedLat: number | null;
+
+  @Column({ name: 'captured_lon', type: 'double precision', nullable: true })
+  capturedLon: number | null;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
 

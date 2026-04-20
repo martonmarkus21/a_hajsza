@@ -68,15 +68,22 @@ Elfogások táblája.
 ```sql
 CREATE TABLE captures (
   id SERIAL PRIMARY KEY,
-  pair_id INTEGER REFERENCES pairs(id) ON DELETE CASCADE,
-  captured_by_user_id INTEGER REFERENCES users(id),
+  pair_id INTEGER NOT NULL REFERENCES pairs(id) ON DELETE CASCADE,
+  captured_by_user_id INTEGER NOT NULL REFERENCES users(id),
   location_id INTEGER REFERENCES positions(id),
-  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  request_id VARCHAR(100) UNIQUE,
+  client_timestamp TIMESTAMPTZ,
+  timestamp TIMESTAMPTZ NOT NULL,
+  captured_lat DOUBLE PRECISION,
+  captured_lon DOUBLE PRECISION,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT UQ_captures_pair_id_unique UNIQUE (pair_id)
 );
 
 CREATE INDEX idx_captures_pair_id ON captures(pair_id);
 ```
+
+> **`pair_id`**: egy párhoz egyszerre legfeljebb egy elfogás (egyedi). **`request_id`**: opcionális kliens-kérés azonosító idempotens ismétléshez (egyedi, ha meg van adva). **`captured_lat` / `captured_lon`**: a rögzítés pillanatában mentett hely (nem feltétlenül egyezik a `location_id` sor koordinátájával). **`location_id`**: ha a hely a legutóbbi PG `positions` sorból lett kötve.
 
 ### `mw_flags`
 Most Wanted jelzések táblája.

@@ -4,18 +4,19 @@ import { CapturesController } from './captures.controller';
 import { CapturesService } from './captures.service';
 import { Capture } from '../entities/capture.entity';
 import { Position } from '../entities/position.entity';
+import { Pair } from '../entities/pair.entity';
+import { Device } from '../entities/device.entity';
+import { User } from '../entities/user.entity';
 import { WebSocketModule } from '../websocket/websocket.module';
 import { FcmModule } from '../fcm/fcm.module';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
-import { GameDaysModule } from '../game-days/game-days.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Capture, Position]),
+    TypeOrmModule.forFeature([Capture, Pair, Device, Position, User]),
     WebSocketModule,
     FcmModule,
     AuditLogsModule,
-    GameDaysModule,
   ],
   controllers: [CapturesController],
   providers: [CapturesService],

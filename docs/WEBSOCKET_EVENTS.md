@@ -83,6 +83,9 @@ Pár elfogva.
 ```json
 {
   "pairId": 1,
+  "assignedNumber": 1,
+  "pairName": "Példa név",
+  "captureLocation": { "lat": 47.5, "lon": 19.0 },
   "capturedBy": {
     "id": 1,
     "username": "officer1"
@@ -90,6 +93,8 @@ Pár elfogva.
   "timestamp": "2024-01-15T10:35:00Z"
 }
 ```
+
+> Az `assignedNumber`, `pairName` és `captureLocation` a kliensek számára kényelmes megjelenítéshez kerülnek bele; a `captureLocation` lehet `null`, ha nem volt koordináta a rögzítéskor.
 
 ### `mwHighlight`
 Most Wanted jelzés aktiválva/deaktiválva.

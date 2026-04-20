@@ -235,6 +235,9 @@ class LocationService : Service() {
 
     private fun sendLocation(location: Location) {
         val prefsHelper = com.mostwanted.app.util.PreferencesHelper(this)
+        if (prefsHelper.isLoggingOut()) {
+            return
+        }
         val deviceId = prefsHelper.getDeviceId()
         val pairId = prefsHelper.getPairId()
         

@@ -319,6 +319,13 @@ export default function RuleViolationsManagement({
     }
     return m;
   }, [pairs]);
+  const capturedByPairId = useMemo(() => {
+    const m = new Map<number, boolean>();
+    for (const p of pairs ?? []) {
+      m.set(p.id, !!p.captured);
+    }
+    return m;
+  }, [pairs]);
 
   const displayTotal = searchInput.trim() || statusFilter !== 'all' || typeFilter !== 'all' ? totalFiltered : stats.total;
   const fromIdx = totalFiltered === 0 ? 0 : (Math.min(page, totalPages) - 1) * pageSize + 1;
@@ -447,6 +454,9 @@ export default function RuleViolationsManagement({
                     const livePairMw = mostWantedByPairId.has(row.pairId)
                       ? !!mostWantedByPairId.get(row.pairId)
                       : !!row.pairMostWanted;
+                    const livePairCaptured = capturedByPairId.has(row.pairId)
+                      ? !!capturedByPairId.get(row.pairId)
+                      : false;
                     return (
                   <tr
                     key={row.id}
@@ -458,10 +468,12 @@ export default function RuleViolationsManagement({
                         type="button"
                         onClick={() => onSelectPairById(row.pairId)}
                         title="Pár részleteinek megtekintése"
-                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] border-orange-500 text-white transition-colors duration-300 ${
-                          livePairMw
-                            ? 'bg-orange-500 hover:bg-orange-400'
-                            : 'bg-[#2a2a2a] hover:bg-[#383838]'
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] text-white transition-colors duration-300 ${
+                          livePairCaptured
+                            ? 'border-red-600 bg-red-600 hover:bg-red-500'
+                            : livePairMw
+                              ? 'border-orange-500 bg-orange-500 hover:bg-orange-400'
+                              : 'border-orange-500 bg-[#2a2a2a] hover:bg-[#383838]'
                         }`}
                       >
                         {row.assignedNumber ?? '?'}

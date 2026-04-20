@@ -617,7 +617,13 @@ function ModernSidebar({
 
                   <div className="flex items-center gap-3">
                     {/* Avatar / Number — középen a középső tartalommal és a gombokkal */}
-                    <div className={`relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl border-[3px] border-orange-500 text-white shadow-lg pb-0.5 transition-all duration-300 ${isMw ? 'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)]' : 'bg-[#222]'}`}>
+                    <div className={`relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl text-white shadow-lg pb-0.5 transition-all duration-300 ${
+                      pair.captured
+                        ? 'bg-red-600 border-[3px] border-red-600'
+                        : isMw
+                          ? 'bg-orange-500 border-[3px] border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)]'
+                          : 'bg-[#222] border-[3px] border-orange-500'
+                    }`}>
                       {pair.assignedNumber}
                       {/* Status Dot */}
                       <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-[#121212] ${pair.captured ? 'bg-red-500' : pair.active ? 'bg-emerald-500' : 'bg-gray-500'
@@ -642,6 +648,11 @@ function ModernSidebar({
                             </span>
                           )}
                           {isMw && <span className="mw-badge mw !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]"><FiShield className="w-2.5 h-2.5 fill-current" /> MW</span>}
+                          {pair.captured && (
+                            <span className="mw-badge error !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]">
+                              <FaHandcuffs className="w-2.5 h-2.5" /> Elfogva
+                            </span>
+                          )}
                           {hasViolation && (
                             <span className="mw-badge error !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]">
                               <FiAlertCircle className="w-2.5 h-2.5" /> Szabálysz.
@@ -1007,12 +1018,77 @@ function MapView() {
         });
       });
     };
+    const handleCapture = (data: {
+      pairId: number;
+      assignedNumber?: number;
+      pairName?: string | null;
+      timestamp?: string;
+      captureLocation?: { lat: number; lon: number } | null;
+      capturedBy?: { username?: string };
+    }) => {
+      const known = pairsState.find((p) => p.id === data.pairId);
+      const pairNumber = data.assignedNumber ?? known?.assignedNumber ?? data.pairId;
+      const pairName = data.pairName ?? known?.name ?? null;
+      const pairLabel = `${pairNumber}. pár${pairName ? ` (${pairName})` : ''}`;
+      const recorder = data.capturedBy?.username;
+
+      setPairsState((prev) =>
+        prev.map((p) =>
+          p.id === data.pairId
+            ? {
+                ...p,
+                captured: true,
+                captureTimestamp: data.timestamp ?? p.captureTimestamp ?? null,
+                capturedByUsername: data.capturedBy?.username ?? p.capturedByUsername ?? null,
+                captureLocation: data.captureLocation ?? p.captureLocation ?? null,
+              }
+            : p,
+        ),
+      );
+      addNotification(
+        'info',
+        `Elfogás: a(z) ${pairLabel} elfogott státuszba került.${recorder ? ` Rögzítő: ${recorder}.` : ''} Ettől kezdve a térképen és a párok listájában ennek megfelelően látható.`,
+        true,
+      );
+      refetch();
+    };
+    const handleCaptureReverted = (data: {
+      pairId: number;
+      assignedNumber?: number;
+      pairName?: string | null;
+    }) => {
+      const known = pairsState.find((p) => p.id === data.pairId);
+      const pairNumber = data.assignedNumber ?? known?.assignedNumber ?? data.pairId;
+      const pairName = data.pairName ?? known?.name ?? null;
+      const pairLabel = `${pairNumber}. pár${pairName ? ` (${pairName})` : ''}`;
+      setPairsState((prev) =>
+        prev.map((p) =>
+          p.id === data.pairId
+            ? {
+                ...p,
+                captured: false,
+                captureTimestamp: null,
+                captureId: null,
+                capturedByUserId: null,
+                capturedByUsername: null,
+                capturedByRole: null,
+                captureLocation: null,
+                captureNote: null,
+              }
+            : p,
+        ),
+      );
+      addNotification(
+        'info',
+        `Elfogás visszavonva: a(z) ${pairLabel} ismét aktív menekülőként szerepel. A térképen és a párok listájában a nézet ennek megfelelően frissült.`,
+        true,
+      );
+      refetch();
+    };
     socket.on('distanceUpdate', handleDistanceUpdate);
     socket.on('positionUpdate', handlePositionUpdate);
-    socket.on('capture', (data: any) => {
-      setPairsState((prev) => prev.map((p) => p.id === data.pairId ? { ...p, captured: true } : p));
-      refetch();
-    });
+    socket.on('capture', handleCapture);
+    socket.on('captureReverted', handleCaptureReverted);
     socket.on('mwHighlight', (data: any) => {
       setPairsState((prev) => prev.map((p) => p.id === data.pairId ? { ...p, mostWanted: data.active } : p));
       refetch();
@@ -1069,7 +1145,8 @@ function MapView() {
     return () => {
       socket.off('distanceUpdate', handleDistanceUpdate);
       socket.off('positionUpdate', handlePositionUpdate);
-      socket.off('capture');
+      socket.off('capture', handleCapture);
+      socket.off('captureReverted', handleCaptureReverted);
       socket.off('mwHighlight');
       socket.off('gameAreaUpdate');
       socket.off('ruleViolation');
@@ -1097,14 +1174,29 @@ function MapView() {
   // --- Handlers ---
   const handleCapture = async (pairId: number) => {
     try {
+      const p = pairsState.find((x) => x.id === pairId);
+      const pos = p?.distancePosition ?? p?.lastPosition;
+      const requestId = `capture-${pairId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const res = await fetch('http://localhost:3000/api/capture', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ pairId }),
+        body: JSON.stringify({
+          pairId,
+          requestId,
+          clientTimestamp: new Date().toISOString(),
+          ...(pos?.lat != null && pos?.lon != null ? { pairLat: pos.lat, pairLon: pos.lon } : {}),
+        }),
       });
       const data = await res.json();
-      if (data.success) refetch(); else addNotification('error', 'Hiba történt a pár elfogása során');
-    } catch (e) { addNotification('error', 'Hiba történt a pár elfogása során'); }
+      if (data.success) {
+        addNotification('success', 'Elfogás rögzítve.');
+        refetch();
+      } else {
+        addNotification('error', data?.message || 'Hiba történt a pár elfogása során');
+      }
+    } catch (e: any) {
+      addNotification('error', e?.message || 'Hiba történt a pár elfogása során');
+    }
   };
 
   const handleMw = async (pairId: number) => {
@@ -1247,6 +1339,7 @@ function MapView() {
                     assignedNumber: pair.assignedNumber,
                     mostWanted: !!pair.mostWanted,
                     hasViolation: !!activeGameAreaExitViolations[pair.id],
+                    captured: !!pair.captured,
                   }),
                   iconSize: [32, 32],
                   iconAnchor: [16, 16],

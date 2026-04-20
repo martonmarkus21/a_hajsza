@@ -18,6 +18,7 @@ import PositionsHistory from './admin/PositionsHistory';
 import AuditLogsManagement from './admin/AuditLogsManagement';
 import type { AdminRuleViolationRow } from './admin/RuleViolationsManagement';
 import PairDetails from '../components/PairDetails';
+import CaptureDetailsModal from '../components/CaptureDetailsModal';
 import PositionsTraceMapModal, { type SinglePositionRow } from '../components/PositionsTraceMapModal';
 import { fetchLatestSavedPositionForPair } from '../utils/fetchLatestSavedPosition';
 import RuleViolationDetailsModal from '../components/RuleViolationDetailsModal';
@@ -122,6 +123,7 @@ export default function Admin() {
   /* Real-time Pairs Logic */
   const { pairs: initialPairs, refetch: fetchPairs } = usePairs();
   const [pairs, setPairs] = useState<Pair[]>([]);
+  const [captureDetailsPairId, setCaptureDetailsPairId] = useState<number | null>(null);
   const { socket } = useSocket();
 
   const [activeGameAreaExitViolations, setActiveGameAreaExitViolations] = useState<Record<number, boolean>>({});
@@ -276,16 +278,92 @@ export default function Admin() {
       }
     };
 
+    const handleCaptureEvent = (data: {
+      pairId: number;
+      assignedNumber?: number;
+      pairName?: string | null;
+      timestamp?: string;
+      captureLocation?: { lat: number; lon: number } | null;
+      capturedBy?: { username?: string };
+    }) => {
+      const pair = pairs.find((p) => p.id === data.pairId);
+      const number = data.assignedNumber ?? pair?.assignedNumber ?? data.pairId;
+      const name = data.pairName ?? pair?.name ?? null;
+      const pairLabel = `${number}. pár${name ? ` (${name})` : ''}`;
+      const recorder = data.capturedBy?.username;
+
+      setPairs((prev) =>
+        prev.map((p) =>
+          p.id === data.pairId
+            ? {
+                ...p,
+                captured: true,
+                captureTimestamp: data.timestamp ?? p.captureTimestamp ?? null,
+                capturedByUsername: data.capturedBy?.username ?? p.capturedByUsername ?? null,
+                captureLocation: data.captureLocation ?? p.captureLocation ?? null,
+              }
+            : p,
+        ),
+      );
+
+      addNotification(
+        'info',
+        `Elfogás: a(z) ${pairLabel} elfogott státuszba került.${recorder ? ` Rögzítő: ${recorder}.` : ''} Ettől kezdve a térképen és a párok listájában ennek megfelelően látható.`,
+        true,
+      );
+      fetchPairs();
+    };
+
+    const handleCaptureRevertedEvent = (data: {
+      pairId: number;
+      assignedNumber?: number;
+      pairName?: string | null;
+    }) => {
+      const pair = pairs.find((p) => p.id === data.pairId);
+      const number = data.assignedNumber ?? pair?.assignedNumber ?? data.pairId;
+      const name = data.pairName ?? pair?.name ?? null;
+      const pairLabel = `${number}. pár${name ? ` (${name})` : ''}`;
+
+      setPairs((prev) =>
+        prev.map((p) =>
+          p.id === data.pairId
+            ? {
+                ...p,
+                captured: false,
+                captureTimestamp: null,
+                captureId: null,
+                capturedByUserId: null,
+                capturedByUsername: null,
+                capturedByRole: null,
+                captureLocation: null,
+                captureNote: null,
+              }
+            : p,
+        ),
+      );
+
+      addNotification(
+        'info',
+        `Elfogás visszavonva: a(z) ${pairLabel} ismét aktív menekülőként szerepel. A térképen és a párok listájában a nézet ennek megfelelően frissült.`,
+        true,
+      );
+      fetchPairs();
+    };
+
     socket.on('distanceUpdate', handleDistanceUpdate);
     socket.on('positionUpdate', handlePositionUpdate);
     socket.on('ruleViolation', handleRuleViolation);
+    socket.on('capture', handleCaptureEvent);
+    socket.on('captureReverted', handleCaptureRevertedEvent);
 
     return () => {
       socket.off('distanceUpdate', handleDistanceUpdate);
       socket.off('positionUpdate', handlePositionUpdate);
       socket.off('ruleViolation', handleRuleViolation);
+      socket.off('capture', handleCaptureEvent);
+      socket.off('captureReverted', handleCaptureRevertedEvent);
     };
-  }, [socket, addNotification, pairs]);
+  }, [socket, addNotification, pairs, fetchPairs]);
 
 
 
@@ -647,24 +725,32 @@ export default function Admin() {
   // Direct capture for PairDetails modal (which has its own confirmation)
   const handleCaptureDirect = async (pairId: number) => {
     try {
+      const p = pairs.find((x) => x.id === pairId);
+      const pos = p?.distancePosition ?? p?.lastPosition;
+      const requestId = `capture-${pairId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const response = await fetch('http://localhost:3000/api/capture', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ pairId }),
+        body: JSON.stringify({
+          pairId,
+          requestId,
+          clientTimestamp: new Date().toISOString(),
+          ...(pos?.lat != null && pos?.lon != null ? { pairLat: pos.lat, pairLon: pos.lon } : {}),
+        }),
       });
-
-      if (!response.ok) {
-        throw new Error('Hiba az elfogás során');
+      const data = await response.json();
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.message || 'Hiba az elfogás során');
       }
 
       fetchPairs();
-      addNotification('success', 'Elfogás rögzítve');
+      addNotification('success', 'Elfogás rögzítve.');
     } catch (error) {
       console.error('Capture error:', error);
-      addNotification('error', 'Hiba történt az elfogás során');
+      addNotification('error', error instanceof Error ? error.message : 'Hiba történt az elfogás során');
     }
   };
 
@@ -682,6 +768,38 @@ export default function Admin() {
     });
   };
 
+  const handleCaptureRevert = async (pairId: number) => {
+    setConfirmation({
+      isOpen: true,
+      title: 'Elfogás visszavonása',
+      message: 'Biztosan visszavonja a kiválasztott pár elfogását?',
+      isDangerous: true,
+      confirmLabel: 'Visszavonás',
+      action: async () => {
+        try {
+          const response = await fetch(`http://localhost:3000/api/capture/${pairId}`, {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          });
+          const data = await response.json();
+          if (!response.ok || !data?.success) {
+            throw new Error(data?.message || 'Hiba az elfogás visszavonása során');
+          }
+          fetchPairs();
+          addNotification('success', 'Elfogás visszavonva.');
+        } catch (error) {
+          addNotification(
+            'error',
+            error instanceof Error ? error.message : 'Hiba történt az elfogás visszavonása során',
+          );
+        }
+        setConfirmation((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
+  };
+
   const handleForceLogout = async (deviceId: string) => {
     setConfirmation({
       isOpen: true,
@@ -692,7 +810,7 @@ export default function Admin() {
       action: async () => {
         try {
           // Must use the string deviceId (IMEI) for the force-logout endpoint
-          const res = await fetch(`http://localhost:3000/api/devices/force-logout/${deviceId}`, {
+          const res = await fetch(`http://localhost:3000/api/devices/force-logout/${encodeURIComponent(deviceId)}`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
           });
@@ -1027,6 +1145,7 @@ export default function Admin() {
             }}
             handleMw={handleMw}
             handleCapture={handleCapture}
+            handleCaptureRevert={handleCaptureRevert}
             showCreateModal={showCreatePairModal}
             setShowCreateModal={setShowCreatePairModal}
             onPairSelect={setSelectedPair}
@@ -1039,6 +1158,9 @@ export default function Admin() {
               setViolationModalArchive(null);
               setSelectedViolationPairId(pairId);
               setShowViolationDetailsModal(true);
+            }}
+            onOpenCaptureDetails={(p) => {
+              setCaptureDetailsPairId(p.id);
             }}
           />
         );
@@ -1149,7 +1271,10 @@ export default function Admin() {
       headerActions={headerActions}
       showAuditNav={checkAdminRole()}
     >
-      {(sidebarOpen: boolean) => (
+      {(sidebarOpen: boolean) => {
+        const captureModalPair =
+          captureDetailsPairId != null ? pairs.find((p) => p.id === captureDetailsPairId) ?? null : null;
+        return (
         <>
           {renderContent(sidebarOpen)}
 
@@ -1429,8 +1554,14 @@ export default function Admin() {
             isDangerous={confirmation.isDangerous}
             confirmLabel={confirmation.confirmLabel}
           />
+
+          <CaptureDetailsModal
+            pair={captureModalPair}
+            isOpen={captureDetailsPairId != null && !!captureModalPair?.captured}
+            onClose={() => setCaptureDetailsPairId(null)}
+          />
         </>
-      )}
+      );}}
     </AdminLayout>
   );
 }

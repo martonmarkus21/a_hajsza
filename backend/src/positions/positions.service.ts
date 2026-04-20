@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Position, type SavedAreaContext, type SavedScenarioZone } from '../entities/position.entity';
@@ -6,6 +6,7 @@ import { Device } from '../entities/device.entity';
 import { GameSettings } from '../entities/game-settings.entity';
 import { Geofence } from '../entities/geofence.entity';
 import { RuleViolation } from '../entities/rule-violation.entity';
+import { Capture } from '../entities/capture.entity';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { RuleViolationsService } from '../rule-violations/rule-violations.service';
@@ -40,6 +41,8 @@ export class PositionsService {
     private geofenceRepository: Repository<Geofence>,
     @InjectRepository(RuleViolation)
     private ruleViolationRepository: Repository<RuleViolation>,
+    @InjectRepository(Capture)
+    private captureRepository: Repository<Capture>,
     private webSocketGateway: WebSocketGateway,
     private ruleViolationsService: RuleViolationsService,
     private redisPositionService: RedisPositionService,
@@ -146,44 +149,40 @@ export class PositionsService {
       devicePayload: devicePayload ? { deviceId: devicePayload.deviceId, pairId: devicePayload.pairId } : null,
     });
 
-    let device;
-    if (devicePayload?.authenticated && devicePayload?.deviceId) {
-      device = await this.deviceRepository.findOne({
-        where: { imeiOrDeviceId: devicePayload.deviceId },
-      });
-      if (device) {
-        if (devicePayload.pairId && device.pairId !== devicePayload.pairId) {
-          device.pairId = devicePayload.pairId;
-        }
-      }
-    } else {
-      device = await this.deviceRepository.findOne({
-        where: { imeiOrDeviceId: createPositionDto.deviceId },
-      });
+    if (!devicePayload?.authenticated || !devicePayload?.deviceId) {
+      throw new UnauthorizedException('Authenticated device token required');
     }
 
-    if (!device) {
-      const pairId = createPositionDto.pairId || devicePayload?.pairId;
-      logVerbose('[Position] Creating new device with pairId:', pairId);
-      device = this.deviceRepository.create({
-        pairId: pairId,
-        imeiOrDeviceId: createPositionDto.deviceId || devicePayload?.deviceId,
-        lastSeenAt: new Date(),
-        loggedOutAt: null,
-      });
-      device = await this.deviceRepository.save(device);
-    } else {
-      device.lastSeenAt = new Date();
-      if (devicePayload?.pairId && device.pairId !== devicePayload.pairId) {
-        logVerbose('[Position] Updating device pairId from', device.pairId, 'to', devicePayload.pairId);
-        device.pairId = devicePayload.pairId;
-      }
-      device = await this.deviceRepository.save(device);
+    const tokenPairId = Number(devicePayload.pairId);
+    if (
+      Number(createPositionDto.pairId) !== tokenPairId ||
+      createPositionDto.deviceId !== devicePayload.deviceId
+    ) {
+      throw new UnauthorizedException('Position payload does not match authenticated device');
     }
+
+    const device = await this.deviceRepository.findOne({
+      where: { imeiOrDeviceId: devicePayload.deviceId },
+    });
+
+    if (!device) {
+      throw new UnauthorizedException('Device not registered; please log in again');
+    }
+
+    if (device.loggedOutAt != null) {
+      throw new UnauthorizedException('Device session ended; please log in again');
+    }
+
+    if (Number(device.pairId) !== tokenPairId) {
+      throw new UnauthorizedException('Device session invalid; please log in again');
+    }
+
+    device.lastSeenAt = new Date();
+    await this.deviceRepository.save(device);
 
     this.recentDevicePairIdsService.invalidateSnapshot();
 
-    const pairId = createPositionDto.pairId || device.pairId;
+    const pairId = tokenPairId;
 
     if (!pairId || pairId === 0) {
       console.warn('[Position] WARNING: No pairId available! Device may be logged out or pair was deleted.', {
@@ -199,6 +198,7 @@ export class PositionsService {
     }
 
     const serverTimestamp = new Date();
+    const pairCaptured = await this.captureRepository.exist({ where: { pairId } });
     const snapshot: PositionSnapshot = {
       lat: createPositionDto.lat,
       lon: createPositionDto.lon,
@@ -229,7 +229,10 @@ export class PositionsService {
     let shouldShowOnMap = false;
     let pairAddedToCycleThisRequest = false;
 
-    if (!currentSettings) {
+    if (pairCaptured) {
+      shouldShowOnMap = true;
+      pairAddedToCycleThisRequest = false;
+    } else if (!currentSettings) {
       logVerbose('[Position] No game settings found, not broadcasting position update for map');
     } else if (!currentSettings.isTimerRunning) {
       logVerbose('[Position] Timer is not running, not broadcasting position update for map. pairId:', pairId);
@@ -254,7 +257,15 @@ export class PositionsService {
             pairAddedToCycleThisRequest = true;
             logVerbose('[Position] Pair position update allowed. pairId:', pairId, 'pairsSent:', updatedPairsSent);
 
-            const activePairIds = await this.recentDevicePairIdsService.getDistinctRecentDevicePairIds();
+            const activePairIdsRaw = await this.recentDevicePairIdsService.getDistinctRecentDevicePairIds();
+            const capturedRows = activePairIdsRaw.length
+              ? await this.captureRepository.find({
+                  where: { pairId: In(activePairIdsRaw) },
+                  select: ['pairId'],
+                })
+              : [];
+            const capturedIds = new Set(capturedRows.map((r) => r.pairId));
+            const activePairIds = activePairIdsRaw.filter((id: number) => !capturedIds.has(id));
 
             const allPairsSent =
               activePairIds.length > 0 && activePairIds.every((id: number) => updatedPairsSent.includes(id));
@@ -279,7 +290,7 @@ export class PositionsService {
     }
 
     let savedPosition: Position | null = null;
-    if (pairAddedToCycleThisRequest && currentSettings?.isTimerRunning) {
+    if (!pairCaptured && pairAddedToCycleThisRequest && currentSettings?.isTimerRunning) {
       const hadRuleViolationAtSave =
         (await this.ruleViolationRepository.count({ where: { pairId, resolved: false } })) > 0;
       const savedAreaContextJson = await this.buildSavedSnapshotParts();

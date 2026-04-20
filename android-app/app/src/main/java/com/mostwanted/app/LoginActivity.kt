@@ -18,6 +18,8 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.mostwanted.app.api.ApiService
 import com.mostwanted.app.util.PreferencesHelper
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import retrofit2.HttpException
 
 class LoginActivity : AppCompatActivity() {
     private lateinit var pairNumberEditText: EditText
@@ -44,9 +46,9 @@ class LoginActivity : AppCompatActivity() {
         setContentView(R.layout.activity_login)
 
         prefs = PreferencesHelper(this)
+        prefs.setLoggingOut(false)
         apiService = ApiService.create(this)
 
-        // If already logged in, go to main activity
         if (prefs.isLoggedIn() && prefs.getToken() != null) {
             startMainActivity()
             return
@@ -82,7 +84,6 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
-    /** Eszközazonosító a szervernek: [android.provider.Settings.Secure.ANDROID_ID], vagy fallback időbélyeggel. */
     private fun resolveDeviceIdForServer(): String {
         return android.provider.Settings.Secure.getString(
             contentResolver,
@@ -102,15 +103,12 @@ class LoginActivity : AppCompatActivity() {
         loginButton.isEnabled = false
         statusTextView.text = "Bejelentkezés..."
 
-        // Get FCM token
         FirebaseMessaging.getInstance().token.addOnCompleteListener(OnCompleteListener { task ->
             if (!task.isSuccessful) {
                 login(pairNumber, password, null)
                 return@OnCompleteListener
             }
-
-            val fcmToken = task.result
-            login(pairNumber, password, fcmToken)
+            login(pairNumber, password, task.result)
         })
     }
 
@@ -118,24 +116,22 @@ class LoginActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val deviceId = resolveDeviceIdForServer()
-
                 val request = com.mostwanted.app.api.DeviceLoginRequest(
                     username = pairNumber,
                     password = password,
                     deviceId = deviceId,
-                    fcmToken = fcmToken
+                    fcmToken = fcmToken,
                 )
 
                 val response = apiService.deviceLogin(request)
 
                 if (response.success) {
-                    // Save credentials
                     prefs.saveToken(response.token)
                     prefs.saveDeviceInfo(
                         deviceId = deviceId,
                         pairId = response.device.pairId,
                         pairNumber = response.device.pairNumber,
-                        pairName = response.device.pairName
+                        pairName = response.device.pairName,
                     )
                     if (fcmToken != null) {
                         prefs.saveFcmToken(fcmToken)
@@ -147,6 +143,23 @@ class LoginActivity : AppCompatActivity() {
                     showError("Hibás bejelentkezési adatok!")
                     loginButton.isEnabled = true
                 }
+            } catch (e: HttpException) {
+                e.printStackTrace()
+                val serverMessage = try {
+                    e.response()?.errorBody()?.string()?.let { body ->
+                        JSONObject(body).optString("message", "").trim().takeIf { it.isNotEmpty() }
+                    }
+                } catch (_: Exception) {
+                    null
+                }
+                when (e.code()) {
+                    409 -> showError(
+                        serverMessage
+                            ?: "Ez a pár szám már egy másik eszközhöz van kötve, vagy ez a telefon már másik számhoz tartozik.",
+                    )
+                    else -> showError(serverMessage ?: "Hiba történt: ${e.message()}")
+                }
+                loginButton.isEnabled = true
             } catch (e: Exception) {
                 e.printStackTrace()
                 showError("Hiba történt: ${e.message}")

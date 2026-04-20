@@ -1123,7 +1123,7 @@ export default function GeofenceManager({
                     )}
 
                     {/* Pair markers - SAME STYLE AS MAIN PAGE */}
-                    {pairs.filter(p => p.active && p.lastPosition && p.lastPosition.lat != null && p.lastPosition.lon != null && !p.captured).map((pair) => {
+                    {pairs.filter(p => p.active && p.lastPosition && p.lastPosition.lat != null && p.lastPosition.lon != null).map((pair) => {
                         const hasViolation = !!activeGameAreaExitViolations?.[pair.id];
                         return (
                             <SmoothAnimatedMarker
@@ -1136,10 +1136,11 @@ export default function GeofenceManager({
                                         assignedNumber: pair.assignedNumber,
                                         mostWanted: !!pair.mostWanted,
                                         hasViolation,
+                                        captured: !!pair.captured,
                                         size: PAIR_ICON_SIZE,
                                         fontSize: PAIR_FONT_SIZE,
                                         borderWidth: PAIR_BORDER_WIDTH,
-                                        borderColor: '#f36f26',
+                                        borderColor: pair.captured ? '#dc2626' : '#f36f26',
                                     }),
                                     iconSize: [PAIR_ICON_SIZE, PAIR_ICON_SIZE],
                                     iconAnchor: [PAIR_ICON_SIZE / 2, PAIR_ICON_SIZE / 2],

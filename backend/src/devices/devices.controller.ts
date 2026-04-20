@@ -48,13 +48,11 @@ export class DevicesController {
     return await this.devicesService.logout(deviceId, true, req.user?.userId, auditMetaFromRequest(req));
   }
 
-  @Get(':id/delete') // Using GET/DELETE logic or standard DELETE
-  // NestJS uses @Delete
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async delete(@Param('id') id: string) {
-    return await this.devicesService.delete(parseInt(id));
+    return await this.devicesService.delete(parseInt(id, 10));
   }
 }
 

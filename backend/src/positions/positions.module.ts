@@ -6,11 +6,11 @@ import { AdminPositionsController } from './admin-positions.controller';
 import { LatestSavedPositionsController } from './latest-saved-positions.controller';
 import { PositionsService } from './positions.service';
 import { Position } from '../entities/position.entity';
-import { Pair } from '../entities/pair.entity';
 import { Geofence } from '../entities/geofence.entity';
 import { RuleViolation } from '../entities/rule-violation.entity';
 import { Device } from '../entities/device.entity';
 import { GameSettings } from '../entities/game-settings.entity';
+import { Capture } from '../entities/capture.entity';
 import { WebSocketModule } from '../websocket/websocket.module';
 import { RuleViolationsModule } from '../rule-violations/rule-violations.module';
 import { DeviceAuthGuard } from '../auth/device-auth.guard';
@@ -23,9 +23,9 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
       Position,
       Device,
       GameSettings,
-      Pair,
       Geofence,
       RuleViolation,
+      Capture,
     ]),
     WebSocketModule,
     RuleViolationsModule,

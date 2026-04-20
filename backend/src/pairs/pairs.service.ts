@@ -7,6 +7,7 @@ import { Capture } from '../entities/capture.entity';
 import { MwFlag } from '../entities/mw-flag.entity';
 import { Device } from '../entities/device.entity';
 import { RuleViolation } from '../entities/rule-violation.entity';
+import { User } from '../entities/user.entity';
 import { RedisPositionService } from '../redis/redis-position.service';
 import { CreatePairDto } from './dto/create-pair.dto';
 import { UpdatePairDto } from './dto/update-pair.dto';
@@ -32,6 +33,8 @@ export class PairsService {
     private deviceRepository: Repository<Device>,
     @InjectRepository(RuleViolation)
     private ruleViolationRepository: Repository<RuleViolation>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private auditLogsService: AuditLogsService,
     private fcmService: FcmService,
     private gameSettingsService: GameSettingsService,
@@ -81,9 +84,33 @@ export class PairsService {
 
     const captures = await this.captureRepository.find({
       where: { pairId: In(pairIds) },
-      select: ['pairId'],
+      select: ['id', 'pairId', 'capturedByUserId', 'timestamp', 'locationId', 'capturedLat', 'capturedLon'],
     });
-    const capturedPairIds = new Set(captures.map((c) => c.pairId));
+    const captureByPairId = new Map(captures.map((c) => [c.pairId, c]));
+
+    const captureLocIds = [
+      ...new Set(
+        captures.map((c) => c.locationId).filter((id): id is number => id != null && Number(id) > 0),
+      ),
+    ];
+    const capturePositions =
+      captureLocIds.length > 0
+        ? await this.positionRepository.find({
+            where: { id: In(captureLocIds) },
+            select: ['id', 'lat', 'lon'],
+          })
+        : [];
+    const capturePositionById = new Map(capturePositions.map((p) => [p.id, p]));
+
+    const captureUserIds = [...new Set(captures.map((c) => c.capturedByUserId))];
+    const captureUsers =
+      captureUserIds.length > 0
+        ? await this.userRepository.find({
+            where: { id: In(captureUserIds) },
+            select: ['id', 'username', 'role'],
+          })
+        : [];
+    const captureUserById = new Map(captureUsers.map((u) => [u.id, u]));
 
     const mwRows = await this.mwFlagRepository.find({
       where: { pairId: In(pairIds), active: true },
@@ -110,6 +137,13 @@ export class PairsService {
       mostWanted: boolean;
       hasActiveDevice: boolean;
       lastPosition: { lat: number; lon: number; timestamp: string } | null;
+      captureNote: string | null;
+      captureTimestamp: string | null;
+      captureId: number | null;
+      capturedByUserId: number | null;
+      capturedByUsername: string | null;
+      capturedByRole: string | null;
+      captureLocation: { lat: number; lon: number } | null;
       /** Always null from API; pursuers’ straight-line distance is computed in the browser (GPS + pair position). */
       distanceToNearestOfficer: number | null;
     } | null> = [];
@@ -182,15 +216,39 @@ export class PairsService {
         };
       }
 
+      const capRow = captureByPairId.get(pair.id);
+      const capPos = capRow?.locationId ? capturePositionById.get(capRow.locationId) : undefined;
+      const capUser = capRow ? captureUserById.get(capRow.capturedByUserId) : undefined;
       results.push({
         id: pair.id,
         assignedNumber: pair.assignedNumber,
         name: pair.name,
         active: hasActiveDevice,
-        captured: capturedPairIds.has(pair.id),
+        captured: captureByPairId.has(pair.id),
         mostWanted: mwPairIds.has(pair.id),
         hasActiveDevice,
         lastPosition: allowedLastPosition,
+        captureNote:
+          captureByPairId.has(pair.id) && hasActiveDevice
+            ? 'Elfogva: kijelentkezésükig a pár továbbra is követhető a térképen.'
+            : captureByPairId.has(pair.id)
+              ? 'Elfogva: nincs bejelentkezett eszköz, élő követés nincs.'
+              : null,
+        captureTimestamp: capRow?.timestamp?.toISOString?.() ?? null,
+        captureId: capRow?.id ?? null,
+        capturedByUserId: capRow?.capturedByUserId ?? null,
+        capturedByUsername: capUser?.username ?? null,
+        capturedByRole: capUser?.role ?? null,
+        captureLocation:
+          capRow != null &&
+          capRow.capturedLat != null &&
+          capRow.capturedLon != null &&
+          Number.isFinite(Number(capRow.capturedLat)) &&
+          Number.isFinite(Number(capRow.capturedLon))
+            ? { lat: Number(capRow.capturedLat), lon: Number(capRow.capturedLon) }
+            : capPos != null
+              ? { lat: parseFloat(String(capPos.lat)), lon: parseFloat(String(capPos.lon)) }
+              : null,
         distanceToNearestOfficer: null,
       });
     }

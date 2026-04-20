@@ -1,6 +1,7 @@
 package com.mostwanted.app.api
 
 import android.content.Context
+import android.content.Intent
 import com.mostwanted.app.util.PreferencesHelper
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -8,7 +9,6 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
-import retrofit2.http.Header
 import retrofit2.http.POST
 import java.util.concurrent.TimeUnit
 
@@ -25,7 +25,6 @@ interface ApiService {
     suspend fun deviceLogout(): LogoutResponse
 
     companion object {
-        // Change this to your backend URL
         private const val BASE_URL = "http://10.0.2.2:3000/" // Android emulator
         // For real device, use your computer's IP: "http://192.168.x.x:3000/"
 
@@ -40,10 +39,9 @@ interface ApiService {
                 .readTimeout(30, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)
 
-            // Add auth interceptor if context is provided
             if (context != null) {
                 val prefs = PreferencesHelper(context)
-                clientBuilder.addInterceptor { chain ->
+                clientBuilder.addInterceptor(Interceptor { chain ->
                     val token = prefs.getToken()
                     val request = if (token != null) {
                         chain.request().newBuilder()
@@ -52,8 +50,16 @@ interface ApiService {
                     } else {
                         chain.request()
                     }
-                    chain.proceed(request)
-                }
+                    val response = chain.proceed(request)
+                    if (response.code == 401 && token != null && !prefs.isLoggingOut()) {
+                        prefs.clear()
+                        val broadcast = Intent("com.mostwanted.app.FORCE_LOGOUT").apply {
+                            setPackage(context.packageName)
+                        }
+                        context.sendBroadcast(broadcast)
+                    }
+                    response
+                })
             }
 
             val retrofit = Retrofit.Builder()
@@ -89,7 +95,7 @@ data class PositionResponse(
 data class DeviceLoginRequest(
     val username: String,
     val password: String,
-    val deviceId: String?,
+    val deviceId: String,
     val fcmToken: String?
 )
 
@@ -110,9 +116,3 @@ data class LogoutResponse(
     val success: Boolean,
     val message: String?
 )
-
-
-
-
-
-

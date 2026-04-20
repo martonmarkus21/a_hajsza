@@ -254,6 +254,7 @@ export default function DeviceManagement({
                                         pairsList.find((p: { id: number }) => p.id === device.pairId) ||
                                         pairsList.find((p: { name: string }) => p.name === device.pairName);
                                     const pairMostWanted = !!pairForMw?.mostWanted;
+                                    const pairCaptured = !!pairForMw?.captured;
 
                                     return (
                                         <tr key={device.id} className="group hover:bg-white/5 transition-colors">
@@ -278,10 +279,12 @@ export default function DeviceManagement({
                                                                     if (pairObj) onPairSelect(pairObj);
                                                                 }
                                                             }}
-                                                            className={`w-8 h-8 flex-shrink-0 cursor-pointer rounded-full border-[3px] border-orange-500 flex items-center justify-center font-bold text-white text-xs outline-none focus:outline-none transition-colors duration-300 ${
-                                                                pairMostWanted
-                                                                    ? 'bg-orange-500 hover:bg-orange-400'
-                                                                    : 'bg-[#2a2a2a] hover:bg-[#383838]'
+                                                            className={`w-8 h-8 flex-shrink-0 cursor-pointer rounded-full border-[3px] flex items-center justify-center font-bold text-white text-xs outline-none focus:outline-none transition-colors duration-300 ${
+                                                                pairCaptured
+                                                                    ? 'border-red-600 bg-red-600 hover:bg-red-500'
+                                                                    : pairMostWanted
+                                                                        ? 'border-orange-500 bg-orange-500 hover:bg-orange-400'
+                                                                        : 'border-orange-500 bg-[#2a2a2a] hover:bg-[#383838]'
                                                             }`}
                                                             title="Pár részleteinek megtekintése"
                                                         >

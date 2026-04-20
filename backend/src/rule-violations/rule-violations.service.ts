@@ -345,20 +345,9 @@ export class RuleViolationsService {
             createdAt: new Date().toISOString(),
           });
 
-          const pair = await this.pairRepository.findOne({ where: { id: pairId } });
-          const pairShort =
-            pair != null
-              ? `${pair.assignedNumber}. pár${pair.name ? ` (${pair.name})` : ''}`
-              : 'Egy pár';
-
           await this.fcmService.sendToPair(pairId, {
             title: 'Szabályszegés megszűnt',
             body: 'Újra a játékterületen vagytok. A pozíciótok ismét a szokásos módon frissül a térképen.',
-          });
-
-          await this.fcmService.sendToAllPairsExceptPair(pairId, {
-            title: 'Szabályszegés megszűnt',
-            body: `A(z) ${pairShort} visszatért a játékterületre — megszűnt a folyamatos követés.`,
           });
         }
       }
@@ -454,8 +443,8 @@ export class RuleViolationsService {
 
         // Send push notification
         await this.fcmService.sendToPair(pairId, {
-          title: 'Feladat teljesítve!',
-          body: `Sikeresen teljesítetted: ${geofence.name}`,
+          title: 'Feladat teljesítve',
+          body: `Sikeresen teljesítettétek: ${geofence.name}`,
         });
       }
     }

@@ -58,6 +58,7 @@ Nyisd meg: `http://localhost:3001`
 - ✅ Párok listája (csak aktív párok)
 - ✅ Bilincs, MW, Név hozzárendelés, Üzenetküldés
 - ✅ Pár részletek modal
+- ✅ Elfogás (bilincs) API: szigorúbb validáció, idempotencia, elfogás részletei modal (hely, rögzítő, információs szöveg)
 - ✅ Admin panel (teljes funkcionalitással)
 - ✅ Admin **Eseménynapló** (audit lista, szűrés, CSV export, törlés; menü csak **admin** számára)
 - ✅ Admin listák: közös táblázat-kártya (`AdminDataTableCard`), `AdminTableKit` (egységes `mw-table` váz, lapozó, rendezhető fejléc), lapozás a párok / eszközök / felhasználók tábláin is

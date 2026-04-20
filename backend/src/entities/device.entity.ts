@@ -6,9 +6,12 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Unique,
 } from 'typeorm';
 import { Pair } from './pair.entity';
 
+/** One registered device row per pair (first successful login wins; race-safe with DB unique). */
+@Unique(['pairId'])
 @Entity('devices')
 export class Device {
   @PrimaryGeneratedColumn()

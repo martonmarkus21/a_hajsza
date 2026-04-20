@@ -7,6 +7,7 @@ export function buildPairMarkerDivHtml(options: {
   assignedNumber: number;
   mostWanted: boolean;
   hasViolation: boolean;
+  captured?: boolean;
   size?: number;
   fontSize?: number;
   borderWidth?: number;
@@ -15,8 +16,8 @@ export function buildPairMarkerDivHtml(options: {
   const size = options.size ?? 32;
   const fontSize = options.fontSize ?? 18;
   const borderWidth = options.borderWidth ?? 3;
-  const borderColor = options.borderColor ?? '#f97316';
-  const bg = options.mostWanted ? '#f97316' : '#2a2a2a';
+  const borderColor = options.captured ? '#dc2626' : options.borderColor ?? '#f97316';
+  const bg = options.captured ? '#dc2626' : options.mostWanted ? '#f97316' : '#2a2a2a';
 
   const violationBadge = options.hasViolation
     ? `<div aria-hidden="true" style="position:absolute;top:-5px;left:-5px;width:18px;height:18px;border-radius:50%;background:rgba(239,68,68,0.95);border:1px solid rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.35);">${ALERT_SVG}</div>`
