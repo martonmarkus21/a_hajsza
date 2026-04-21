@@ -374,6 +374,7 @@ export class CapturesService {
     }
 
     await this.captureRepository.delete({ id: capture.id });
+    const live = await this.redisPositionService.getLivePosition(pairId);
 
     const pairLabel = `${pair.assignedNumber}. pár${pair.name ? ` (${pair.name})` : ''}`;
     logVerbose(
@@ -386,6 +387,10 @@ export class CapturesService {
       pairName: pair.name ?? null,
       revertedByUserId: userId,
       timestamp: new Date().toISOString(),
+      lastLivePosition:
+        live && Number.isFinite(live.lat) && Number.isFinite(live.lon)
+          ? { lat: live.lat, lon: live.lon, timestamp: live.timestamp }
+          : null,
     });
 
     await this.fcmService.sendToPair(pairId, {

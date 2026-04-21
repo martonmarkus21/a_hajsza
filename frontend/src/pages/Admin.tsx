@@ -85,6 +85,7 @@ interface ActiveGameAreaViolation {
 }
 
 export default function Admin() {
+  const CAPTURE_MAX_DISTANCE_METERS = 500;
   const navigate = useNavigate();
   const { addNotification } = useNotification();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -124,10 +125,55 @@ export default function Admin() {
   const { pairs: initialPairs, refetch: fetchPairs } = usePairs();
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [captureDetailsPairId, setCaptureDetailsPairId] = useState<number | null>(null);
+  const frozenLastLivePositionsRef = useRef<Record<number, NonNullable<Pair['lastPosition']>>>({});
   const { socket } = useSocket();
 
   const [activeGameAreaExitViolations, setActiveGameAreaExitViolations] = useState<Record<number, boolean>>({});
   const [activeGameAreaViolationDetails, setActiveGameAreaViolationDetails] = useState<Record<number, ActiveGameAreaViolation>>({});
+
+  const persistFrozenLastLivePositions = () => {
+    localStorage.setItem('mw:frozen-last-live-positions', JSON.stringify(frozenLastLivePositionsRef.current));
+  };
+
+  const freezeCurrentLastPosition = (
+    pairId: number,
+    explicitPosition?: { lat: number; lon: number; timestamp: string } | null,
+  ) => {
+    const current = explicitPosition ?? pairs.find((p) => p.id === pairId)?.lastPosition;
+    if (!current) return;
+    const existing = frozenLastLivePositionsRef.current[pairId];
+    if (existing) {
+      const tExisting = new Date(existing.timestamp).getTime();
+      const tCurrent = new Date(current.timestamp).getTime();
+      if (Number.isFinite(tExisting) && Number.isFinite(tCurrent) && tCurrent < tExisting) return;
+    }
+    frozenLastLivePositionsRef.current[pairId] = current;
+    persistFrozenLastLivePositions();
+  };
+
+  const clearFrozenLastPosition = (pairId: number) => {
+    if (frozenLastLivePositionsRef.current[pairId] == null) return;
+    delete frozenLastLivePositionsRef.current[pairId];
+    persistFrozenLastLivePositions();
+  };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('mw:frozen-last-live-positions');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, NonNullable<Pair['lastPosition']>>;
+      const normalized: Record<number, NonNullable<Pair['lastPosition']>> = {};
+      for (const [k, v] of Object.entries(parsed || {})) {
+        const id = Number(k);
+        if (!Number.isFinite(id) || !v) continue;
+        if (!Number.isFinite(v.lat) || !Number.isFinite(v.lon) || !v.timestamp) continue;
+        normalized[id] = { lat: v.lat, lon: v.lon, timestamp: v.timestamp };
+      }
+      frozenLastLivePositionsRef.current = normalized;
+    } catch {
+      frozenLastLivePositionsRef.current = {};
+    }
+  }, []);
 
   const refreshActiveGameAreaViolations = useCallback(async () => {
     try {
@@ -164,16 +210,29 @@ export default function Admin() {
   // This prevents the jumping issue where API data overwrites socket data
   useEffect(() => {
     if (initialPairs.length > 0) {
+      const apiPairIds = new Set(initialPairs.map((p) => p.id));
+      let removedAnyFrozen = false;
+      for (const rawId of Object.keys(frozenLastLivePositionsRef.current)) {
+        const id = Number(rawId);
+        if (!apiPairIds.has(id)) {
+          delete frozenLastLivePositionsRef.current[id];
+          removedAnyFrozen = true;
+        }
+      }
+      if (removedAnyFrozen) {
+        persistFrozenLastLivePositions();
+      }
       setPairs(prevPairs => {
         // Merge API data with existing socket-updated data
         return initialPairs.map(apiPair => {
           const existing = prevPairs.find(p => p.id === apiPair.id);
           if (existing) {
+            const frozen = frozenLastLivePositionsRef.current[apiPair.id];
             // Preserve distancePosition from socket (distanceUpdate events)
             // Preserve lastPosition from socket (positionUpdate events)
             return {
               ...apiPair,
-              lastPosition: mergeLastPosition(existing.lastPosition, apiPair.lastPosition),
+              lastPosition: frozen ?? mergeLastPosition(existing.lastPosition, apiPair.lastPosition),
               distancePosition: existing.distancePosition, // Keep socket-updated distance position
             };
           }
@@ -220,6 +279,7 @@ export default function Admin() {
         console.warn('Received invalid position data:', data);
         return;
       }
+      clearFrozenLastPosition(data.pairId);
 
       setPairs(prevPairs => prevPairs.map(p => {
         if (p.id === data.pairId) {
@@ -263,6 +323,7 @@ export default function Admin() {
           true, // global
         );
       } else {
+        freezeCurrentLastPosition(pairId, data.lastLivePosition ?? null);
         setActiveGameAreaExitViolations((prev) => {
           if (!prev[pairId]) return prev;
           const next = { ...prev };
@@ -305,7 +366,6 @@ export default function Admin() {
             : p,
         ),
       );
-
       addNotification(
         'info',
         `Elfogás: a(z) ${pairLabel} elfogott státuszba került.${recorder ? ` Rögzítő: ${recorder}.` : ''} Ettől kezdve a térképen és a párok listájában ennek megfelelően látható.`,
@@ -318,6 +378,7 @@ export default function Admin() {
       pairId: number;
       assignedNumber?: number;
       pairName?: string | null;
+      lastLivePosition?: { lat: number; lon: number; timestamp: string } | null;
     }) => {
       const pair = pairs.find((p) => p.id === data.pairId);
       const number = data.assignedNumber ?? pair?.assignedNumber ?? data.pairId;
@@ -341,6 +402,8 @@ export default function Admin() {
             : p,
         ),
       );
+
+      freezeCurrentLastPosition(data.pairId, data.lastLivePosition ?? null);
 
       addNotification(
         'info',
@@ -727,6 +790,27 @@ export default function Admin() {
     try {
       const p = pairs.find((x) => x.id === pairId);
       const pos = p?.distancePosition ?? p?.lastPosition;
+      if (!browserLocation) {
+        addNotification(
+          'error',
+          'Az elfogás nem rögzíthető: a saját pozíció nem áll rendelkezésre. Kérjük, ellenőrizze a helymeghatározási jogosultságot, majd próbálja újra.',
+        );
+        return;
+      }
+      if (!pos || pos.lat == null || pos.lon == null) {
+        addNotification('error', 'Az elfogás nem rögzíthető: a célpár aktuális pozíciója nem érhető el.');
+        return;
+      }
+      const distanceM = calculateDistance(browserLocation.lat, browserLocation.lon, pos.lat, pos.lon);
+      const formatDistance = (d: number): string =>
+        d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`;
+      if (!Number.isFinite(distanceM) || distanceM > CAPTURE_MAX_DISTANCE_METERS) {
+        addNotification(
+          'error',
+          `Az elfogás nem rögzíthető: a célpár távolsága ${formatDistance(distanceM)}. Az engedélyezett maximális távolság ${formatDistance(CAPTURE_MAX_DISTANCE_METERS)}.`,
+        );
+        return;
+      }
       const requestId = `capture-${pairId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const response = await fetch('http://localhost:3000/api/capture', {
         method: 'POST',
@@ -755,11 +839,12 @@ export default function Admin() {
   };
 
   const handleCapture = async (pairId: number) => {
+    const pair = pairs.find((p) => p.id === pairId);
     setConfirmation({
       isOpen: true,
       title: 'Pár elfogása',
-      message: 'Megerősíti a páros elfogását?',
-      isDangerous: false,
+      message: `Biztosan elfogottnak jelöli a(z) ${pair?.assignedNumber ?? '?'}. számú párt?`,
+      isDangerous: true,
       confirmLabel: 'Elfogás',
       action: async () => {
         await handleCaptureDirect(pairId);

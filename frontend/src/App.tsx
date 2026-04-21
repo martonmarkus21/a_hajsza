@@ -789,6 +789,7 @@ function GeofencePopup({
 }
 
 function MapView() {
+  const CAPTURE_MAX_DISTANCE_METERS = 500;
   const { pairs, loading, refetch } = usePairs();
   const { addNotification } = useNotification();
   const { socket, connected } = useSocket();
@@ -826,9 +827,54 @@ function MapView() {
   const [forceRender, setForceRender] = useState(0);
   const [activeGameAreaExitViolations, setActiveGameAreaExitViolations] = useState<Record<number, boolean>>({});
   const [activeGameAreaViolationDetails, setActiveGameAreaViolationDetails] = useState<Record<number, ActiveGameAreaViolation>>({});
+  const frozenLastLivePositionsRef = useRef<Record<number, NonNullable<Pair['lastPosition']>>>({});
 
   const [activeMapLayer, setActiveMapLayer] = useState<MapLayerType>('standard');
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
+
+  const persistFrozenLastLivePositions = () => {
+    localStorage.setItem('mw:frozen-last-live-positions', JSON.stringify(frozenLastLivePositionsRef.current));
+  };
+
+  const freezeCurrentLastPosition = (
+    pairId: number,
+    explicitPosition?: { lat: number; lon: number; timestamp: string } | null,
+  ) => {
+    const current = explicitPosition ?? pairsState.find((p) => p.id === pairId)?.lastPosition;
+    if (!current) return;
+    const existing = frozenLastLivePositionsRef.current[pairId];
+    if (existing) {
+      const tExisting = new Date(existing.timestamp).getTime();
+      const tCurrent = new Date(current.timestamp).getTime();
+      if (Number.isFinite(tExisting) && Number.isFinite(tCurrent) && tCurrent < tExisting) return;
+    }
+    frozenLastLivePositionsRef.current[pairId] = current;
+    persistFrozenLastLivePositions();
+  };
+
+  const clearFrozenLastPosition = (pairId: number) => {
+    if (frozenLastLivePositionsRef.current[pairId] == null) return;
+    delete frozenLastLivePositionsRef.current[pairId];
+    persistFrozenLastLivePositions();
+  };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('mw:frozen-last-live-positions');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, NonNullable<Pair['lastPosition']>>;
+      const normalized: Record<number, NonNullable<Pair['lastPosition']>> = {};
+      for (const [k, v] of Object.entries(parsed || {})) {
+        const id = Number(k);
+        if (!Number.isFinite(id) || !v) continue;
+        if (!Number.isFinite(v.lat) || !Number.isFinite(v.lon) || !v.timestamp) continue;
+        normalized[id] = { lat: v.lat, lon: v.lon, timestamp: v.timestamp };
+      }
+      frozenLastLivePositionsRef.current = normalized;
+    } catch {
+      frozenLastLivePositionsRef.current = {};
+    }
+  }, []);
 
   // All active pairs
   const allActivePairs = (pairsState.length > 0 ? pairsState : pairs)
@@ -965,13 +1011,26 @@ function MapView() {
 
   useEffect(() => {
     if (pairs.length > 0) {
+      const apiPairIds = new Set(pairs.map((p) => p.id));
+      let removedAnyFrozen = false;
+      for (const rawId of Object.keys(frozenLastLivePositionsRef.current)) {
+        const id = Number(rawId);
+        if (!apiPairIds.has(id)) {
+          delete frozenLastLivePositionsRef.current[id];
+          removedAnyFrozen = true;
+        }
+      }
+      if (removedAnyFrozen) {
+        persistFrozenLastLivePositions();
+      }
       setPairsState((prev) => {
         return pairs.map((apiPair) => {
           const existing = prev.find((p) => p.id === apiPair.id);
           if (existing) {
+            const frozen = frozenLastLivePositionsRef.current[apiPair.id];
             return {
               ...apiPair,
-              lastPosition: mergeLastPosition(existing.lastPosition, apiPair.lastPosition),
+              lastPosition: frozen ?? mergeLastPosition(existing.lastPosition, apiPair.lastPosition),
               distancePosition: existing.distancePosition,
               distanceToNearestOfficer: existing.distanceToNearestOfficer ?? apiPair.distanceToNearestOfficer,
             };
@@ -998,6 +1057,7 @@ function MapView() {
     };
     const handlePositionUpdate = (data: any) => {
       const ts = new Date(data.timestamp).getTime();
+      clearFrozenLastPosition(data.pairId);
       setPairsState((prev) => {
         const existing = prev.find((p) => p.id === data.pairId);
         if (!existing) {
@@ -1056,6 +1116,7 @@ function MapView() {
       pairId: number;
       assignedNumber?: number;
       pairName?: string | null;
+      lastLivePosition?: { lat: number; lon: number; timestamp: string } | null;
     }) => {
       const known = pairsState.find((p) => p.id === data.pairId);
       const pairNumber = data.assignedNumber ?? known?.assignedNumber ?? data.pairId;
@@ -1078,6 +1139,7 @@ function MapView() {
             : p,
         ),
       );
+      freezeCurrentLastPosition(data.pairId, data.lastLivePosition ?? null);
       addNotification(
         'info',
         `Elfogás visszavonva: a(z) ${pairLabel} ismét aktív menekülőként szerepel. A térképen és a párok listájában a nézet ennek megfelelően frissült.`,
@@ -1128,6 +1190,7 @@ function MapView() {
           true, // global
         );
       } else {
+        freezeCurrentLastPosition(pairId, data.lastLivePosition ?? null);
         setActiveGameAreaExitViolations((prev) => {
           if (!prev[pairId]) return prev;
           const next = { ...prev };
@@ -1176,6 +1239,28 @@ function MapView() {
     try {
       const p = pairsState.find((x) => x.id === pairId);
       const pos = p?.distancePosition ?? p?.lastPosition;
+      if (!browserLocation) {
+        addNotification(
+          'error',
+          'Az elfogás nem rögzíthető: a saját pozíció nem áll rendelkezésre. Kérjük, ellenőrizze a helymeghatározási jogosultságot, majd próbálja újra.',
+        );
+        return;
+      }
+      if (!pos || pos.lat == null || pos.lon == null) {
+        addNotification(
+          'error',
+          'Az elfogás nem rögzíthető: a célpár aktuális pozíciója nem érhető el.',
+        );
+        return;
+      }
+      const distanceM = calculateDistance(browserLocation.lat, browserLocation.lon, pos.lat, pos.lon);
+      if (!Number.isFinite(distanceM) || distanceM > CAPTURE_MAX_DISTANCE_METERS) {
+        addNotification(
+          'error',
+          `Az elfogás nem rögzíthető: a célpár távolsága ${formatDistance(distanceM)}. Az engedélyezett maximális távolság ${formatDistance(CAPTURE_MAX_DISTANCE_METERS)}.`,
+        );
+        return;
+      }
       const requestId = `capture-${pairId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const res = await fetch('http://localhost:3000/api/capture', {
         method: 'POST',

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FiMapPin, FiClock, FiUser, FiInfo } from 'react-icons/fi';
+import { FiMapPin, FiClock, FiUser, FiInfo, FiExternalLink } from 'react-icons/fi';
 import { FaHandcuffs } from 'react-icons/fa6';
 import { MapContainer, TileLayer, CircleMarker, useMap } from 'react-leaflet';
 import Modal from './Modal';
@@ -108,8 +108,9 @@ export default function CaptureDetailsModal({ pair, isOpen, onClose }: CaptureDe
                   href={`https://www.google.com/maps?q=${pair.captureLocation.lat},${pair.captureLocation.lon}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-orange-400 hover:text-orange-300 font-sans font-semibold"
+                  className="text-orange-400 hover:text-orange-300 font-sans font-semibold inline-flex items-center gap-1"
                 >
+                  <FiExternalLink className="w-3 h-3 opacity-70" />
                   Megnyitás Google Mapsben
                 </a>
               </div>

@@ -13,6 +13,7 @@ import { Pair } from '../entities/pair.entity';
 import { MwFlag } from '../entities/mw-flag.entity';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
+import { RedisPositionService } from '../redis/redis-position.service';
 
 @Injectable()
 export class RuleViolationsService {
@@ -30,6 +31,7 @@ export class RuleViolationsService {
     private gameDaysService: GameDaysService,
     private fcmService: FcmService,
     private auditLogsService: AuditLogsService,
+    private redisPositionService: RedisPositionService,
   ) {}
 
   async getActiveGameAreaViolations() {
@@ -323,6 +325,7 @@ export class RuleViolationsService {
         });
 
         if (existingViolation) {
+          const live = await this.redisPositionService.getLivePosition(pairId);
           // Nem mentünk positions sort visszatéréskor: a tábla csak az időzítő szerinti mintákat tartja.
 
           await this.ruleViolationRepository.update(
@@ -343,6 +346,10 @@ export class RuleViolationsService {
             resolved: true,
             timestamp: new Date().toISOString(),
             createdAt: new Date().toISOString(),
+            lastLivePosition:
+              live && Number.isFinite(live.lat) && Number.isFinite(live.lon)
+                ? { lat: live.lat, lon: live.lon, timestamp: live.timestamp }
+                : null,
           });
 
           await this.fcmService.sendToPair(pairId, {

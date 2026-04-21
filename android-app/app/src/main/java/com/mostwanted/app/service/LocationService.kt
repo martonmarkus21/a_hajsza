@@ -265,7 +265,8 @@ class LocationService : Service() {
             lat = location.latitude,
             lon = location.longitude,
             accuracy = location.accuracy.toDouble(),
-            speed = location.speed.toDouble(),
+            // Android Location.speed is m/s; backend + UI expect km/h.
+            speed = location.speed.toDouble() * 3.6,
             timestamp = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
                 timeZone = TimeZone.getTimeZone("UTC")
             }.format(Date()),
