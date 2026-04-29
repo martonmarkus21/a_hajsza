@@ -15,8 +15,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import com.mostwanted.app.api.ApiService
 import com.mostwanted.app.service.FcmService
 import com.mostwanted.app.service.LocationService
+import com.mostwanted.app.util.GameRuntimeFormatter
 import com.mostwanted.app.util.PreferencesHelper
 import com.mostwanted.app.viewmodel.MainViewModel
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +34,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var logoutButton: Button
     private lateinit var prefs: PreferencesHelper
     private lateinit var pairInfoTextView: TextView
+    private lateinit var runtimeStatusTextView: TextView
+
+    private val runtimeSummaryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val text = intent?.getStringExtra(LocationService.EXTRA_RUNTIME_SUMMARY) ?: return
+            runOnUiThread { runtimeStatusTextView.text = text }
+        }
+    }
 
     private val messageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -90,6 +100,7 @@ class MainActivity : AppCompatActivity() {
         vehicleButton = findViewById(R.id.vehicleButton)
         logoutButton = findViewById(R.id.logoutButton)
         pairInfoTextView = findViewById(R.id.pairInfoTextView)
+        runtimeStatusTextView = findViewById(R.id.runtimeStatusTextView)
 
         // Set pair info - only show pair number, not name (name is admin-only)
         val pairNumber = prefs.getPairNumber()
@@ -116,6 +127,19 @@ class MainActivity : AppCompatActivity() {
             forceLogoutFilter,
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+
+        val runtimeFilter = IntentFilter(LocationService.ACTION_RUNTIME_SUMMARY)
+        ContextCompat.registerReceiver(
+            this,
+            runtimeSummaryReceiver,
+            runtimeFilter,
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshRuntimeStatusFromApi()
     }
 
     override fun onDestroy() {
@@ -129,6 +153,27 @@ class MainActivity : AppCompatActivity() {
             unregisterReceiver(forceLogoutReceiver)
         } catch (e: Exception) {
             // Receiver might not be registered
+        }
+        try {
+            unregisterReceiver(runtimeSummaryReceiver)
+        } catch (e: Exception) {
+            // Receiver might not be registered
+        }
+    }
+
+    private fun refreshRuntimeStatusFromApi() {
+        if (!prefs.isLoggedIn() || prefs.getToken() == null) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val api = ApiService.create(this@MainActivity)
+                val r = api.getGameCountdown()
+                val line = GameRuntimeFormatter.statusLine(r)
+                withContext(Dispatchers.Main) {
+                    runtimeStatusTextView.text = line
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "countdown: ${e.message}")
+            }
         }
     }
 

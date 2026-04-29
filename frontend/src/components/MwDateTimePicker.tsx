@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { FiCalendar, FiChevronDown, FiChevronLeft, FiChevronRight, FiClock } from 'react-icons/fi';
 import { MwTimeScrollWheel } from './MwTimeScrollWheel';
 
-const PANEL_CLOSE_MS = 200;
 const VIEWPORT_PAD = 8;
 
 function clampPanelLeft(left: number, panelWidth: number): number {
@@ -98,6 +97,8 @@ interface MwDateTimePickerProps {
   minLocal?: string;
   /** Intervallum: ettől nem lehet későbbi dátum (pl. időponttól mezőhöz) */
   maxLocal?: string;
+  /** Csak naptár — a görgős időválasztó és az időkijelzés rejtve marad. */
+  dateOnly?: boolean;
 }
 
 export default function MwDateTimePicker({
@@ -107,6 +108,7 @@ export default function MwDateTimePicker({
   className = '',
   minLocal,
   maxLocal,
+  dateOnly = false,
 }: MwDateTimePickerProps) {
   const id = useId();
   const labelId = `${id}-lbl`;
@@ -144,11 +146,14 @@ export default function MwDateTimePicker({
 
   const displayText = useMemo(() => {
     if (!parsed) return '—';
+    if (dateOnly) {
+      return `${parsed.y}. ${MONTHS_HU[parsed.mo - 1]} ${parsed.d}.`;
+    }
     return `${parsed.y}. ${MONTHS_HU[parsed.mo - 1]} ${parsed.d}. · ${pad2(parsed.h)}:${pad2(parsed.mi)}`;
-  }, [parsed]);
+  }, [parsed, dateOnly]);
 
-  /** Naptár + görgős idő egymás mellett. */
-  const panelWidth = 464;
+  /** Naptár + (opcionális) görgős idő egymás mellett. */
+  const panelWidth = dateOnly ? 296 : 464;
 
   const updatePosition = useCallback(() => {
     const el = triggerRef.current;
@@ -171,7 +176,7 @@ export default function MwDateTimePicker({
     const t = window.setTimeout(() => {
       setMenuVisible(false);
       setCoords({ top: 0, left: 0, width: 0 });
-    }, PANEL_CLOSE_MS);
+    }, 200);
     return () => clearTimeout(t);
   }, [open, menuVisible]);
 
@@ -293,6 +298,11 @@ export default function MwDateTimePicker({
     setOpen(false);
   };
 
+  const clearDateOnly = () => {
+    onChange('');
+    setOpen(false);
+  };
+
   const hVal = parsed?.h ?? 12;
   const miVal = parsed?.mi ?? 0;
 
@@ -402,61 +412,75 @@ export default function MwDateTimePicker({
             </div>
           </div>
 
-          <div className="flex min-h-0 w-full shrink-0 flex-col self-stretch border-t border-white/5 px-3 pb-3 pt-2 sm:w-[208px] sm:border-l sm:border-t-0 sm:pl-3 sm:pr-3">
-            <div className="mb-2 flex min-h-8 shrink-0 items-center justify-between gap-2">
-              <div className="flex min-h-8 min-w-0 items-center gap-2 text-[10px] font-semibold uppercase leading-none tracking-wider text-gray-500">
-                <FiClock className="h-3.5 w-3.5 shrink-0 text-gray-400 opacity-80" />
-                Idő
+          {!dateOnly ? (
+            <div className="flex min-h-0 w-full shrink-0 flex-col self-stretch border-t border-white/5 px-3 pb-3 pt-2 sm:w-[208px] sm:border-l sm:border-t-0 sm:pl-3 sm:pr-3">
+              <div className="mb-2 flex min-h-8 shrink-0 items-center justify-between gap-2">
+                <div className="flex min-h-8 min-w-0 items-center gap-2 text-[10px] font-semibold uppercase leading-none tracking-wider text-gray-500">
+                  <FiClock className="h-3.5 w-3.5 shrink-0 text-gray-400 opacity-80" />
+                  Idő
+                </div>
+                <span className="inline-grid h-7 max-w-max shrink-0 auto-cols-max grid-cols-1 grid-rows-[1.75rem]">
+                  <button
+                    type="button"
+                    onMouseUp={(e) => e.currentTarget.blur()}
+                    onClick={() => {
+                      const n = new Date();
+                      if (parsed) {
+                        emit(
+                          partsToLocalDatetimeString(
+                            parsed.y,
+                            parsed.mo,
+                            parsed.d,
+                            n.getHours(),
+                            n.getMinutes(),
+                          ),
+                        );
+                      } else {
+                        setTodayNow();
+                      }
+                    }}
+                    className="group relative col-start-1 row-start-1 grid h-full min-h-0 w-full place-items-center overflow-hidden rounded-lg border-0 bg-white/[0.04] px-3 text-[11px]/[14px] font-semibold [font-synthesis:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/45 focus-visible:ring-offset-0 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-lg before:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] before:content-[''] after:pointer-events-none after:absolute after:inset-0 after:z-[1] after:rounded-lg after:bg-orange-500/10 after:shadow-[inset_0_0_0_1px_rgba(249,115,22,0.35)] after:opacity-0 after:transition-opacity after:content-[''] hover:after:opacity-100"
+                  >
+                    <span className="relative z-10 block translate-y-0 text-center text-gray-300 transition-colors group-hover:text-white">
+                      Most
+                    </span>
+                  </button>
+                </span>
               </div>
-              <span className="inline-grid h-7 max-w-max shrink-0 auto-cols-max grid-cols-1 grid-rows-[1.75rem]">
+
+              <div className="flex shrink-0 justify-center">
+                <MwTimeScrollWheel
+                  hour={hVal}
+                  minute={miVal}
+                  onHourChange={(h) => setTime(h, miVal)}
+                  onMinuteChange={(m) => setTime(hVal, m)}
+                />
+              </div>
+
+              <div className="mt-auto flex shrink-0 justify-end pt-2">
                 <button
                   type="button"
-                  onMouseUp={(e) => e.currentTarget.blur()}
-                  onClick={() => {
-                    const n = new Date();
-                    if (parsed) {
-                      emit(
-                        partsToLocalDatetimeString(
-                          parsed.y,
-                          parsed.mo,
-                          parsed.d,
-                          n.getHours(),
-                          n.getMinutes(),
-                        ),
-                      );
-                    } else {
-                      setTodayNow();
-                    }
-                  }}
-                  className="group relative col-start-1 row-start-1 grid h-full min-h-0 w-full place-items-center overflow-hidden rounded-lg border-0 bg-white/[0.04] px-3 text-[11px]/[14px] font-semibold [font-synthesis:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/45 focus-visible:ring-offset-0 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-lg before:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] before:content-[''] after:pointer-events-none after:absolute after:inset-0 after:z-[1] after:rounded-lg after:bg-orange-500/10 after:shadow-[inset_0_0_0_1px_rgba(249,115,22,0.35)] after:opacity-0 after:transition-opacity after:content-[''] hover:after:opacity-100"
+                  onClick={clear}
+                  className="text-xs font-medium text-gray-500 hover:text-red-400 transition-colors"
                 >
-                  <span className="relative z-10 block translate-y-0 text-center text-gray-300 transition-colors group-hover:text-white">
-                    Most
-                  </span>
+                  Időpont törlése
                 </button>
-              </span>
+              </div>
             </div>
-
-            <div className="flex shrink-0 justify-center">
-              <MwTimeScrollWheel
-                hour={hVal}
-                minute={miVal}
-                onHourChange={(h) => setTime(h, miVal)}
-                onMinuteChange={(m) => setTime(hVal, m)}
-              />
-            </div>
-
-            <div className="mt-auto flex shrink-0 justify-end pt-2">
-              <button
-                type="button"
-                onClick={clear}
-                className="text-xs font-medium text-gray-500 hover:text-red-400 transition-colors"
-              >
-                Időpont törlése
-              </button>
-            </div>
-          </div>
+          ) : null}
         </div>
+
+        {dateOnly ? (
+          <div className="flex shrink-0 justify-end border-t border-white/5 px-3 py-2">
+            <button
+              type="button"
+              onClick={clearDateOnly}
+              className="text-xs font-medium text-gray-500 hover:text-red-400 transition-colors"
+            >
+              Dátum törlése
+            </button>
+          </div>
+        ) : null}
       </div>,
       document.body,
     );
@@ -467,7 +491,11 @@ export default function MwDateTimePicker({
         id={labelId}
         className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 pointer-events-none select-none"
       >
-        <FiClock className="w-3.5 h-3.5 opacity-70 shrink-0" />
+        {dateOnly ? (
+          <FiCalendar className="w-3.5 h-3.5 opacity-70 shrink-0" />
+        ) : (
+          <FiClock className="w-3.5 h-3.5 opacity-70 shrink-0" />
+        )}
         {label}
       </div>
       <button
@@ -478,7 +506,8 @@ export default function MwDateTimePicker({
         aria-labelledby={labelId}
         aria-controls={open ? panelListId : undefined}
         onClick={() => setOpen((o) => !o)}
-        className={`mw-btn mw-filter-trigger !flex h-10 w-full flex-row items-center justify-between gap-2 px-3 py-0 leading-none [&_.mw-dt-row]:items-center ${
+        style={{ transform: 'translateZ(0)' }}
+        className={`mw-btn mw-filter-trigger !flex h-11 w-full flex-row items-center justify-between gap-2 px-3 py-0.5 leading-none [&_.mw-dt-row]:items-center ${
           open
             ? 'mw-btn-primary !text-white shadow-none [&_.mw-dt-chevron]:text-white'
             : 'mw-btn-secondary text-gray-400 hover:text-white'
@@ -496,7 +525,7 @@ export default function MwDateTimePicker({
             {displayText}
           </span>
         </span>
-        <span className="flex h-10 w-9 shrink-0 items-center justify-center">
+        <span className="flex h-11 w-9 shrink-0 items-center justify-center">
           <FiChevronDown
             className={`mw-dt-chevron h-4 w-4 transition-transform duration-200 ease-out ${open ? 'rotate-180' : ''}`}
             aria-hidden

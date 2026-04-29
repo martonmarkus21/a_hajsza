@@ -126,14 +126,16 @@ Content-Type: application/json
 ### Játék Napok
 - **`GET /api/game-days`** - Összes versenynap lekérése.
 - **`GET /api/game-days/today`** - Mai versenynap beállításai.
-- **`POST /api/game-days`** - Versenynap létrehozása/módosítása.
+- **`POST /api/game-days`** - Versenynap létrehozása (Admin).
+- **`PUT /api/game-days/:id`** - Versenynap módosítása (Admin).
+- **`DELETE /api/game-days/:id`** - Versenynap törlése (Admin).
 
 ### Game Settings (Játék beállítások & Időzítők)
-- **`GET /api/game-settings/countdown`** - Visszaszámláló és nyilvános mezők (JWT: bejelentkezett felhasználó, admin vagy officer).
-- **`GET /api/game-settings`** - Teljes globális beállítások + countdown (JWT: **csak admin**).
+- **`GET /api/game-settings/countdown`** - Visszaszámláló és játékmotor állapot mezők (JWT: bejelentkezett felhasználó, admin vagy officer). Tartalmazza a `campaignStatus`, `isGameActive`, és a következő frissítési ciklus (`nextLocationUpdate`) adatait.
+- **`GET /api/game-settings`** - Teljes globális beállítások + játékmotor állapot (`runtime`) (JWT: **csak admin**).
 - **`PUT /api/game-settings`** - Beállítások frissítése (JWT: **csak admin**). Sikeres mentés után napló: `game_settings_update` (`audit_logs`).
-- **`POST /api/game-settings/timer/start`** — időzítő indítás (JWT: **csak admin**). Napló: `game_settings_timer_start`.
-- **`POST /api/game-settings/timer/stop`** — időzítő leállítás (JWT: **csak admin**). Napló: `game_settings_timer_stop`.
+- **`POST /api/game-settings/timer/start`** — Játékmotor kézi indítása (JWT: **csak admin**). Napló: `game_runtime_engine_start`.
+- **`POST /api/game-settings/timer/stop`** — Játékmotor kézi leállítása (JWT: **csak admin**). Napló: `game_runtime_engine_stop`.
 
 > **Megjegyzés**: További admin műveletek is bekerülnek az eseménynaplóba (payload a `data_json` mezőben), például geofence aktiválás / deaktiválás / tömeges státusz (`geofence_activate`, `geofence_deactivate`, `geofence_bulk_status`), mentett pozíciók törlése (`position_delete_pair`, `position_delete_batch`), lezárt szabályszegés törlése (`rule_violation_delete`).
 

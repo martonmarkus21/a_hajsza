@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MwFlag } from '../entities/mw-flag.entity';
@@ -6,6 +6,7 @@ import { CreateMwFlagDto } from './dto/create-mw-flag.dto';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
+import { GameRuntimeService } from '../game-runtime/game-runtime.service';
 
 @Injectable()
 export class MwFlagsService {
@@ -14,9 +15,17 @@ export class MwFlagsService {
     private mwFlagRepository: Repository<MwFlag>,
     private webSocketGateway: WebSocketGateway,
     private auditLogsService: AuditLogsService,
+    private gameRuntimeService: GameRuntimeService,
   ) {}
 
   async create(createMwFlagDto: CreateMwFlagDto, audit?: AuditRequestMeta) {
+    const gameCtx = await this.gameRuntimeService.getRuntimeContext();
+    if (!gameCtx.isGameActive) {
+      throw new BadRequestException({
+        code: 'GAME_NOT_IN_PROGRESS',
+        message: 'MW jelölés csak aktív játék időszakban lehetséges.',
+      });
+    }
     await this.mwFlagRepository.update(
       { pairId: createMwFlagDto.pairId, active: true },
       { active: false },

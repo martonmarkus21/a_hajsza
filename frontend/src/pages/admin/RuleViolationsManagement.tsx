@@ -24,6 +24,7 @@ import ConfirmationModal from '../../components/ConfirmationModal';
 import MwDropdownSelect, { type MwDropdownOption } from '../../components/MwDropdownSelect';
 import { useNotification } from '../../contexts/NotificationContext';
 import type { Pair } from '../../types';
+import { apiUrl } from '@/config/env';
 
 export interface AdminRuleViolationRow {
   id: number;
@@ -134,7 +135,7 @@ export default function RuleViolationsManagement({
       params.set('sortBy', 'createdAt');
       params.set('sortDir', 'desc');
 
-      const res = await fetch(`http://localhost:3000/api/rule-violations/list?${params}`, {
+      const res = await fetch(apiUrl(`/api/rule-violations/list?${params}`), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) {
@@ -287,7 +288,7 @@ export default function RuleViolationsManagement({
     if (!deleteTarget || deleting) return;
     setDeleting(true);
     try {
-      const res = await fetch(`http://localhost:3000/api/rule-violations/${deleteTarget.id}`, {
+      const res = await fetch(apiUrl(`/api/rule-violations/${deleteTarget.id}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });

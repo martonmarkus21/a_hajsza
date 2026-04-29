@@ -278,6 +278,19 @@ export class GameAreaService implements OnModuleInit {
       }
     }
 
+    if (updateGameAreaDto.activeRegions !== undefined) {
+      await this.geofenceRepository.update({ geofenceType: 'scenario' }, { active: false });
+      for (const raw of updateGameAreaDto.activeRegions) {
+        const id = Number.parseInt(String(raw), 10);
+        if (!Number.isFinite(id) || id <= 0) continue;
+        const g = await this.geofenceRepository.findOne({ where: { id } });
+        if (g && g.geofenceType === 'scenario') {
+          g.active = true;
+          await this.geofenceRepository.save(g);
+        }
+      }
+    }
+
     await this.redisGeofenceCache.invalidateActiveGeofences();
 
     // Broadcast update

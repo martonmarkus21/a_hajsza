@@ -41,7 +41,7 @@ export class AuditLog {
   @Column({ type: 'text', nullable: true, name: 'user_agent' })
   userAgent: string;
 
-  @CreateDateColumn({ name: 'timestamp' })
+  @CreateDateColumn({ type: 'timestamptz', name: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   @Index()
   timestamp: Date;
 }

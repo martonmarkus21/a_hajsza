@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FiAlertTriangle, FiMapPin, FiClock, FiActivity, FiCheckCircle } from 'react-icons/fi';
 import Modal from './Modal';
 import { formatDateTimeBudapest } from '../utils/formatDateTimeBudapest';
+import { apiUrl } from '@/config/env';
 
 const TYPE_LABELS: Record<string, string> = {
   game_area_exit: 'Játékterület elhagyása',
@@ -64,7 +65,7 @@ export default function RuleViolationDetailsModal({
 
     const fetchStatus = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/rule-violations/active-game-area', {
+        const response = await fetch(apiUrl('/api/rule-violations/active-game-area'), {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
         if (!response.ok || cancelled) return;

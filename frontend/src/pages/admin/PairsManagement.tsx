@@ -324,8 +324,7 @@ export default function PairsManagement({
                                             <button
                                                 onClick={(e) => {
                                                     e.currentTarget.blur();
-                                                    handleMw(pair.id);
-                                                    addNotification('success', `Most Wanted státusz ${pair.mostWanted ? 'eltávolítva' : 'beállítva'}`);
+                                                    void handleMw(pair.id);
                                                 }}
                                                 className={`relative block mx-auto -translate-x-1.5 p-2 rounded-xl transition-all duration-300 outline-none border-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 bg-transparent ${pair.mostWanted
                                                     ? 'text-orange-400'

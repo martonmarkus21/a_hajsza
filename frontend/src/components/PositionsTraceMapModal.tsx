@@ -13,6 +13,7 @@ import {
 import L from 'leaflet';
 import Modal from './Modal';
 import { FiMapPin, FiX } from 'react-icons/fi';
+import { apiUrl } from '@/config/env';
 
 export interface SinglePositionRow {
   id: number;
@@ -315,7 +316,7 @@ export default function PositionsTraceMapModal({
       if (fromIso) params.set('from', fromIso);
       if (toIso) params.set('to', toIso);
 
-      const res = await fetch(`http://localhost:3000/api/positions/admin/list?${params}`, {
+      const res = await fetch(apiUrl(`/api/positions/admin/list?${params}`), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) {

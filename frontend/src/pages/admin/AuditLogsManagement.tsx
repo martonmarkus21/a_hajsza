@@ -28,11 +28,11 @@ import {
   AdminTableSortTh,
   AdminTablePaginationFooter,
 } from '../../components/admin/AdminTableKit';
-import { DateTimeStackCell } from '../../utils/formatDateTimeBudapest';
+import { DateTimeStackCell, formatDateTimeBudapest } from '../../utils/formatDateTimeBudapest';
 import { useNotification } from '../../contexts/NotificationContext';
+import { apiUrl } from '@/config/env';
 
 const POLL_MS = 8000;
-const API = 'http://localhost:3000';
 
 export interface AdminAuditLogRow {
   id: number;
@@ -80,6 +80,11 @@ const ACTION_LABELS: Record<string, string> = {
   game_settings_update: 'Játékbeállítások módosítva',
   game_settings_timer_start: 'Lokációs időzítő indítva',
   game_settings_timer_stop: 'Lokációs időzítő leállítva',
+  game_runtime_engine_start: 'Játékmotor elindítva',
+  game_runtime_engine_stop: 'Játékmotor leállítva',
+  game_day_create: 'Játéknap létrehozva',
+  game_day_update: 'Játéknap módosítva',
+  game_day_delete: 'Játéknap törölve',
   position_delete_pair: 'Pozíciók törlése (pár)',
   position_delete_batch: 'Pozíciók törlése (kiválasztott)',
   rule_violation_delete: 'Szabályszegés törölve',
@@ -96,6 +101,8 @@ function actionBadgeClass(actionType: string): string {
   if (actionType.startsWith('geofence_')) return 'bg-sky-500/15 text-sky-200 border-sky-500/25';
   if (actionType.startsWith('game_area')) return 'bg-cyan-500/12 text-cyan-200 border-cyan-500/25';
   if (actionType.startsWith('game_settings')) return 'bg-indigo-500/15 text-indigo-200 border-indigo-500/25';
+  if (actionType.startsWith('game_runtime')) return 'bg-indigo-500/15 text-indigo-200 border-indigo-500/25';
+  if (actionType.startsWith('game_day')) return 'bg-blue-500/15 text-blue-200 border-blue-500/25';
   if (actionType.startsWith('device_')) return 'bg-slate-500/20 text-slate-200 border-slate-500/30';
   if (actionType.startsWith('message')) return 'bg-amber-500/15 text-amber-200 border-amber-500/30';
   if (actionType.startsWith('capture')) return 'bg-red-500/15 text-red-200 border-red-500/30';
@@ -188,7 +195,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
 
   const loadMeta = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/api/audit-logs/admin/meta`, {
+      const res = await fetch(apiUrl('/api/audit-logs/admin/meta'), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) return;
@@ -210,7 +217,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
     setError(null);
     try {
       const params = buildListParams();
-      const res = await fetch(`${API}/api/audit-logs/admin/list?${params}`, {
+      const res = await fetch(apiUrl(`/api/audit-logs/admin/list?${params}`), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) {
@@ -332,7 +339,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
     }
     try {
       const params = buildFilterParams();
-      const res = await fetch(`${API}/api/audit-logs/admin/export?${params}`, {
+      const res = await fetch(apiUrl(`/api/audit-logs/admin/export?${params}`), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) {
@@ -371,7 +378,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
     if (!rowPendingDelete) return;
     setDeleteBusy(true);
     try {
-      const res = await fetch(`${API}/api/audit-logs/admin/${rowPendingDelete.id}`, {
+      const res = await fetch(apiUrl(`/api/audit-logs/admin/${rowPendingDelete.id}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
@@ -397,7 +404,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
     setBulkBusy(true);
     try {
       const params = buildFilterParams();
-      const res = await fetch(`${API}/api/audit-logs/admin/bulk-delete?${params}`, {
+      const res = await fetch(apiUrl(`/api/audit-logs/admin/bulk-delete?${params}`), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -727,12 +734,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 space-y-1">
                 <div className="text-xs font-medium uppercase tracking-widest text-gray-500">Időpont</div>
-                <div className="text-lg font-semibold leading-snug text-white">
-                  {new Date(detailRow.timestamp).toLocaleString('hu-HU', {
-                    dateStyle: 'full',
-                    timeStyle: 'medium',
-                  })}
-                </div>
+                <div className="text-lg font-semibold leading-snug text-white">{formatDateTimeBudapest(detailRow.timestamp)}</div>
               </div>
               <span
                 className={`inline-flex shrink-0 flex-col items-end gap-0.5 rounded-lg border px-3 py-2 text-right text-[11px] font-bold leading-tight ${actionBadgeClass(detailRow.actionType)}`}

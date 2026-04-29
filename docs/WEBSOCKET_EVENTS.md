@@ -169,6 +169,23 @@ Játéktér frissítés (admin).
 }
 ```
 
+### `gameRuntimeUpdate`
+Játékmotor állapotfrissítés (kampány státusz, ciklus, engedélyezett pozíciókövetés).
+
+```json
+{
+  "campaignStatus": "RUNNING",
+  "activeGameDayId": 1,
+  "currentCycleStartAt": "2024-01-15T10:00:00.000Z",
+  "currentCycleEndAt": "2024-01-15T10:20:00.000Z",
+  "allowPositionUpdatesForMap": false,
+  "currentIntervalMinutes": 20,
+  "isGameActive": true,
+  "isPastLastScheduledGameEnd": false,
+  "timestamp": "2024-01-15T10:15:00.000Z"
+}
+```
+
 ### `error`
 Hiba esemény.
 

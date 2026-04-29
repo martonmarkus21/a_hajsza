@@ -11,14 +11,14 @@ import { RuleViolation } from '../entities/rule-violation.entity';
 import { User } from '../entities/user.entity';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 import { FcmModule } from '../fcm/fcm.module';
-import { GameSettingsModule } from '../game-settings/game-settings.module';
+import { GameRuntimeModule } from '../game-runtime/game-runtime.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Pair, Position, Capture, MwFlag, Device, RuleViolation, User]),
     AuditLogsModule,
     FcmModule,
-    GameSettingsModule,
+    GameRuntimeModule,
   ],
   controllers: [PairsController],
   providers: [PairsService],

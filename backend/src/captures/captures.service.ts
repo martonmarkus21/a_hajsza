@@ -13,6 +13,7 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
 import { logVerbose } from '../common/verbose-log';
 import { RedisPositionService } from '../redis/redis-position.service';
+import { GameRuntimeService } from '../game-runtime/game-runtime.service';
 
 @Injectable()
 export class CapturesService {
@@ -35,6 +36,7 @@ export class CapturesService {
     private webSocketGateway: WebSocketGateway,
     private fcmService: FcmService,
     private auditLogsService: AuditLogsService,
+    private gameRuntimeService: GameRuntimeService,
   ) {}
 
   private buildSuccessResponse(capture: Capture, idempotent = false) {
@@ -141,6 +143,17 @@ export class CapturesService {
         createCaptureDto.pairId,
         'PAIR_NOT_FOUND',
         'A célpár nem található',
+        audit,
+      );
+    }
+
+    const gameCtx = await this.gameRuntimeService.getRuntimeContext();
+    if (!gameCtx.isGameActive) {
+      return await this.rejectCapture(
+        userId,
+        createCaptureDto.pairId,
+        'GAME_NOT_IN_PROGRESS',
+        'Elfogás csak a játék időtartama alatt lehetséges (a játékmotor ebben az időben aktív).',
         audit,
       );
     }

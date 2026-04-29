@@ -147,7 +147,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             {children}
 
             {/* Toast Container */}
-            <div className="fixed bottom-6 right-6 z-[10000] flex flex-col gap-3 pointer-events-none">
+            <div className="fixed bottom-6 right-6 z-[11000] flex flex-col gap-3 pointer-events-none">
                 {notifications.map((notification) => (
                     <div
                         key={notification.id}

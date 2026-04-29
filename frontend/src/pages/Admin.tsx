@@ -28,12 +28,14 @@ import SendMessageModal from '../components/SendMessageModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { useNotification } from '../contexts/NotificationContext';
 import { formatDateTimeBudapestParts } from '../utils/formatDateTimeBudapest';
+import { extractApiErrorMessage } from '../utils/extractApiErrorMessage';
 import { mergeLastPosition } from '../utils/mergeLastPosition';
 
 import 'leaflet/dist/leaflet.css';
 
 // Import Pair from types
 import { Pair } from '../types';
+import { apiUrl } from '@/config/env';
 
 interface Geofence {
   id: number;
@@ -82,6 +84,33 @@ interface ActiveGameAreaViolation {
   pairName: string | null;
   description: string;
   createdAt: string;
+}
+
+interface GameDay {
+  id: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+  specialRulesJson?: any;
+}
+
+function normalizeYmd(value?: string): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  const ymdMatch = /^(\d{4}-\d{2}-\d{2})/.exec(raw);
+  if (ymdMatch) return ymdMatch[1];
+  const dt = new Date(raw);
+  if (!Number.isNaN(dt.getTime())) return dt.toISOString().slice(0, 10);
+  return raw.slice(0, 10);
+}
+
+function normalizeHm(value?: string): string {
+  const raw = String(value ?? '').trim();
+  const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(raw);
+  if (!match) return '00:00';
+  const hh = Math.max(0, Math.min(23, Number(match[1]) || 0));
+  const mm = Math.max(0, Math.min(59, Number(match[2]) || 0));
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
 export default function Admin() {
@@ -177,7 +206,7 @@ export default function Admin() {
 
   const refreshActiveGameAreaViolations = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/rule-violations/active-game-area', {
+      const response = await fetch(apiUrl('/api/rule-violations/active-game-area'), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!response.ok) return;
@@ -245,6 +274,23 @@ export default function Admin() {
   useEffect(() => {
     void refreshActiveGameAreaViolations();
   }, [refreshActiveGameAreaViolations]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleRuntimeUpdate = () => {
+      fetchGameSettings();
+    };
+    const handleAreaUpdate = () => {
+      fetchGeofences();
+      fetchGameSettings();
+    };
+    socket.on('gameRuntimeUpdate', handleRuntimeUpdate);
+    socket.on('gameAreaUpdate', handleAreaUpdate);
+    return () => {
+      socket.off('gameRuntimeUpdate', handleRuntimeUpdate);
+      socket.off('gameAreaUpdate', handleAreaUpdate);
+    };
+  }, [socket]);
 
   // Listen for real-time position updates
   useEffect(() => {
@@ -522,7 +568,7 @@ export default function Admin() {
   const [users, setUsers] = useState<User[]>([]);
   const [gameSettings, setGameSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-
+  const [gameDays, setGameDays] = useState<GameDay[]>([]);
   // Form States
   const [newGeofence, setNewGeofence] = useState({
     name: '',
@@ -555,6 +601,8 @@ export default function Admin() {
   // UI States
   const [intervalInputValue, setIntervalInputValue] = useState<number>(20);
   const [isEditingInterval, setIsEditingInterval] = useState(false);
+  const [stayRadiusInput, setStayRadiusInput] = useState(5);
+  const [isEditingStay, setIsEditingStay] = useState(false);
   const [mapClickMode, setMapClickMode] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [showCreatePairModal, setShowCreatePairModal] = useState(false);
@@ -600,6 +648,12 @@ export default function Admin() {
     }
   }, [gameSettings?.locationUpdateIntervalMinutes, isEditingInterval]);
 
+  useEffect(() => {
+    if (!isEditingStay && gameSettings?.stayRadiusKm != null) {
+      setStayRadiusInput(Number(gameSettings.stayRadiusKm));
+    }
+  }, [gameSettings?.stayRadiusKm, isEditingStay]);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -611,6 +665,7 @@ export default function Admin() {
           fetchActiveDevices(),
           fetchUsers(),
           fetchGameSettings(),
+          fetchGameDays(),
         ]);
       } else {
         // Just fetch minimal data if needed, or redirect
@@ -626,7 +681,7 @@ export default function Admin() {
   // API Calls
   const fetchGameSettings = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/game-settings', {
+      const response = await fetch(apiUrl('/api/game-settings'), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (response.ok) {
@@ -635,11 +690,22 @@ export default function Admin() {
     } catch (error) { console.error(error); }
   };
 
+  const fetchGameDays = async () => {
+    try {
+      const response = await fetch(apiUrl('/api/game-days'), {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (response.ok) {
+        setGameDays(await response.json());
+      }
+    } catch (error) { console.error(error); }
+  };
+
   // fetchPairs removed, handled by usePairs hook
 
   const fetchDevices = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/devices', {
+      const response = await fetch(apiUrl('/api/devices'), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (response.ok) setDevices(await response.json());
@@ -648,7 +714,7 @@ export default function Admin() {
 
   const fetchActiveDevices = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/devices/active', {
+      const response = await fetch(apiUrl('/api/devices/active'), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (response.ok) setActiveDevices(await response.json());
@@ -657,7 +723,7 @@ export default function Admin() {
 
   const fetchGeofences = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/geofence', {
+      const response = await fetch(apiUrl('/api/geofence'), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (response.ok) setGeofences(await response.json());
@@ -666,7 +732,7 @@ export default function Admin() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/users', {
+      const response = await fetch(apiUrl('/api/users'), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (response.ok) setUsers(await response.json());
@@ -675,7 +741,7 @@ export default function Admin() {
 
   // Actions
   const startTimer = async () => {
-    await fetch('http://localhost:3000/api/game-settings/timer/start', {
+    await fetch(apiUrl('/api/game-settings/timer/start'), {
       method: 'POST',
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
@@ -683,7 +749,7 @@ export default function Admin() {
   };
 
   const stopTimer = async () => {
-    await fetch('http://localhost:3000/api/game-settings/timer/stop', {
+    await fetch(apiUrl('/api/game-settings/timer/stop'), {
       method: 'POST',
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
@@ -691,7 +757,7 @@ export default function Admin() {
   };
 
   const updateInterval = async (minutes: number) => {
-    await fetch('http://localhost:3000/api/game-settings', {
+    await fetch(apiUrl('/api/game-settings'), {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -700,7 +766,218 @@ export default function Admin() {
       body: JSON.stringify({ locationUpdateIntervalMinutes: minutes }),
     });
     fetchGameSettings();
-    addNotification('success', 'Időköz frissítve');
+    addNotification('success', 'A helymeghatározási időköz frissítése megtörtént.');
+  };
+
+  const updateStaySettings = async (payload: { stayRuleEnabled?: boolean; stayRadiusKm?: number }) => {
+    await fetch(apiUrl('/api/game-settings'), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    fetchGameSettings();
+    addNotification('success', 'A maradási szabály beállításai frissítve lettek.');
+  };
+
+  const createGameDay = async (draft: {
+    date: string;
+    startTime: string;
+    endTime: string;
+    specialRulesText: string;
+  }) => {
+    const isFinalDay = (raw: unknown): boolean => {
+      if (!raw) return false;
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          return parsed?.isFinalDay === true;
+        } catch {
+          return false;
+        }
+      }
+      if (typeof raw === 'object') {
+        return (raw as any)?.isFinalDay === true;
+      }
+      return false;
+    };
+    const buildStamp = (dateValue?: string, timeValue?: string): string => {
+      const ymd = normalizeYmd(dateValue);
+      const hm = normalizeHm(timeValue);
+      return `${ymd} ${hm}`;
+    };
+
+    if (!draft.date || !draft.startTime || !draft.endTime) {
+      addNotification('error', 'A dátum és az idősáv megadása kötelező.');
+      return false;
+    }
+    const sanitizedDate = normalizeYmd(draft.date);
+    const sanitizedStartTime = normalizeHm(draft.startTime);
+    const sanitizedEndTime = normalizeHm(draft.endTime);
+    let specialRules: any = undefined;
+    if (draft.specialRulesText.trim()) {
+      try {
+        specialRules = JSON.parse(draft.specialRulesText);
+      } catch {
+        addNotification('error', 'A speciális beállítások formátuma nem érvényes. Kérjük, ellenőrizze.');
+        return false;
+      }
+    }
+    const existingFinalDay = gameDays.find((day) => isFinalDay(day.specialRulesJson));
+    if (existingFinalDay) {
+      if (specialRules?.isFinalDay === true) {
+        addNotification('error', 'Már létezik utolsó játéknap. Egyszerre csak egy lehet.');
+        return false;
+      }
+      const finalYmd = normalizeYmd(existingFinalDay.date);
+      const draftYmd = sanitizedDate;
+      if (finalYmd && draftYmd && draftYmd > finalYmd) {
+        addNotification('error', 'Az utolsó játéknap után nem lehet új napot felvenni.');
+        return false;
+      }
+    }
+    if (specialRules?.isFinalDay === true) {
+      const latestExisting = gameDays.reduce((acc, day) => {
+        const stamp = buildStamp(day.date, day.startTime);
+        return !acc || stamp > acc ? stamp : acc;
+      }, '');
+      const draftStamp = buildStamp(sanitizedDate, sanitizedStartTime);
+      if (latestExisting && draftStamp < latestExisting) {
+        addNotification('error', 'Az utolsó játéknap csak a ténylegesen legutolsó ütemezett nap lehet.');
+        return false;
+      }
+    }
+    const response = await fetch(apiUrl('/api/game-days'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+      body: JSON.stringify({
+        date: sanitizedDate,
+        startTime: sanitizedStartTime,
+        endTime: sanitizedEndTime,
+        ...(specialRules ? { specialRules } : {}),
+      }),
+    });
+    if (response.ok) {
+      addNotification('success', 'A játéknap sikeresen felvétele megtörtént.');
+      fetchGameDays();
+      return true;
+    }
+    try {
+      const err = await response.json();
+      addNotification('error', err?.message || 'A játéknap mentése sikertelen volt.');
+    } catch {
+      addNotification('error', 'A játéknap mentése sikertelen volt.');
+    }
+    return false;
+  };
+
+  const updateGameDay = async (
+    id: number,
+    payload: { date: string; startTime: string; endTime: string; specialRulesText: string },
+  ) => {
+    const isFinalDay = (raw: unknown): boolean => {
+      if (!raw) return false;
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          return parsed?.isFinalDay === true;
+        } catch {
+          return false;
+        }
+      }
+      if (typeof raw === 'object') {
+        return (raw as any)?.isFinalDay === true;
+      }
+      return false;
+    };
+    const buildStamp = (dateValue?: string, timeValue?: string): string => {
+      const ymd = normalizeYmd(dateValue);
+      const hm = normalizeHm(timeValue);
+      return `${ymd} ${hm}`;
+    };
+    const sanitizedDate = normalizeYmd(payload.date);
+    const sanitizedStartTime = normalizeHm(payload.startTime);
+    const sanitizedEndTime = normalizeHm(payload.endTime);
+
+    let specialRules: any = {};
+    if (payload.specialRulesText.trim()) {
+      try {
+        specialRules = JSON.parse(payload.specialRulesText);
+      } catch {
+        addNotification('error', 'A speciális beállítások formátuma nem érvényes. Kérjük, ellenőrizze.');
+        return false;
+      }
+    }
+    const otherFinalDay = gameDays.find((day) => day.id !== id && isFinalDay(day.specialRulesJson));
+    if (otherFinalDay && specialRules?.isFinalDay === true) {
+      addNotification('error', 'Már létezik utolsó játéknap. Egyszerre csak egy lehet.');
+      return false;
+    }
+    if (otherFinalDay) {
+      const finalYmd = normalizeYmd(otherFinalDay.date);
+      const payloadYmd = normalizeYmd(payload.date);
+      if (finalYmd && payloadYmd && payloadYmd > finalYmd) {
+        addNotification('error', 'Az utolsó játéknap után nem lehet napot ütemezni.');
+        return false;
+      }
+    }
+    if (specialRules?.isFinalDay === true) {
+      const latestOtherStamp = gameDays
+        .filter((day) => day.id !== id)
+        .reduce((acc, day) => {
+          const stamp = buildStamp(day.date, day.startTime);
+          return !acc || stamp > acc ? stamp : acc;
+        }, '');
+      const payloadStamp = buildStamp(sanitizedDate, sanitizedStartTime);
+      if (latestOtherStamp && payloadStamp < latestOtherStamp) {
+        addNotification('error', 'Az utolsó játéknap csak a ténylegesen legutolsó ütemezett nap lehet.');
+        return false;
+      }
+    }
+    const response = await fetch(apiUrl(`/api/game-days/${id}`), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+      body: JSON.stringify({
+        date: sanitizedDate,
+        startTime: sanitizedStartTime,
+        endTime: sanitizedEndTime,
+        specialRules,
+      }),
+    });
+    if (response.ok) {
+      addNotification('success', 'A játéknap módosítása elmentve.');
+      fetchGameDays();
+      return true;
+    }
+    try {
+      const err = await response.json();
+      addNotification('error', err?.message || 'A játéknap mentése sikertelen volt.');
+    } catch {
+      addNotification('error', 'A játéknap mentése sikertelen volt.');
+    }
+    return false;
+  };
+
+  const deleteGameDay = async (id: number) => {
+    const response = await fetch(apiUrl(`/api/game-days/${id}`), {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    });
+    if (response.ok) {
+      addNotification('success', 'A játéknap törlése megtörtént.');
+      fetchGameDays();
+      return true;
+    }
+    addNotification('error', 'A játéknap törlése sikertelen volt.');
+    return false;
   };
 
   const createPair = async () => {
@@ -708,7 +985,7 @@ export default function Admin() {
       addNotification('error', 'Adja meg a számot!');
       return;
     }
-    const res = await fetch('http://localhost:3000/api/pairs', {
+    const res = await fetch(apiUrl('/api/pairs'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -737,7 +1014,7 @@ export default function Admin() {
       isDangerous: true,
       confirmLabel: 'Törlés',
       action: async () => {
-        await fetch(`http://localhost:3000/api/pairs/${id}`, {
+        await fetch(apiUrl(`/api/pairs/${id}`), {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
@@ -754,7 +1031,7 @@ export default function Admin() {
     const name = pair.name;
     if (name === undefined || name === null) return;
 
-    await fetch(`http://localhost:3000/api/pairs/${pair.id}/name`, {
+    await fetch(apiUrl(`/api/pairs/${pair.id}/name`), {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -766,23 +1043,45 @@ export default function Admin() {
   };
 
   const handleMw = async (pairId: number) => {
-    const pair = pairs.find(p => p.id === pairId);
-    if (pair?.mostWanted) {
-      await fetch(`http://localhost:3000/api/mw/${pairId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      });
-    } else {
-      await fetch('http://localhost:3000/api/mw', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ pairId }),
-      });
+    const pair = pairs.find((p) => p.id === pairId);
+    const wasMw = !!pair?.mostWanted;
+    const fallbackErr = wasMw
+      ? 'A Most Wanted státusz nem távolítható el.'
+      : 'A Most Wanted státusz nem állítható be.';
+    try {
+      const res = wasMw
+        ? await fetch(apiUrl(`/api/mw/${pairId}`), {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+          })
+        : await fetch(apiUrl('/api/mw'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+            body: JSON.stringify({ pairId }),
+          });
+
+      if (res.ok) {
+        await fetchPairs();
+        addNotification(
+          'success',
+          wasMw ? 'Most Wanted státusz eltávolítva.' : 'Most Wanted státusz beállítva.',
+        );
+        return;
+      }
+
+      let body: unknown;
+      try {
+        body = await res.json();
+      } catch {
+        body = null;
+      }
+      addNotification('error', extractApiErrorMessage(body, fallbackErr));
+    } catch {
+      addNotification('error', 'Hálózati hiba történt. Kérjük, próbálja újra.');
     }
-    fetchPairs();
   };
 
   // Direct capture for PairDetails modal (which has its own confirmation)
@@ -812,7 +1111,7 @@ export default function Admin() {
         return;
       }
       const requestId = `capture-${pairId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const response = await fetch('http://localhost:3000/api/capture', {
+      const response = await fetch(apiUrl('/api/capture'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -862,7 +1161,7 @@ export default function Admin() {
       confirmLabel: 'Visszavonás',
       action: async () => {
         try {
-          const response = await fetch(`http://localhost:3000/api/capture/${pairId}`, {
+          const response = await fetch(apiUrl(`/api/capture/${pairId}`), {
             method: 'DELETE',
             headers: {
               Authorization: `Bearer ${localStorage.getItem('token')}`,
@@ -895,7 +1194,7 @@ export default function Admin() {
       action: async () => {
         try {
           // Must use the string deviceId (IMEI) for the force-logout endpoint
-          const res = await fetch(`http://localhost:3000/api/devices/force-logout/${encodeURIComponent(deviceId)}`, {
+          const res = await fetch(apiUrl(`/api/devices/force-logout/${encodeURIComponent(deviceId)}`), {
             method: 'POST',
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
           });
@@ -924,7 +1223,7 @@ export default function Admin() {
       confirmLabel: 'Törlés',
       action: async () => {
         try {
-          const res = await fetch(`http://localhost:3000/api/devices/${deviceId}`, {
+          const res = await fetch(apiUrl(`/api/devices/${deviceId}`), {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
           });
@@ -959,7 +1258,7 @@ export default function Admin() {
     };
 
     try {
-      const res = await fetch('http://localhost:3000/api/users', {
+      const res = await fetch(apiUrl('/api/users'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -993,7 +1292,7 @@ export default function Admin() {
       confirmLabel: 'Törlés',
       action: async () => {
         try {
-          const res = await fetch(`http://localhost:3000/api/users/${id}`, {
+          const res = await fetch(apiUrl(`/api/users/${id}`), {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
           });
@@ -1040,7 +1339,7 @@ export default function Admin() {
     }
 
     try {
-      const res = await fetch(`http://localhost:3000/api/users/${editingUser.id}`, {
+      const res = await fetch(apiUrl(`/api/users/${editingUser.id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1068,7 +1367,7 @@ export default function Admin() {
       addNotification('error', 'Név kötelező!');
       return;
     }
-    const res = await fetch('http://localhost:3000/api/geofence', {
+    const res = await fetch(apiUrl('/api/geofence'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1084,7 +1383,7 @@ export default function Admin() {
   };
 
   const handleToggleGeofence = async (id: number, active: boolean) => {
-    await fetch(`http://localhost:3000/api/geofence/${id}/${active ? 'activate' : 'deactivate'}`, {
+    await fetch(apiUrl(`/api/geofence/${id}/${active ? 'activate' : 'deactivate'}`), {
       method: 'PUT',
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
@@ -1099,7 +1398,7 @@ export default function Admin() {
       isDangerous: true,
       confirmLabel: 'Törlés',
       action: async () => {
-        await fetch(`http://localhost:3000/api/geofence/${id}`, {
+        await fetch(apiUrl(`/api/geofence/${id}`), {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
@@ -1112,7 +1411,7 @@ export default function Admin() {
 
   const handleActivateHungary = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/game-area', {
+      const res = await fetch(apiUrl('/api/game-area'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1144,7 +1443,7 @@ export default function Admin() {
 
   const handleSendMessage = async (pairId: number | null, title: string, body: string) => {
     try {
-      const res = await fetch('http://localhost:3000/api/messages/send', {
+      const res = await fetch(apiUrl('/api/messages/send'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1197,22 +1496,36 @@ export default function Admin() {
         return (
           <DashboardHome
             gameSettings={gameSettings}
+            gameDays={gameDays}
             activePairsCount={pairs.filter(p => p.active && !p.captured).length}
             activeDevicesCount={activeDevices.length}
             activeGeofencesCount={geofences.filter(g => g.active).length}
-            startTimer={startTimer}
-            stopTimer={stopTimer}
+            onGoToGameControl={() => setActiveTab('game_control')}
+            onGoToPairs={() => setActiveTab('pairs')}
+            onGoToDevices={() => setActiveTab('devices')}
+            onGoToGeofences={() => setActiveTab('geofences')}
           />
         );
       case 'game_control':
         return (
           <GameControl
             gameSettings={gameSettings}
+            startTimer={startTimer}
+            stopTimer={stopTimer}
+            gameDays={gameDays}
+            createGameDay={createGameDay}
+            updateGameDay={updateGameDay}
+            deleteGameDay={deleteGameDay}
             intervalInputValue={intervalInputValue}
             isEditingInterval={isEditingInterval}
             setIntervalInputValue={setIntervalInputValue}
             setIsEditingInterval={setIsEditingInterval}
             updateInterval={updateInterval}
+            stayRadiusInput={stayRadiusInput}
+            setStayRadiusInput={setStayRadiusInput}
+            isEditingStay={isEditingStay}
+            setIsEditingStay={setIsEditingStay}
+            updateStaySettings={updateStaySettings}
           />
         );
       case 'pairs':

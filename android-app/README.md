@@ -6,11 +6,11 @@ Android alkalmazás a menekülő párok számára.
 
 - ✅ Device bejelentkezés (pár száma alapján)
 - ✅ Minimal UI (fekete háttér, rövid üzenetek)
-- ✅ Háttér service 20 percenkénti pozícióküldéshez
+- ✅ **LocationService** (előtér-szolgáltatás): folyamatos GPS + pozícióküldés a szervernek (távolságszámításhoz is)
 - ✅ FCM push értesítések fogadása
 - ✅ Járműhasználat követése (40 perc limit)
-- ✅ Offline cache és sync
-- ✅ Automatikus pozíció küldés WorkManager-rel
+- ✅ Offline cache és sync (`PositionRepository`)
+- ✅ Játékállapot / countdown lekérés (`GET /api/game-settings/countdown`) — értesítés és főképernyő frissítés
 
 ## Technológia
 
@@ -18,7 +18,6 @@ Android alkalmazás a menekülő párok számára.
 - MVVM architektúra
 - Google Play Services Location API
 - Firebase Cloud Messaging
-- WorkManager (háttér feladatokhoz)
 - Room Database (offline cache)
 - Retrofit (API kommunikáció)
 
@@ -67,7 +66,7 @@ private const val BASE_URL = "http://192.168.x.x:3000/"
 
 ### Háttér működés
 
-- Az alkalmazás automatikusan küldi a pozíciót 20 percenként
+- A **LocationService** küldi a pozíciót (folyamatos / gyakori mintavétel a kliensen; a játékmotor ciklusa a szerveren dől el)
 - Offline módban a pozíciók lokálisan tárolódnak és később szinkronizálódnak
 - FCM push értesítések automatikusan megjelennek
 
@@ -112,7 +111,6 @@ app/src/main/java/com/mostwanted/app/
 ├── service/          # Háttér szolgáltatások
 ├── util/             # Segéd osztályok
 ├── viewmodel/        # ViewModel osztályok
-├── worker/           # WorkManager worker-ek
 ├── LoginActivity.kt  # Bejelentkezési képernyő
 └── MainActivity.kt  # Főképernyő
 ```
@@ -120,6 +118,7 @@ app/src/main/java/com/mostwanted/app/
 ### API Endpoints
 
 - `POST /api/devices/login` - Device bejelentkezés
+- `GET /api/game-settings/countdown` - Játékállapot / számláló (JWT)
 - `POST /api/position` - Pozíció küldés
 
 ### Adatbázis

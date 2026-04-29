@@ -14,6 +14,7 @@ import { MwFlag } from '../entities/mw-flag.entity';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
 import { RedisPositionService } from '../redis/redis-position.service';
+import { haversineKm } from '../common/haversine-km';
 
 @Injectable()
 export class RuleViolationsService {
@@ -257,7 +258,13 @@ export class RuleViolationsService {
   async checkViolations(
     pairId: number,
     position: PositionSnapshot,
+    options: { applyGameRules?: boolean } = {},
   ): Promise<{ violations: RuleViolation[]; gameAreaExitViolationActive: boolean }> {
+    const applyGameRules = options.applyGameRules !== false;
+    if (!applyGameRules) {
+      return { violations: [], gameAreaExitViolationActive: false };
+    }
+
     const violations: RuleViolation[] = [];
     let gameAreaExitViolationActive = false;
 
@@ -515,6 +522,85 @@ export class RuleViolationsService {
         Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+  }
+
+  /**
+   * Játéknap lezárása után, ugyanazon naphoz rögzített bázis vs. élő hely; km küszöb: stayRadiusKm.
+   */
+  async checkEndOfDayStayRule(
+    pairId: number,
+    live: { lat: number; lon: number },
+    anchor: { lat: number; lon: number },
+    radiusKm: number,
+  ): Promise<void> {
+    const d = haversineKm(anchor.lat, anchor.lon, live.lat, live.lon);
+    const existing = await this.ruleViolationRepository.findOne({
+      where: { pairId, violationType: 'end_of_day_stay', resolved: false },
+    });
+
+    if (d > radiusKm) {
+      if (!existing) {
+        const v = this.ruleViolationRepository.create({
+          pairId,
+          violationType: 'end_of_day_stay',
+          description: 'A játéknap lezárása után túl messze a napi bázisponthoz (maradási kör).',
+          resolved: false,
+        });
+        const saved = await this.ruleViolationRepository.save(v);
+        const createdIso = saved.createdAt
+          ? new Date(saved.createdAt as Date).toISOString()
+          : new Date().toISOString();
+        this.webSocketGateway.broadcastRuleViolation({
+          pairId,
+          violationType: 'end_of_day_stay',
+          description: v.description,
+          continuousMode: true,
+          resolved: false,
+          timestamp: createdIso,
+          createdAt: createdIso,
+        });
+        await this.fcmService.sendToPair(pairId, {
+          title: 'Maradási szabály',
+          body: 'A játéknap lezárása után túl messze mentetek a bázisponthoz képest.',
+        });
+      }
+    } else if (existing) {
+      await this.ruleViolationRepository.update(
+        { id: existing.id },
+        { resolved: true, resolvedAt: new Date() },
+      );
+      this.webSocketGateway.broadcastRuleViolation({
+        pairId,
+        violationType: 'end_of_day_stay',
+        description: 'A megengedett maradási körön belül vagytok.',
+        continuousMode: false,
+        resolved: true,
+        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  async resolveAllEndOfDayStayViolations(): Promise<void> {
+    const rows = await this.ruleViolationRepository.find({
+      where: { violationType: 'end_of_day_stay', resolved: false },
+    });
+    if (rows.length === 0) return;
+    for (const r of rows) {
+      await this.ruleViolationRepository.update(
+        { id: r.id },
+        { resolved: true, resolvedAt: new Date() },
+      );
+      this.webSocketGateway.broadcastRuleViolation({
+        pairId: r.pairId,
+        violationType: 'end_of_day_stay',
+        description: 'A maradási ellenőrzés inaktív (ablakon kívül).',
+        continuousMode: false,
+        resolved: true,
+        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
+    }
   }
 }
 

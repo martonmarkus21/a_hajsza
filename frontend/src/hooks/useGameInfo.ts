@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSocket } from './useSocket';
+import { apiUrl } from '@/config/env';
 
 interface GameInfo {
   isGameActive: boolean;
@@ -9,6 +10,11 @@ interface GameInfo {
   activeGameArea: string | null;
   activePairs: number;
   totalPairs: number;
+  /** Backend JSON: `campaignStatus` — a játékmotor fázisa (pl. RUNNING). */
+  campaignStatus?: string | null;
+  currentIntervalMinutes?: number | null;
+  /** Utolsó játéknap ütemezett zárása után (backend). */
+  isPastLastScheduledGameEnd?: boolean;
 }
 
 export function useGameInfo() {
@@ -21,6 +27,9 @@ export function useGameInfo() {
     activeGameArea: null,
     activePairs: 0,
     totalPairs: 0,
+    campaignStatus: null,
+    currentIntervalMinutes: null,
+    isPastLastScheduledGameEnd: false,
   });
 
   const fetchGameInfo = async () => {
@@ -28,7 +37,7 @@ export function useGameInfo() {
       // Fetch game day info
       let gameDay = null;
       try {
-        const gameDayResponse = await fetch('http://localhost:3000/api/game-days/today', {
+        const gameDayResponse = await fetch(apiUrl('/api/game-days/today'), {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
@@ -43,10 +52,27 @@ export function useGameInfo() {
         console.error('Error fetching game day:', error);
       }
 
+      let runtimeInfo: any = null;
+      try {
+        const runtimeResponse = await fetch(apiUrl('/api/game-settings/countdown'), {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (runtimeResponse.ok) {
+          const text = await runtimeResponse.text();
+          if (text && text.trim()) {
+            runtimeInfo = JSON.parse(text);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching runtime info:', error);
+      }
+
       // Fetch game area
       let gameArea = null;
       try {
-        const gameAreaResponse = await fetch('http://localhost:3000/api/game-area', {
+        const gameAreaResponse = await fetch(apiUrl('/api/game-area'), {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
@@ -64,7 +90,7 @@ export function useGameInfo() {
       // Fetch pairs
       let pairsData = { pairs: [] };
       try {
-        const pairsResponse = await fetch('http://localhost:3000/api/pairs?active=true', {
+        const pairsResponse = await fetch(apiUrl('/api/pairs?active=true'), {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
@@ -81,16 +107,7 @@ export function useGameInfo() {
 
       const now = new Date();
       const currentTime = now.toLocaleTimeString('hu-HU');
-      const isGameActive = gameDay
-        ? (() => {
-          const [startHour, startMin] = gameDay.startTime.split(':').map(Number);
-          const [endHour, endMin] = gameDay.endTime.split(':').map(Number);
-          const currentMinutes = now.getHours() * 60 + now.getMinutes();
-          const startMinutes = startHour * 60 + startMin;
-          const endMinutes = endHour * 60 + endMin;
-          return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
-        })()
-        : false;
+      const isGameActive = runtimeInfo?.isGameActive === true;
 
       // Get active game area - use the activeGameArea from API if available, otherwise find all active geofences
       let activeGameArea: string | null = null;
@@ -100,7 +117,7 @@ export function useGameInfo() {
 
       // Also check for active custom zones via direct geofence fetch
       try {
-        const geofenceResponse = await fetch('http://localhost:3000/api/geofence', {
+        const geofenceResponse = await fetch(apiUrl('/api/geofence'), {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
@@ -124,6 +141,12 @@ export function useGameInfo() {
         activeGameArea: activeGameArea,
         activePairs: pairsData.pairs?.length || 0,
         totalPairs: pairsData.pairs?.length || 0,
+        campaignStatus: runtimeInfo?.campaignStatus || null,
+        currentIntervalMinutes:
+          typeof runtimeInfo?.currentIntervalMinutes === 'number'
+            ? runtimeInfo.currentIntervalMinutes
+            : null,
+        isPastLastScheduledGameEnd: runtimeInfo?.isPastLastScheduledGameEnd === true,
       });
     } catch (error) {
       console.error('Error fetching game info:', error);
@@ -132,7 +155,7 @@ export function useGameInfo() {
 
   useEffect(() => {
     fetchGameInfo();
-    const interval = setInterval(fetchGameInfo, 60000); // Update every minute
+    const interval = setInterval(fetchGameInfo, 30000);
     const timeInterval = setInterval(() => {
       setGameInfo((prev) => ({
         ...prev,
@@ -146,19 +169,24 @@ export function useGameInfo() {
     };
   }, []);
 
-  // Listen for game area updates via WebSocket
+  // Játéktér vagy játékmotor (ütemezés / ciklus) változásakor azonnali frissítés
   useEffect(() => {
     if (!socket) return;
 
     const handleGameAreaUpdate = () => {
-      console.log('Game area update received, refreshing game info...');
-      fetchGameInfo();
+      void fetchGameInfo();
+    };
+
+    const handleGameRuntimeUpdate = () => {
+      void fetchGameInfo();
     };
 
     socket.on('gameAreaUpdate', handleGameAreaUpdate);
+    socket.on('gameRuntimeUpdate', handleGameRuntimeUpdate);
 
     return () => {
       socket.off('gameAreaUpdate', handleGameAreaUpdate);
+      socket.off('gameRuntimeUpdate', handleGameRuntimeUpdate);
     };
   }, [socket]);
 

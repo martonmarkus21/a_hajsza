@@ -1,4 +1,4 @@
-import { IsOptional, IsNumber, IsBoolean, IsArray } from 'class-validator';
+import { IsOptional, IsNumber, IsBoolean } from 'class-validator';
 
 export class UpdateGameSettingsDto {
   @IsOptional()
@@ -7,12 +7,15 @@ export class UpdateGameSettingsDto {
 
   @IsOptional()
   @IsBoolean()
-  isTimerRunning?: boolean;
+  gameEnabled?: boolean;
 
   @IsOptional()
-  @IsArray()
-  @IsNumber({}, { each: true })
-  pairsSentPositionThisCycle?: number[];
+  @IsBoolean()
+  stayRuleEnabled?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  stayRadiusKm?: number;
 }
 
 

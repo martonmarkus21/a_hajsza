@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Pair } from '../types';
+import { apiUrl } from '@/config/env';
 
 export function usePairs() {
   const [pairs, setPairs] = useState<Pair[]>([]);
@@ -13,7 +14,7 @@ export function usePairs() {
 
   const fetchPairs = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/pairs', {
+      const response = await fetch(apiUrl('/api/pairs'), {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },

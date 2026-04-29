@@ -10,6 +10,8 @@ import { Pair } from '../../types';
 import SmoothAnimatedMarker from '../../components/SmoothAnimatedMarker';
 import { buildPairMarkerDivHtml } from '../../utils/pairMapMarkerHtml';
 import MwTableSearchInput from '../../components/MwTableSearchInput';
+import MwSwitch from '../../components/admin/MwSwitch';
+import { apiUrl } from '@/config/env';
 
 interface Geofence {
     id: number;
@@ -190,13 +192,12 @@ export default function GeofenceManager({
     useEffect(() => {
         const fetchCounties = async () => {
             try {
-                const response = await fetch('http://localhost:3000/api/game-area/counties', {
+                const response = await fetch(apiUrl('/api/game-area/counties'), {
                     headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
                 });
                 if (response.ok) {
                     const data = await response.json();
                     setAvailableCounties(data);
-                    console.log('Loaded available counties:', data.length);
                 }
             } catch (error) {
                 console.error('Error fetching counties:', error);
@@ -215,7 +216,9 @@ export default function GeofenceManager({
                         lon: position.coords.longitude,
                     });
                 },
-                (error) => console.log('Geolocation error:', error),
+                () => {
+                    /* watchPosition error — csendben; UI a hiányzó helyből is működik */
+                },
                 { enableHighAccuracy: true, maximumAge: 30000, timeout: 5000 }
             );
             return () => navigator.geolocation.clearWatch(watchId);
@@ -360,7 +363,7 @@ export default function GeofenceManager({
                 body.active = false;
 
                 // 1. Create Inactive
-                const res = await fetch('http://localhost:3000/api/geofence', {
+                const res = await fetch(apiUrl('/api/geofence'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                     body: JSON.stringify(body)
@@ -371,7 +374,7 @@ export default function GeofenceManager({
                     const newZoneId = data.geofence.id;
 
                     // 2. Atomic Switch
-                    await fetch('http://localhost:3000/api/geofence/bulk-status', {
+                    await fetch(apiUrl('/api/geofence/bulk-status'), {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                         body: JSON.stringify({
@@ -425,7 +428,7 @@ export default function GeofenceManager({
 
             if (idsToDeactivate.length > 0) {
                 try {
-                    await fetch('http://localhost:3000/api/geofence/bulk-status', {
+                    await fetch(apiUrl('/api/geofence/bulk-status'), {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json',
@@ -471,7 +474,7 @@ export default function GeofenceManager({
                 activateIds.push(county.id);
 
                 try {
-                    await fetch('http://localhost:3000/api/geofence/bulk-status', {
+                    await fetch(apiUrl('/api/geofence/bulk-status'), {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json',
@@ -505,7 +508,7 @@ export default function GeofenceManager({
             if (deactivateIds.length > 0 && county.id) {
                 // Atomic switch for Budapest/Pest
                 try {
-                    await fetch('http://localhost:3000/api/geofence/bulk-status', {
+                    await fetch(apiUrl('/api/geofence/bulk-status'), {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json',
@@ -533,7 +536,7 @@ export default function GeofenceManager({
             onRefresh();
         } else {
             try {
-                const response = await fetch('http://localhost:3000/api/game-area', {
+                const response = await fetch(apiUrl('/api/game-area'), {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -561,7 +564,7 @@ export default function GeofenceManager({
             const activateIds = [id];
 
             try {
-                await fetch('http://localhost:3000/api/geofence/bulk-status', {
+                await fetch(apiUrl('/api/geofence/bulk-status'), {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -680,16 +683,11 @@ export default function GeofenceManager({
                                         </div>
                                     </div>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer shadow-md rounded-full flex-shrink-0">
-                                    <input
-                                        type="checkbox"
-                                        checked={hungaryGeofence?.active || false}
-                                        onChange={handleHungaryToggle}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-10 h-6 bg-[#404040] peer-focus:outline-none rounded-full peer peer-checked:bg-green-500 transition-colors duration-200"></div>
-                                    <div className="absolute left-1 top-1 bg-white w-4 h-4 rounded-full shadow-sm transition-transform duration-200 peer-checked:translate-x-4"></div>
-                                </label>
+                                <MwSwitch
+                                    checked={hungaryGeofence?.active || false}
+                                    onChange={handleHungaryToggle}
+                                    srLabel="Magyarország kapcsoló"
+                                />
                             </div>
                         </div>
                     )}
@@ -736,16 +734,11 @@ export default function GeofenceManager({
                                             </div>
                                         </div>
 
-                                        <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                            <input
-                                                type="checkbox"
-                                                checked={county.active}
-                                                onChange={() => handleCountyToggle(county)}
-                                                className="sr-only peer"
-                                            />
-                                            <div className="w-10 h-6 bg-[#404040] peer-focus:outline-none rounded-full peer peer-checked:bg-green-500 transition-colors duration-200"></div>
-                                            <div className="absolute left-1 top-1 bg-white w-4 h-4 rounded-full shadow-sm transition-transform duration-200 peer-checked:translate-x-4"></div>
-                                        </label>
+                                        <MwSwitch
+                                            checked={county.active}
+                                            onChange={() => handleCountyToggle(county)}
+                                            srLabel={county.name}
+                                        />
                                     </div>
                                 ))
                             )
@@ -810,16 +803,11 @@ export default function GeofenceManager({
                                                     <FiTrash2 className="w-4 h-4" />
                                                 </button>
 
-                                                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={geo.active}
-                                                        onChange={() => handleCustomZoneToggle(geo.id, !geo.active)}
-                                                        className="sr-only peer"
-                                                    />
-                                                    <div className="w-10 h-6 bg-[#404040] peer-focus:outline-none rounded-full peer peer-checked:bg-green-500 transition-colors duration-200"></div>
-                                                    <div className="absolute left-1 top-1 bg-white w-4 h-4 rounded-full shadow-sm transition-transform duration-200 peer-checked:translate-x-4"></div>
-                                                </label>
+                                                <MwSwitch
+                                                    checked={geo.active}
+                                                    onChange={() => handleCustomZoneToggle(geo.id, !geo.active)}
+                                                    srLabel={geo.name}
+                                                />
                                             </div>
                                         </div>
                                     ))

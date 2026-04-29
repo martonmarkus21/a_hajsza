@@ -324,8 +324,7 @@ export default function PairDetails({
             <div
               id="mw-toggle-div"
               onClick={() => {
-                onMw(pair.id);
-                addNotification('success', isMw ? 'Most Wanted státusz eltávolítva' : 'Most Wanted státusz beállítva');
+                void onMw(pair.id);
               }}
               className={`flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer select-none ${isMw
                 ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'

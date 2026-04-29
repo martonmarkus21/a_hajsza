@@ -18,6 +18,16 @@ export class CreateGameDayDto {
       start: string;
       end: string;
     };
+    locationIntervalSchedule?: Array<{
+      from: string;
+      to?: string;
+      intervalMinutes: number;
+    }>;
+    areaSchedule?: Array<{
+      from: string;
+      activeCounties?: string[];
+      activeRegions?: string[];
+    }>;
   };
 }
 

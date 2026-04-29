@@ -1,5 +1,9 @@
 import api from './api';
 
+function notifyAuthTokenChanged() {
+  window.dispatchEvent(new CustomEvent('mw:auth-token-changed'));
+}
+
 export interface LoginCredentials {
   username: string;
   password: string;
@@ -39,6 +43,7 @@ export const authService = {
     if (response.data.access_token) {
       localStorage.setItem('token', response.data.access_token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      notifyAuthTokenChanged();
     }
     return response.data;
   },
@@ -46,6 +51,7 @@ export const authService = {
   async logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    notifyAuthTokenChanged();
   },
 
   getCurrentUser(): User | null {

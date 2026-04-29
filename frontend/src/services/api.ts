@@ -1,10 +1,8 @@
 import axios from 'axios';
-
-// @ts-ignore
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { API_ORIGIN } from '@/config/env';
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_ORIGIN,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -26,6 +24,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      window.dispatchEvent(new CustomEvent('mw:auth-token-changed'));
       // Only redirect if not already on login page to prevent infinite refresh loops
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';

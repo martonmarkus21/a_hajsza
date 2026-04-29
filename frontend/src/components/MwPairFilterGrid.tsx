@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { FiChevronDown, FiUsers } from 'react-icons/fi';
 import type { Pair } from '../types';
 
-const PANEL_CLOSE_MS = 200;
 const VIEWPORT_PAD = 8;
 
 function clampPanelLeft(left: number, panelWidth: number): number {
@@ -63,7 +62,7 @@ export default function MwPairFilterGrid({ pairs, value, onChange, className = '
     const t = window.setTimeout(() => {
       setMenuVisible(false);
       setCoords({ top: 0, left: 0, width: 0 });
-    }, PANEL_CLOSE_MS);
+    }, 200);
     return () => clearTimeout(t);
   }, [open, menuVisible]);
 

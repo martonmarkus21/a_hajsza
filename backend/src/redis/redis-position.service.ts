@@ -3,8 +3,11 @@ import { RedisConnectionService } from './redis-connection.service';
 import { PositionSnapshot } from '../positions/position-snapshot';
 
 const LIVE_KEY_PREFIX = 'mw:live:position:';
+const STAY_ANCHOR_PREFIX = 'mw:stay:anchor:';
 /** Longer than the 30-minute "active device" window so keys stay while pairs are online */
 const LIVE_TTL_SECONDS = 45 * 60;
+/** A játéknap zárását követő maradási bázis (ugyanazon naphoz) */
+const STAY_ANCHOR_TTL_SECONDS = 24 * 60 * 60;
 
 export type LivePositionPayload = {
   lat: number;
@@ -18,6 +21,10 @@ export type LivePositionPayload = {
 
 function liveKey(pairId: number): string {
   return `${LIVE_KEY_PREFIX}${pairId}`;
+}
+
+function stayAnchorKey(ymd: string, pairId: number): string {
+  return `${STAY_ANCHOR_PREFIX}${ymd}:${pairId}`;
 }
 
 @Injectable()
@@ -70,5 +77,37 @@ export class RedisPositionService {
 
   async deleteLivePosition(pairId: number): Promise<void> {
     await this.redis.del(liveKey(pairId));
+  }
+
+  /**
+   * Játéknap végének pillanatában: bázisponthoz használt (első) minta — ugyanarra a (nap, pár) kulcsra csak egyszer ír.
+   */
+  async setEndOfDayStayAnchorIfAbsent(
+    ymd: string,
+    pairId: number,
+    lat: number,
+    lon: number,
+  ): Promise<boolean> {
+    const k = stayAnchorKey(ymd, pairId);
+    const res = await this.redis.set(
+      k,
+      JSON.stringify({ lat, lon, setAt: new Date().toISOString() }),
+      { EX: STAY_ANCHOR_TTL_SECONDS, NX: true },
+    );
+    return res === 'OK';
+  }
+
+  async getEndOfDayStayAnchor(ymd: string, pairId: number): Promise<{ lat: number; lon: number } | null> {
+    const raw = await this.redis.get(stayAnchorKey(ymd, pairId));
+    if (!raw) return null;
+    try {
+      const o = JSON.parse(raw) as { lat?: number; lon?: number };
+      if (typeof o.lat === 'number' && typeof o.lon === 'number' && Number.isFinite(o.lat) && Number.isFinite(o.lon)) {
+        return { lat: o.lat, lon: o.lon };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 }

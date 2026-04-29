@@ -21,14 +21,24 @@ export class GameSettingsController {
   async getCountdown() {
     const countdown = await this.gameSettingsService.getCountdown();
     const settings = await this.gameSettingsService.getSettings();
+    const runtime = await this.gameSettingsService.getRuntimeSnapshot();
 
     return {
       countdown,
-      isTimerRunning: settings.isTimerRunning,
-      allowPositionUpdatesForMap: settings.allowPositionUpdatesForMap ?? false,
+      gameEnabled: settings.gameEnabled,
+      isTimerRunning: runtime.campaignStatus === 'RUNNING',
+      allowPositionUpdatesForMap: runtime.allowPositionUpdatesForMap ?? false,
       locationUpdateIntervalMinutes: settings.locationUpdateIntervalMinutes,
-      lastLocationUpdate: settings.lastLocationUpdate
-        ? new Date(settings.lastLocationUpdate).toISOString()
+      currentIntervalMinutes: runtime.currentIntervalMinutes,
+      campaignStatus: runtime.campaignStatus,
+      isGameActive: runtime.isGameActive,
+      isPastLastScheduledGameEnd: runtime.isPastLastScheduledGameEnd,
+      activeGameDayId: runtime.activeGameDayId,
+      lastLocationUpdate: runtime.lastCycleTurnAt
+        ? new Date(runtime.lastCycleTurnAt).toISOString()
+        : null,
+      nextLocationUpdate: runtime.currentCycleEndAt
+        ? new Date(runtime.currentCycleEndAt).toISOString()
         : null,
     };
   }
@@ -40,10 +50,12 @@ export class GameSettingsController {
   async getSettings() {
     const settings = await this.gameSettingsService.getSettings();
     const countdown = await this.gameSettingsService.getCountdown();
+    const runtime = await this.gameSettingsService.getRuntimeSnapshot();
 
     return {
       ...settings,
       countdown,
+      runtime,
     };
   }
 
@@ -69,9 +81,12 @@ export class GameSettingsController {
     const out = await this.gameSettingsService.startTimer();
     await this.auditLogsService.log({
       userId: req.user.userId,
-      actionType: 'game_settings_timer_start',
-      entityType: 'game_settings',
+      actionType: 'game_runtime_engine_start',
+      entityType: 'game_runtime',
       dataJson: {
+        campaignStatus: out.isTimerRunning ? 'RUNNING' : 'IDLE',
+        allowPositionUpdatesForMap: out.allowPositionUpdatesForMap,
+        currentIntervalMinutes: out.locationUpdateIntervalMinutes,
         nextLocationUpdate: out.nextLocationUpdate
           ? new Date(out.nextLocationUpdate).toISOString()
           : null,
@@ -88,9 +103,12 @@ export class GameSettingsController {
     const out = await this.gameSettingsService.stopTimer();
     await this.auditLogsService.log({
       userId: req.user.userId,
-      actionType: 'game_settings_timer_stop',
-      entityType: 'game_settings',
-      dataJson: {},
+      actionType: 'game_runtime_engine_stop',
+      entityType: 'game_runtime',
+      dataJson: {
+        campaignStatus: out.isTimerRunning ? 'RUNNING' : 'IDLE',
+        allowPositionUpdatesForMap: out.allowPositionUpdatesForMap,
+      },
       ...auditMetaFromRequest(req),
     });
     return out;

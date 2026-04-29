@@ -8,6 +8,7 @@ import { usePairs } from './hooks/usePairs';
 import { useGameInfo } from './hooks/useGameInfo';
 import { Pair } from './types';
 import { mergeLastPosition } from './utils/mergeLastPosition';
+import { liveGameStatusHeadline, mapPositionWindowLabelHu } from '@/utils/liveGameLabels';
 import { authService } from './services/auth';
 import { useNotification } from './contexts/NotificationContext';
 import Login from './pages/Login';
@@ -16,6 +17,7 @@ import Profile from './pages/Profile';
 import PairDetails from './components/PairDetails';
 import PositionsTraceMapModal, { type SinglePositionRow } from './components/PositionsTraceMapModal';
 import { fetchLatestSavedPositionForPair } from './utils/fetchLatestSavedPosition';
+import { extractApiErrorMessage } from './utils/extractApiErrorMessage';
 import RuleViolationDetailsModal from './components/RuleViolationDetailsModal';
 import MWLoader from './components/MWLoader';
 import SendMessageModal from './components/SendMessageModal';
@@ -51,6 +53,7 @@ import 'leaflet/dist/leaflet.css';
 import './App.css';
 import SmoothAnimatedMarker from './components/SmoothAnimatedMarker';
 import { buildPairMarkerDivHtml } from './utils/pairMapMarkerHtml';
+import { apiUrl } from '@/config/env';
 
 interface Geofence {
   id: number;
@@ -371,6 +374,38 @@ function FloatingHeader({
   onToggleSidebar: () => void;
 }) {
   const navigate = useNavigate();
+  const liveActive = gameSettings?.isGameActive ?? gameInfo.isGameActive;
+  const motorPhase = gameSettings?.campaignStatus ?? gameInfo.campaignStatus;
+  const pastLast = gameSettings?.isPastLastScheduledGameEnd ?? gameInfo.isPastLastScheduledGameEnd;
+  const statusUi = liveGameStatusHeadline({
+    gameEnabled: gameSettings?.gameEnabled,
+    isGameActive: liveActive,
+    motorPhase,
+    isPastLastScheduledGameEnd: pastLast,
+  });
+  const statusClass =
+    statusUi.variant === 'live'
+      ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+      : statusUi.variant === 'paused'
+        ? 'bg-amber-500/10 border-amber-500/25 text-amber-300'
+        : statusUi.variant === 'warn'
+          ? 'bg-amber-600/15 border-amber-500/30 text-amber-200'
+          : statusUi.variant === 'off'
+            ? 'bg-red-500/10 border-red-500/20 text-red-400'
+            : 'bg-white/5 border-white/10 text-gray-400';
+  const dotClass =
+    statusUi.variant === 'live'
+      ? 'bg-orange-400 pulse-orange'
+      : statusUi.variant === 'paused' || statusUi.variant === 'warn'
+        ? 'bg-amber-400'
+        : statusUi.variant === 'off'
+          ? 'bg-red-400'
+          : 'bg-gray-500';
+  const mapWin =
+    gameSettings?.gameEnabled && (motorPhase === 'RUNNING' || liveActive)
+      ? mapPositionWindowLabelHu(gameSettings.allowPositionUpdatesForMap)
+      : null;
+
   return (
     <div className={`absolute top-0 left-0 right-0 z-[1000] flex flex-col transition-all duration-300 ease-in-out font-sans p-4`}>
       {/* Glassmorphism Container */}
@@ -481,18 +516,27 @@ function FloatingHeader({
         </div>
 
         {/* Expanded Info Panel */}
-        <div className={`header-divider transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden border-t ${isExpanded ? 'max-h-[140px] border-white/5' : 'max-h-0 border-transparent'
+        <div className={`header-divider transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden border-t ${isExpanded ? 'max-h-[250px] border-white/5' : 'max-h-0 border-transparent'
           }`}>
           <div className="p-5 grid grid-cols-2 md:grid-cols-5 gap-4">
-            {/* ... existing info panel contents ... */}
-            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center gap-2 hover:bg-white/[0.06] transition-colors">
-              <div className="text-xs uppercase font-bold text-gray-500 tracking-wider">Státusz</div>
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-bold border ${gameInfo.isGameActive
-                ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
-                : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
-                <div className={`w-1.5 h-1.5 rounded-full ${gameInfo.isGameActive ? 'bg-orange-400 pulse-orange' : 'bg-red-400'}`} />
-                {gameInfo.isGameActive ? 'FOLYAMATBAN' : 'SZÜNETEL'}
+            <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 hover:bg-white/[0.06] transition-colors min-h-[108px]">
+              <div className="text-xs uppercase font-bold text-gray-500 tracking-wider">Játék állapot</div>
+              <div className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-xl text-center border ${statusClass}`}>
+                <div className="flex items-center gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
+                  <span className="text-sm font-bold leading-tight">{statusUi.headline}</span>
+                </div>
+                {statusUi.detail ? (
+                  <span className="text-[10px] font-medium opacity-90 leading-snug max-w-[11rem]">{statusUi.detail}</span>
+                ) : null}
               </div>
+              {mapWin ? (
+                <span
+                  className={`text-[10px] font-semibold uppercase tracking-wide ${mapWin.variant === 'open' ? 'text-emerald-400/90' : 'text-gray-500'}`}
+                >
+                  {mapWin.label}
+                </span>
+              ) : null}
             </div>
 
             <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-3 flex flex-col items-center justify-center gap-1 hover:bg-white/[0.06] transition-colors">
@@ -526,9 +570,17 @@ function FloatingHeader({
                 {locationUpdateCountdown ? (
                   `${locationUpdateCountdown.minutes}:${locationUpdateCountdown.seconds.toString().padStart(2, '0')}`
                 ) : (
-                  gameSettings?.isTimerRunning ? '--:--' : 'ÁLL'
+                  gameSettings?.gameEnabled ? '--:--' : 'ÁLL'
                 )}
               </div>
+              {gameSettings?.gameEnabled ? (
+                <div className="text-[10px] text-gray-500 font-medium">
+                  Aktuális ciklus:{' '}
+                  <span className="text-gray-400 tabular-nums">
+                    {gameSettings.currentIntervalMinutes ?? gameSettings.locationUpdateIntervalMinutes ?? '—'} perc
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -569,7 +621,7 @@ function ModernSidebar({
       className={`absolute left-4 bottom-4 z-[999] w-96 flex flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] transform ${isVisible ? 'translate-x-0 opacity-100 pointer-events-auto' : '-translate-x-[120%] opacity-0 pointer-events-none'
         }`}
       /* Round 3: Consistent top position (gap) regardless of Header expansion */
-      style={{ top: isHeaderExpanded ? '220px' : '100px' }}
+      style={{ top: isHeaderExpanded ? '250px' : '100px' }}
     >
       {/* Glass Container */}
       <div className="flex-1 bg-[#0f0f0f]/90 backdrop-blur-xl border border-white/10 shadow-2xl rounded-[24px] overflow-hidden flex flex-col">
@@ -818,6 +870,12 @@ function MapView() {
   const [locationUpdateCountdown, setLocationUpdateCountdown] = useState<{ minutes: number; seconds: number } | null>(null);
   const [gameSettings, setGameSettings] = useState<{
     locationUpdateIntervalMinutes: number;
+    gameEnabled?: boolean;
+    isGameActive?: boolean;
+    campaignStatus?: string | null;
+    currentIntervalMinutes?: number | null;
+    isPastLastScheduledGameEnd?: boolean;
+    activeGameDayId?: number | null;
     isTimerRunning: boolean;
     countdown: { minutes: number; seconds: number } | null;
     lastLocationUpdate: string | null;
@@ -901,7 +959,7 @@ function MapView() {
   useEffect(() => {
     const fetchActiveGameAreaViolations = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/rule-violations/active-game-area', {
+        const response = await fetch(apiUrl('/api/rule-violations/active-game-area'), {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
         });
         if (!response.ok) return;
@@ -984,8 +1042,8 @@ function MapView() {
         if (!token) return;
         const isAdmin = authService.getCurrentUser()?.role === 'admin';
         const url = isAdmin
-          ? 'http://localhost:3000/api/game-settings'
-          : 'http://localhost:3000/api/game-settings/countdown';
+          ? apiUrl('/api/game-settings')
+          : apiUrl('/api/game-settings/countdown');
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -993,6 +1051,13 @@ function MapView() {
           const data = await response.json();
           setGameSettings({
             locationUpdateIntervalMinutes: data.locationUpdateIntervalMinutes || 20,
+            gameEnabled: data.gameEnabled,
+            isGameActive: data.isGameActive,
+            campaignStatus: data.campaignStatus ?? data.runtime?.campaignStatus ?? null,
+            currentIntervalMinutes: data.currentIntervalMinutes ?? data.runtime?.currentIntervalMinutes ?? null,
+            isPastLastScheduledGameEnd:
+              data.isPastLastScheduledGameEnd ?? data.runtime?.isPastLastScheduledGameEnd,
+            activeGameDayId: data.activeGameDayId ?? data.runtime?.activeGameDayId ?? null,
             isTimerRunning: data.isTimerRunning,
             countdown: data.countdown,
             lastLocationUpdate: data.lastLocationUpdate || null,
@@ -1156,6 +1221,39 @@ function MapView() {
       refetch();
     });
     socket.on('gameAreaUpdate', () => fetchGeofences());
+    socket.on('gameRuntimeUpdate', (data: any) => {
+      setGameSettings((prev) => {
+        if (!prev) return prev;
+        const prevRt = (prev as any).runtime ?? {};
+        return {
+          ...prev,
+          isTimerRunning: data?.campaignStatus === 'RUNNING',
+          campaignStatus: data?.campaignStatus ?? prev.campaignStatus ?? null,
+          isGameActive: data?.isGameActive ?? prev.isGameActive,
+          currentIntervalMinutes: data?.currentIntervalMinutes ?? prev.currentIntervalMinutes ?? null,
+          isPastLastScheduledGameEnd:
+            data?.isPastLastScheduledGameEnd ?? prev.isPastLastScheduledGameEnd,
+          activeGameDayId: data?.activeGameDayId ?? prev.activeGameDayId ?? null,
+          allowPositionUpdatesForMap:
+            data?.allowPositionUpdatesForMap ?? prev.allowPositionUpdatesForMap,
+          lastLocationUpdate: data?.currentCycleStartAt ?? prev.lastLocationUpdate,
+          nextLocationUpdate: data?.currentCycleEndAt ?? (prev as any).nextLocationUpdate ?? null,
+          runtime: {
+            ...prevRt,
+            campaignStatus: data?.campaignStatus ?? prevRt.campaignStatus,
+            isGameActive: data?.isGameActive ?? prevRt.isGameActive,
+            isPastLastScheduledGameEnd:
+              data?.isPastLastScheduledGameEnd ?? prevRt.isPastLastScheduledGameEnd,
+            currentIntervalMinutes: data?.currentIntervalMinutes ?? prevRt.currentIntervalMinutes,
+            allowPositionUpdatesForMap:
+              data?.allowPositionUpdatesForMap ?? prevRt.allowPositionUpdatesForMap,
+            activeGameDayId: data?.activeGameDayId ?? prevRt.activeGameDayId,
+            currentCycleStartAt: data?.currentCycleStartAt ?? prevRt.currentCycleStartAt,
+            currentCycleEndAt: data?.currentCycleEndAt ?? prevRt.currentCycleEndAt,
+          },
+        } as any;
+      });
+    });
     socket.on('ruleViolation', (data: any) => {
       if (!data || data.violationType !== 'game_area_exit') return;
       const pairId = Number(data.pairId);
@@ -1212,6 +1310,7 @@ function MapView() {
       socket.off('captureReverted', handleCaptureReverted);
       socket.off('mwHighlight');
       socket.off('gameAreaUpdate');
+      socket.off('gameRuntimeUpdate');
       socket.off('ruleViolation');
     };
   }, [socket, gameSettings, refetch, addNotification, pairsState, pairs]);
@@ -1229,7 +1328,7 @@ function MapView() {
 
   const fetchGeofences = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/geofence', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const res = await fetch(apiUrl('/api/geofence'), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       setGeofences(await res.json());
     } catch (e) { console.error(e); }
   };
@@ -1262,7 +1361,7 @@ function MapView() {
         return;
       }
       const requestId = `capture-${pairId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const res = await fetch('http://localhost:3000/api/capture', {
+      const res = await fetch(apiUrl('/api/capture'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({
@@ -1285,18 +1384,39 @@ function MapView() {
   };
 
   const handleMw = async (pairId: number) => {
+    const p = pairsState.find((x) => x.id === pairId);
+    const wasMw = !!p?.mostWanted;
+    const fallbackErr = wasMw
+      ? 'A Most Wanted státusz nem távolítható el.'
+      : 'A Most Wanted státusz nem állítható be.';
     try {
-      const p = pairsState.find((p) => p.id === pairId);
-      const url = p?.mostWanted ? `http://localhost:3000/api/mw/${pairId}` : 'http://localhost:3000/api/mw';
-      const method = p?.mostWanted ? 'DELETE' : 'POST';
-      const body = p?.mostWanted ? undefined : JSON.stringify({ pairId });
+      const url = wasMw ? apiUrl(`/api/mw/${pairId}`) : apiUrl('/api/mw');
+      const method = wasMw ? 'DELETE' : 'POST';
+      const body = wasMw ? undefined : JSON.stringify({ pairId });
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body,
       });
-      if (res.ok) refetch();
-    } catch (e) { console.error(e); }
+      if (res.ok) {
+        refetch();
+        addNotification(
+          'success',
+          wasMw ? 'Most Wanted státusz eltávolítva.' : 'Most Wanted státusz beállítva.',
+        );
+        return;
+      }
+      let payload: unknown;
+      try {
+        payload = await res.json();
+      } catch {
+        payload = null;
+      }
+      addNotification('error', extractApiErrorMessage(payload, fallbackErr));
+    } catch (e) {
+      console.error(e);
+      addNotification('error', 'Hálózati hiba történt. Kérjük, próbálja újra.');
+    }
   };
 
   const handleAssignName = async (pairId: number, newName?: string) => {
@@ -1309,7 +1429,7 @@ function MapView() {
     if (n === null) return;
     const nameToSet = n.trim() === '' ? null : n.trim();
     try {
-      const res = await fetch(`http://localhost:3000/api/pairs/${pairId}/name`, {
+      const res = await fetch(apiUrl(`/api/pairs/${pairId}/name`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ name: nameToSet }),
@@ -1324,7 +1444,7 @@ function MapView() {
 
   const handleSendMessage = async (pairId: number | null, title: string, body: string) => {
     try {
-      const res = await fetch('http://localhost:3000/api/messages/send', {
+      const res = await fetch(apiUrl('/api/messages/send'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ pairId: pairId || undefined, title, body }),

@@ -10,6 +10,7 @@ import { User } from '../entities/user.entity';
 import { WebSocketModule } from '../websocket/websocket.module';
 import { FcmModule } from '../fcm/fcm.module';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { GameRuntimeModule } from '../game-runtime/game-runtime.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { AuditLogsModule } from '../audit-logs/audit-logs.module';
     WebSocketModule,
     FcmModule,
     AuditLogsModule,
+    GameRuntimeModule,
   ],
   controllers: [CapturesController],
   providers: [CapturesService],

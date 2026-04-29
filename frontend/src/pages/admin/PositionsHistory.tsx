@@ -33,6 +33,7 @@ import { DateTimeStackCell, formatDateTimeBudapestParts } from '../../utils/form
 import { useSocket } from '../../hooks/useSocket';
 import { useNotification } from '../../contexts/NotificationContext';
 import type { Pair } from '../../types';
+import { apiUrl } from '@/config/env';
 
 export interface AdminPositionRow {
   id: number;
@@ -182,7 +183,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
       params.set('sortBy', 'timestamp');
       params.set('sortDir', 'desc');
 
-      const res = await fetch(`http://localhost:3000/api/positions/admin/list?${params}`, {
+      const res = await fetch(apiUrl(`/api/positions/admin/list?${params}`), {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       if (!res.ok) {
@@ -452,7 +453,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
     setDeletingPositions(true);
     setError(null);
     try {
-      const res = await fetch(`http://localhost:3000/api/positions/admin/pair/${selectedPairId}`, {
+      const res = await fetch(apiUrl(`/api/positions/admin/pair/${selectedPairId}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
@@ -500,7 +501,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
     setDeletingPositions(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost:3000/api/positions/admin/delete-by-ids', {
+      const res = await fetch(apiUrl('/api/positions/admin/delete-by-ids'), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,

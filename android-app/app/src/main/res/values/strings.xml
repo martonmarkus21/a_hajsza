@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Most Wanted</string>
+    <string name="location_service_title">Most Wanted — helyzet</string>
+    <string name="location_service_default_status">Pozíció követés aktív</string>
 </resources>
 
 

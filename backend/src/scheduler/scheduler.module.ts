@@ -4,14 +4,22 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SchedulerService } from './scheduler.service';
 import { Position } from '../entities/position.entity';
 import { RuleViolation } from '../entities/rule-violation.entity';
-import { Device } from '../entities/device.entity';
+import { Pair } from '../entities/pair.entity';
+import { Capture } from '../entities/capture.entity';
+import { GameSettings } from '../entities/game-settings.entity';
 import { RuleViolationsModule } from '../rule-violations/rule-violations.module';
+import { GameRuntimeModule } from '../game-runtime/game-runtime.module';
+import { GameDaysModule } from '../game-days/game-days.module';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    TypeOrmModule.forFeature([Position, RuleViolation, Device]),
+    TypeOrmModule.forFeature([Position, RuleViolation, Pair, Capture, GameSettings]),
     RuleViolationsModule,
+    GameRuntimeModule,
+    GameDaysModule,
+    RedisModule,
   ],
   providers: [SchedulerService],
   exports: [SchedulerService],

@@ -17,7 +17,8 @@
 ### ✅ 3. Location Service
 - **Foreground service**: Háttérben futó szolgáltatás
 - **GPS tracking**: Google Play Services Location API
-- **20 perces intervallum**: Automatikus pozíció küldés
+- **Folyamatos / gyakori pozícióküldés** a szervernek (`PositionRepository`), a játékmotor mintaciklusa a backendhez igazodik
+- **Játékállapot poll**: `GET /api/game-settings/countdown` (értesítés + broadcast a főképernyőnek)
 - **Vehicle mode**: Járműhasználat követés
 
 ### ✅ 4. FCM Service
@@ -26,33 +27,28 @@
 - **Message handling**: Üzenetek megjelenítése
 - **Broadcast**: MainActivity frissítés
 
-### ✅ 5. Position Worker
-- **WorkManager**: Periodikus háttér feladat
-- **Offline sync**: Offline pozíciók szinkronizálása
-- **Error handling**: Retry mechanizmus
-
-### ✅ 6. Repository Pattern
+### ✅ 5. Repository Pattern
 - **PositionRepository**: Adat réteg
 - **Offline cache**: Room database
 - **Sync mechanism**: Automatikus szinkronizálás
 
-### ✅ 7. MainActivity
+### ✅ 6. MainActivity
 - **UI**: Minimal fekete UI
 - **Message display**: Üzenetek megjelenítése
 - **Vehicle control**: Járműhasználat kezelés
 - **Help button**: Segítség kérés
 
-### ✅ 8. PreferencesHelper
+### ✅ 7. PreferencesHelper
 - **Token storage**: Biztonságos token tárolás
 - **Device info**: Pár információk
 - **Vehicle state**: Járműhasználat állapot
 
-### ✅ 9. Build Configuration
+### ✅ 8. Build Configuration
 - **Kapt plugin**: Room compiler
 - **Dependencies**: Minden szükséges library
 - **Firebase**: Google Services integráció
 
-### ✅ 10. UI/UX
+### ✅ 9. UI/UX
 - **Themes**: Fekete-narancs színséma
 - **Layouts**: Login és Main activity
 - **Strings**: Magyar nyelvű szövegek
@@ -76,11 +72,10 @@ android-app/
 │   │   │   │   ├── LocationService.kt     # GPS service
 │   │   │   │   └── FcmService.kt         # FCM service
 │   │   │   ├── util/
-│   │   │   │   └── PreferencesHelper.kt  # SharedPreferences helper
+│   │   │   │   ├── PreferencesHelper.kt  # SharedPreferences helper
+│   │   │   │   └── GameRuntimeFormatter.kt
 │   │   │   ├── viewmodel/
 │   │   │   │   └── MainViewModel.kt       # ViewModel
-│   │   │   ├── worker/
-│   │   │   │   └── PositionWorker.kt     # WorkManager worker
 │   │   │   ├── LoginActivity.kt          # Bejelentkezés
 │   │   │   └── MainActivity.kt           # Főképernyő
 │   │   ├── res/
@@ -116,14 +111,8 @@ android-app/
 
 ### LocationService
 - Foreground service
-- GPS pozíció követés
-- 20 perces intervallum
-- Automatikus pozíció küldés
-
-### PositionWorker
-- WorkManager periodikus feladat
-- Offline pozíciók szinkronizálása
-- Retry mechanizmus
+- GPS pozíció követés, pozícióküldés a `PositionRepository`-n keresztül
+- Játékállapot / countdown poll (értesítés szöveg + broadcast)
 
 ### ApiService
 - Retrofit API interfész
@@ -191,7 +180,7 @@ Body: {
 
 - Pozíciók lokálisan tárolódnak Room database-ben
 - Automatikus szinkronizálás amikor internet elérhető
-- WorkManager kezeli a retry-t
+- Sikertelen küldés esetén a pozíciók a Room-ban maradnak; a következő sikeres `sendPosition` szinkronizál
 
 ## Járműhasználat
 

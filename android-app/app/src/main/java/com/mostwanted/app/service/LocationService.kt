@@ -16,11 +16,19 @@ import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import com.mostwanted.app.MainActivity
 import com.mostwanted.app.R
+import com.mostwanted.app.api.ApiService
 import com.mostwanted.app.database.PositionEntity
 import com.mostwanted.app.repository.PositionRepository
+import com.mostwanted.app.util.GameRuntimeFormatter
+import com.mostwanted.app.util.PreferencesHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.Timer
@@ -35,6 +43,14 @@ class LocationService : Service() {
     private var positionSendTimer: Timer? = null
     private var lastSentLocation: Location? = null
 
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(serviceJob + Dispatchers.IO)
+
+    companion object {
+        const val ACTION_RUNTIME_SUMMARY = "com.mostwanted.app.GAME_RUNTIME_SUMMARY"
+        const val EXTRA_RUNTIME_SUMMARY = "runtime_summary"
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
@@ -43,11 +59,11 @@ class LocationService : Service() {
         setupLocationUpdates()
         startLocationUpdates()
         startPositionSendTimer() // Start timer to guarantee 1-second updates
-        // PositionWorker removed - LocationService now handles continuous updates
+        startGameRuntimePolling()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification()
+        val notification = buildForegroundNotification(getString(R.string.location_service_default_status))
         startForeground(1, notification)
         
         // Check if this is a location update request
@@ -63,6 +79,7 @@ class LocationService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceJob.cancel()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         positionSendTimer?.cancel()
         positionSendTimer = null
@@ -83,7 +100,7 @@ class LocationService : Service() {
         }
     }
 
-    private fun createNotification(): Notification {
+    private fun buildForegroundNotification(body: String): Notification {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
@@ -91,8 +108,8 @@ class LocationService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Most Wanted")
-            .setContentText("Pozíció követés aktív")
+            .setContentTitle(getString(R.string.location_service_title))
+            .setContentText(body)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(pendingIntent)
             .setOngoing(true) // Make notification persistent
@@ -101,11 +118,39 @@ class LocationService : Service() {
             .build()
     }
 
+    private fun startGameRuntimePolling() {
+        serviceScope.launch {
+            while (isActive) {
+                try {
+                    val prefs = PreferencesHelper(this@LocationService)
+                    if (prefs.isLoggedIn() && prefs.getToken() != null) {
+                        val api = ApiService.create(this@LocationService)
+                        val r = api.getGameCountdown()
+                        val line = GameRuntimeFormatter.statusLine(r)
+                        withContext(Dispatchers.Main) {
+                            val nm = getSystemService(NotificationManager::class.java)
+                            nm.notify(1, buildForegroundNotification(line))
+                            sendBroadcast(
+                                Intent(ACTION_RUNTIME_SUMMARY).apply {
+                                    putExtra(EXTRA_RUNTIME_SUMMARY, line)
+                                    setPackage(packageName)
+                                },
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("LocationService", "Game countdown poll: ${e.message}")
+                }
+                delay(45_000L)
+            }
+        }
+    }
+
     private fun setupLocationUpdates() {
         // Use very frequent updates for continuous tracking (for distance calculation)
         // Priority: High accuracy for better location tracking
         // Interval: 1 second for very frequent updates (even in background)
-        // This is needed for accurate distance calculation, but positions won't be shown on map until game timer expires
+        // Gyakori minta: légvonalbeli távolság a kliensen; a térképre kerülés / PG-mentés a szerver játékmotor-ciklusától függ
         // CRITICAL: Use PRIORITY_HIGH_ACCURACY and setMaxUpdateDelayMillis to ensure updates work in background
         locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000) // 1 second
             .setWaitForAccurateLocation(false)

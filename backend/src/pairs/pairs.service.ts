@@ -14,9 +14,9 @@ import { UpdatePairDto } from './dto/update-pair.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
 import { FcmService } from '../fcm/fcm.service';
-import { GameSettingsService } from '../game-settings/game-settings.service';
 import { RecentDevicePairIdsService } from '../device-activity/recent-device-pair-ids.service';
 import { parsePairsSentIds } from '../common/pairs-sent.util';
+import { GameRuntimeService } from '../game-runtime/game-runtime.service';
 
 @Injectable()
 export class PairsService {
@@ -37,7 +37,7 @@ export class PairsService {
     private userRepository: Repository<User>,
     private auditLogsService: AuditLogsService,
     private fcmService: FcmService,
-    private gameSettingsService: GameSettingsService,
+    private gameRuntimeService: GameRuntimeService,
     private redisPositionService: RedisPositionService,
     private recentDevicePairIdsService: RecentDevicePairIdsService,
   ) {}
@@ -63,7 +63,8 @@ export class PairsService {
     const exitViolationPairIds = new Set(activeExitViolations.map((v) => v.pairId));
 
     const liveByPairId = await this.redisPositionService.getLivePositionsForPairIds(pairIds);
-    const gameSettings = await this.gameSettingsService.getSettings();
+    const runtimeContext = await this.gameRuntimeService.getRuntimeContext();
+    const runtimeState = runtimeContext.state;
 
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
 
@@ -120,12 +121,11 @@ export class PairsService {
 
     const latestByPairId = await this.loadLatestPositionPerPair(pairIds);
 
-    const pairsSentArray = parsePairsSentIds(gameSettings.pairsSentPositionThisCycle);
-    const firstInCycleByPairId = await this.loadFirstPositionInCycleForPairs(
-      pairs,
-      pairsSentArray,
-      gameSettings,
-    );
+    const pairsSentArray = parsePairsSentIds(runtimeState.pairsSentPositionThisCycle);
+    const firstInCycleByPairId = await this.loadFirstPositionInCycleForPairs(pairs, pairsSentArray, {
+      motorRunning: runtimeState.campaignStatus === 'RUNNING',
+      cycleStartAt: runtimeState.currentCycleStartAt,
+    });
 
     const pairIdsToDeactivate: number[] = [];
     const results: Array<{
@@ -169,7 +169,11 @@ export class PairsService {
       const lastPosition = latestByPairId.get(pair.id) ?? null;
       let allowedLastPosition: { lat: number; lon: number; timestamp: string } | null = null;
 
-      if (lastPosition && gameSettings.isTimerRunning && gameSettings.lastLocationUpdate) {
+      if (
+        lastPosition &&
+        runtimeState.campaignStatus === 'RUNNING' &&
+        runtimeState.currentCycleStartAt
+      ) {
         const pairIdInArray = pairsSentArray.some((id) => Number(id) === Number(pair.id));
         if (pairIdInArray) {
           const firstPositionInCycle = firstInCycleByPairId.get(pair.id);
@@ -207,7 +211,7 @@ export class PairsService {
       }
 
       // Ha nincs ciklusbeli / élő pozíció: mindig a legutóbbi mentett (positions) — számláló alatt is
-      // (új számlálónál lastLocationUpdate még null, vagy a pár még nem küldött a ciklusban; ilyenkor se tűnjön el a térképről).
+      // (új ciklusban cycleStartAt még null, vagy a pár még nem küldött a ciklusban; ilyenkor se tűnjön el a térképről).
       if (!allowedLastPosition && lastPosition) {
         allowedLastPosition = {
           lat: parseFloat(lastPosition.lat.toString()),
@@ -282,21 +286,21 @@ export class PairsService {
   private async loadFirstPositionInCycleForPairs(
     pairs: Pair[],
     pairsSentArray: number[],
-    gameSettings: { isTimerRunning: boolean; lastLocationUpdate: Date | null },
+    cycle: { motorRunning: boolean; cycleStartAt: Date | null },
   ): Promise<Map<number, Position>> {
     const map = new Map<number, Position>();
-    if (!gameSettings.isTimerRunning || !gameSettings.lastLocationUpdate || pairsSentArray.length === 0) {
+    if (!cycle.motorRunning || !cycle.cycleStartAt || pairsSentArray.length === 0) {
       return map;
     }
     const eligibleIds = pairs
       .filter((p) => pairsSentArray.some((id) => Number(id) === Number(p.id)))
       .map((p) => p.id);
     if (eligibleIds.length === 0) return map;
-    const lastLocationUpdate = new Date(gameSettings.lastLocationUpdate);
+    const cycleStartAt = new Date(cycle.cycleStartAt);
     const rows = await this.positionRepository
       .createQueryBuilder('position')
       .where('position.pairId IN (:...ids)', { ids: eligibleIds })
-      .andWhere('position.timestamp >= :lastLocationUpdate', { lastLocationUpdate })
+      .andWhere('position.timestamp >= :cycleStartAt', { cycleStartAt })
       .distinctOn(['position.pairId'])
       .orderBy('position.pairId', 'ASC')
       .addOrderBy('position.timestamp', 'ASC')

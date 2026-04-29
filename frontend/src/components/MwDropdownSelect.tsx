@@ -18,7 +18,6 @@ interface MwDropdownSelectProps {
   minPanelWidth?: number;
 }
 
-const PANEL_CLOSE_MS = 200;
 const VIEWPORT_PAD = 8;
 
 function clampPanelLeft(left: number, panelWidth: number): number {
@@ -66,7 +65,7 @@ export default function MwDropdownSelect({
     const t = window.setTimeout(() => {
       setMenuVisible(false);
       setCoords({ top: 0, left: 0, width: 0 });
-    }, PANEL_CLOSE_MS);
+    }, 200);
     return () => window.clearTimeout(t);
   }, [open, menuVisible]);
 

@@ -9,10 +9,14 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
 import java.util.concurrent.TimeUnit
 
 interface ApiService {
+    @GET("api/game-settings/countdown")
+    suspend fun getGameCountdown(): GameCountdownResponse
+
     @POST("api/position")
     suspend fun sendPosition(
         @Body request: PositionRequest
@@ -72,6 +76,27 @@ interface ApiService {
         }
     }
 }
+
+data class CountdownValues(
+    val minutes: Int = 0,
+    val seconds: Int = 0,
+)
+
+/** Válasz a játékmotor / követési ciklus állapotához (páros kliens). */
+data class GameCountdownResponse(
+    val countdown: CountdownValues? = null,
+    val gameEnabled: Boolean? = false,
+    val isTimerRunning: Boolean? = false,
+    val allowPositionUpdatesForMap: Boolean? = false,
+    val locationUpdateIntervalMinutes: Int? = null,
+    val currentIntervalMinutes: Int? = null,
+    val campaignStatus: String? = null,
+    val isGameActive: Boolean? = false,
+    val isPastLastScheduledGameEnd: Boolean? = false,
+    val activeGameDayId: Int? = null,
+    val lastLocationUpdate: String? = null,
+    val nextLocationUpdate: String? = null,
+)
 
 data class PositionRequest(
     val deviceId: String,

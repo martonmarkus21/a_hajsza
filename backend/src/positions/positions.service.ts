@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Position, type SavedAreaContext, type SavedScenarioZone } from '../entities/position.entity';
 import { Device } from '../entities/device.entity';
-import { GameSettings } from '../entities/game-settings.entity';
 import { Geofence } from '../entities/geofence.entity';
 import { RuleViolation } from '../entities/rule-violation.entity';
 import { Capture } from '../entities/capture.entity';
@@ -14,10 +13,10 @@ import { RedisPositionService } from '../redis/redis-position.service';
 import { RecentDevicePairIdsService } from '../device-activity/recent-device-pair-ids.service';
 import { PositionSnapshot } from './position-snapshot';
 import { logVerbose } from '../common/verbose-log';
-import { parsePairsSentIds } from '../common/pairs-sent.util';
 import { QueryAdminPositionsDto } from './dto/query-admin-positions.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
+import { GameRuntimeService } from '../game-runtime/game-runtime.service';
 
 function parseOptionalDateInput(raw?: string): Date | undefined {
   if (raw == null || String(raw).trim() === '') return undefined;
@@ -35,8 +34,6 @@ export class PositionsService {
     private positionRepository: Repository<Position>,
     @InjectRepository(Device)
     private deviceRepository: Repository<Device>,
-    @InjectRepository(GameSettings)
-    private gameSettingsRepository: Repository<GameSettings>,
     @InjectRepository(Geofence)
     private geofenceRepository: Repository<Geofence>,
     @InjectRepository(RuleViolation)
@@ -48,6 +45,7 @@ export class PositionsService {
     private redisPositionService: RedisPositionService,
     private recentDevicePairIdsService: RecentDevicePairIdsService,
     private auditLogsService: AuditLogsService,
+    private gameRuntimeService: GameRuntimeService,
   ) {}
 
   /** Mentéskor: fix game_area geofence ID-k + scenario körök — egy jsonb oszlopban. */
@@ -212,8 +210,12 @@ export class PositionsService {
     await this.redisPositionService.setLivePosition(pairId, snapshot);
     logVerbose('[Position] Live position stored in Redis for pairId:', pairId);
 
-    const { violations, gameAreaExitViolationActive } =
-      await this.ruleViolationsService.checkViolations(pairId, snapshot);
+    const gameCtx = await this.gameRuntimeService.getRuntimeContext();
+    const { violations, gameAreaExitViolationActive } = await this.ruleViolationsService.checkViolations(
+      pairId,
+      snapshot,
+      { applyGameRules: gameCtx.isGameActive },
+    );
 
     // Straight-line distance for pursuers is computed in the browser (geolocation + pair coords).
     logVerbose('[Position] Broadcasting distance update via WebSocket for pairId:', pairId);
@@ -225,59 +227,40 @@ export class PositionsService {
       timestamp: serverTimestamp.toISOString(),
     });
 
-    const currentSettings = await this.gameSettingsRepository.findOne({ where: {} });
+    const runtime = await this.gameRuntimeService.tick();
     let shouldShowOnMap = false;
     let pairAddedToCycleThisRequest = false;
 
     if (pairCaptured) {
       shouldShowOnMap = true;
       pairAddedToCycleThisRequest = false;
-    } else if (!currentSettings) {
-      logVerbose('[Position] No game settings found, not broadcasting position update for map');
-    } else if (!currentSettings.isTimerRunning) {
-      logVerbose('[Position] Timer is not running, not broadcasting position update for map. pairId:', pairId);
+    } else if (runtime.campaignStatus !== 'RUNNING' && runtime.allowPositionUpdatesForMap !== true) {
+      logVerbose(
+        '[Position] Runtime does not allow sampled map position now. pairId:',
+        pairId,
+        'motorPhase:',
+        runtime.campaignStatus,
+      );
     } else {
       shouldShowOnMap = gameAreaExitViolationActive;
 
-      if (currentSettings.allowPositionUpdatesForMap === true) {
-        const freshSettings = await this.gameSettingsRepository.findOne({ where: {} });
-        if (!freshSettings || freshSettings.allowPositionUpdatesForMap !== true) {
-          // window closed concurrently
-        } else {
-          const pairsSentArray = parsePairsSentIds(freshSettings.pairsSentPositionThisCycle);
+      if (runtime.allowPositionUpdatesForMap === true) {
+        const consume = await this.gameRuntimeService.tryConsumePairCycleSlot(pairId);
+        if (consume.allowed) {
+          shouldShowOnMap = true;
+          pairAddedToCycleThisRequest = true;
+          logVerbose('[Position] Pair position update allowed in runtime cycle. pairId:', pairId);
 
-          const pairIdInArray = pairsSentArray.some((id) => Number(id) === Number(pairId));
-
-          if (!pairIdInArray) {
-            const updatedPairsSent = [...pairsSentArray, pairId];
-            freshSettings.pairsSentPositionThisCycle = updatedPairsSent;
-            await this.gameSettingsRepository.save(freshSettings);
-
-            shouldShowOnMap = true;
-            pairAddedToCycleThisRequest = true;
-            logVerbose('[Position] Pair position update allowed. pairId:', pairId, 'pairsSent:', updatedPairsSent);
-
-            const activePairIdsRaw = await this.recentDevicePairIdsService.getDistinctRecentDevicePairIds();
-            const capturedRows = activePairIdsRaw.length
-              ? await this.captureRepository.find({
-                  where: { pairId: In(activePairIdsRaw) },
-                  select: ['pairId'],
-                })
-              : [];
-            const capturedIds = new Set(capturedRows.map((r) => r.pairId));
-            const activePairIds = activePairIdsRaw.filter((id: number) => !capturedIds.has(id));
-
-            const allPairsSent =
-              activePairIds.length > 0 && activePairIds.every((id: number) => updatedPairsSent.includes(id));
-
-            if (allPairsSent) {
-              freshSettings.allowPositionUpdatesForMap = false;
-              await this.gameSettingsRepository.save(freshSettings);
-              logVerbose(
-                '[Position] All active pairs have sent position. Closing position update window IMMEDIATELY. Positions will stay on map until next timer cycle.',
-              );
-            }
-          }
+          const activePairIdsRaw = await this.recentDevicePairIdsService.getDistinctRecentDevicePairIds();
+          const capturedRows = activePairIdsRaw.length
+            ? await this.captureRepository.find({
+                where: { pairId: In(activePairIdsRaw) },
+                select: ['pairId'],
+              })
+            : [];
+          const capturedIds = new Set(capturedRows.map((r) => r.pairId));
+          const activePairIds = activePairIdsRaw.filter((id: number) => !capturedIds.has(id));
+          await this.gameRuntimeService.closeCycleWindowIfAllPairsSent(activePairIds);
         }
       } else {
         if (!gameAreaExitViolationActive) {
@@ -290,7 +273,7 @@ export class PositionsService {
     }
 
     let savedPosition: Position | null = null;
-    if (!pairCaptured && pairAddedToCycleThisRequest && currentSettings?.isTimerRunning) {
+    if (!pairCaptured && pairAddedToCycleThisRequest) {
       const hadRuleViolationAtSave =
         (await this.ruleViolationRepository.count({ where: { pairId, resolved: false } })) > 0;
       const savedAreaContextJson = await this.buildSavedSnapshotParts();
@@ -332,15 +315,14 @@ export class PositionsService {
         distanceToNearestOfficer: null,
       });
     } else {
-      const allowUpdates = currentSettings?.allowPositionUpdatesForMap ?? false;
-      const timerRunning = currentSettings?.isTimerRunning ?? false;
+      const allowUpdates = runtime.allowPositionUpdatesForMap ?? false;
       logVerbose(
-        '[Position] Position update NOT broadcasted for map (timer not allowing or pair already sent) for pairId:',
+        '[Position] Position update NOT broadcasted for map (cycle or pair already sent) for pairId:',
         pairId,
         'allowPositionUpdatesForMap:',
         allowUpdates,
-        'isTimerRunning:',
-        timerRunning,
+        'motorPhase:',
+        runtime.campaignStatus,
       );
     }
 

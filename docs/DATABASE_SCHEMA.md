@@ -216,6 +216,26 @@ CREATE INDEX idx_rule_violations_pair_id ON rule_violations(pair_id);
 CREATE INDEX idx_rule_violations_resolved ON rule_violations(resolved);
 ```
 
+### `game_runtime_state`
+Játékmotor futásidejű állapota (egysoros konfigurációs/állapot tábla).
+
+```sql
+CREATE TABLE game_runtime_state (
+  id SERIAL PRIMARY KEY,
+  campaign_status VARCHAR(50) NOT NULL DEFAULT 'IDLE',
+  active_game_day_id INTEGER REFERENCES game_days(id),
+  current_cycle_start_at TIMESTAMP,
+  current_cycle_end_at TIMESTAMP,
+  allow_position_updates_for_map BOOLEAN DEFAULT false,
+  last_cycle_turn_at TIMESTAMP,
+  last_map_position_at TIMESTAMP,
+  pairs_sent_position_this_cycle JSONB DEFAULT '[]',
+  last_applied_area_schedule_key VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
 ## Kapcsolatok
 
 - `devices.pair_id` → `pairs.id`

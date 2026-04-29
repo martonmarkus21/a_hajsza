@@ -1,5 +1,5 @@
 /**
- * game_settings.pairs_sent_position_this_cycle (TypeORM simple-array) → number[]
+ * `game_runtime_state.pairs_sent_position_this_cycle` (TypeORM simple-array) → number[]
  */
 export function parsePairsSentIds(
   pairsSent: number[] | string | null | undefined,
