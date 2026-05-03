@@ -36,6 +36,7 @@ import 'leaflet/dist/leaflet.css';
 // Import Pair from types
 import { Pair } from '../types';
 import { apiUrl } from '@/config/env';
+import { maybeReportPursuerLiveLocation } from '@/utils/reportPursuerLiveLocation';
 
 interface Geofence {
   id: number;
@@ -84,6 +85,7 @@ interface ActiveGameAreaViolation {
   pairName: string | null;
   description: string;
   createdAt: string;
+  violationType?: string;
 }
 
 interface GameDay {
@@ -225,6 +227,7 @@ export default function Admin() {
           pairName: violation.pairName ?? null,
           description: violation.description || 'Pár kilépett a játéktérből',
           createdAt: violation.createdAt,
+          violationType: violation.violationType,
         };
       }
 
@@ -342,8 +345,18 @@ export default function Admin() {
       }));
     };
 
+    const handleGlobalToast = (data: { message?: string; variant?: string }) => {
+      const msg = (data?.message ?? '').trim();
+      if (!msg) return;
+      const v = (data?.variant ?? 'info').toLowerCase();
+      const level: 'info' | 'error' | 'success' =
+        v === 'error' ? 'error' : v === 'success' ? 'success' : 'info';
+      addNotification(level, msg, true);
+    };
+
     const handleRuleViolation = (data: any) => {
-      if (!data || data.violationType !== 'game_area_exit') return;
+      const vType = data?.violationType;
+      if (!data || (vType !== 'game_area_exit' && vType !== 'vehicle_time_exceeded')) return;
       const pairId = Number(data.pairId);
       if (!pairId) return;
 
@@ -355,19 +368,24 @@ export default function Admin() {
             pairId,
             assignedNumber: pairs.find((p) => p.id === pairId)?.assignedNumber ?? null,
             pairName: pairs.find((p) => p.id === pairId)?.name ?? null,
-            description: data.description || 'Pár kilépett a játéktérből',
+            description:
+              data.description ||
+              (vType === 'vehicle_time_exceeded'
+                ? 'Járműhasználati idő túllépve'
+                : 'Pár kilépett a játéktérből'),
             createdAt: data.createdAt || data.timestamp || new Date().toISOString(),
+            violationType: vType,
           },
         }));
         const targetPair = pairs.find((p) => p.id === pairId);
         const pairText = targetPair
           ? `${targetPair.assignedNumber}. pár${targetPair.name ? ` (${targetPair.name})` : ''}`
           : `${pairId}. azonosítójú pár`;
-        addNotification(
-          'error',
-          `Szabálysértés: a(z) ${pairText} elhagyta az aktív játékterületet. Ettől kezdve folyamatosan láthatja ezt a párost a térképen, amíg a játékterületre nem tér vissza.`,
-          true, // global
-        );
+        const body =
+          vType === 'vehicle_time_exceeded'
+            ? `Szabálysértés: a(z) ${pairText} túllépte a járműhasználati időt. Ettől kezdve kb. 15 percig folyamatosan látható a térképen (élő pozíció). Ezután a szabályszegés jelzése lezárul.`
+            : `Szabálysértés: a(z) ${pairText} elhagyta az aktív játékterületet. Ettől kezdve folyamatosan láthatja ezt a párost a térképen, amíg a játékterületre nem tér vissza.`;
+        addNotification('error', body, true);
       } else {
         freezeCurrentLastPosition(pairId, data.lastLivePosition ?? null);
         setActiveGameAreaExitViolations((prev) => {
@@ -462,6 +480,7 @@ export default function Admin() {
     socket.on('distanceUpdate', handleDistanceUpdate);
     socket.on('positionUpdate', handlePositionUpdate);
     socket.on('ruleViolation', handleRuleViolation);
+    socket.on('globalToast', handleGlobalToast);
     socket.on('capture', handleCaptureEvent);
     socket.on('captureReverted', handleCaptureRevertedEvent);
 
@@ -469,6 +488,7 @@ export default function Admin() {
       socket.off('distanceUpdate', handleDistanceUpdate);
       socket.off('positionUpdate', handlePositionUpdate);
       socket.off('ruleViolation', handleRuleViolation);
+      socket.off('globalToast', handleGlobalToast);
       socket.off('capture', handleCaptureEvent);
       socket.off('captureReverted', handleCaptureRevertedEvent);
     };
@@ -512,6 +532,7 @@ export default function Admin() {
       // Helper function to save location
       const saveLocation = (lat: number, lon: number) => {
         setBrowserLocation({ lat, lon });
+        maybeReportPursuerLiveLocation(lat, lon);
       };
 
       // Get initial position immediately
@@ -1449,7 +1470,11 @@ export default function Admin() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ pairId, title, body }),
+        body: JSON.stringify({
+          ...(pairId != null ? { pairId } : {}),
+          title,
+          body,
+        }),
       });
       const data = await res.json();
       if (data.success) {

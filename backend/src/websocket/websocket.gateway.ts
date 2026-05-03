@@ -100,6 +100,11 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     this.server.emit('gameRuntimeUpdate', data);
   }
 
+  /** Webes frontend: globális toast (pl. segítségkérés, jármű szabályszegés). */
+  broadcastGlobalToast(data: { message: string; variant?: string }) {
+    this.server.emit('globalToast', data);
+  }
+
   /** Új, adatbázisba mentett GPS-minta (admin pozíciók lista élő frissítéséhez). */
   broadcastSavedPositionSample(data: { pairId: number; id: number }) {
     this.server.emit('savedPositionSample', data);

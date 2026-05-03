@@ -7,6 +7,7 @@ import { GameDaysModule } from '../game-days/game-days.module';
 import { GameAreaModule } from '../game-area/game-area.module';
 import { WebSocketModule } from '../websocket/websocket.module';
 import { FcmModule } from '../fcm/fcm.module';
+import { RuleViolationsModule } from '../rule-violations/rule-violations.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { FcmModule } from '../fcm/fcm.module';
     GameAreaModule,
     WebSocketModule,
     FcmModule,
+    RuleViolationsModule,
   ],
   providers: [GameRuntimeService],
   exports: [GameRuntimeService],

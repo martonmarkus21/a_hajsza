@@ -6,10 +6,12 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import com.mostwanted.app.MainActivity
+import com.mostwanted.app.AppActivity
 import com.mostwanted.app.R
+import com.mostwanted.app.repository.EventRepository
 import com.mostwanted.app.util.PreferencesHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,48 +35,70 @@ class FcmService : FirebaseMessagingService() {
 
         // Check for force logout or pair deletion
         val dataType = remoteMessage.data["type"]
-        if (dataType == "force_logout" || dataType == "pair_deleted" || remoteMessage.data["action"] == "logout") {
-            android.util.Log.d("FcmService", "Force logout or pair deletion received, logging out device")
-            handleForceLogout()
+        if (dataType == "pair_deleted") {
+            android.util.Log.d("FcmService", "Pair deleted: logging out device")
+            handleForceLogout(SessionEndReason.PairDeleted)
+            return
+        }
+        if (dataType == "force_logout" || remoteMessage.data["action"] == "logout") {
+            android.util.Log.d("FcmService", "Force logout received, logging out device")
+            handleForceLogout(SessionEndReason.ForceLogout)
             return
         }
 
         // Check for location update request
         if (dataType == "location_update_request" || remoteMessage.data["action"] == "update_location") {
             android.util.Log.d("FcmService", "Location update request received")
+            saveEvent(
+                title = "Azonnali pozíció",
+                body = "A szerver friss pozíció küldését kéri.",
+                type = "tracking",
+                priority = "warning",
+            )
             handleLocationUpdateRequest()
             return
         }
 
-        remoteMessage.notification?.let { notification ->
-            val title = notification.title ?: "Most Wanted"
-            val body = notification.body ?: ""
+        val notificationTitle = remoteMessage.notification?.title
+        val notificationBody = remoteMessage.notification?.body
+        val dataTitle = remoteMessage.data["title"]
+        val dataBody = remoteMessage.data["message"] ?: remoteMessage.data["body"]
+        var finalTitle = notificationTitle ?: dataTitle ?: "Most Wanted"
+        var finalBody = notificationBody ?: dataBody ?: ""
 
-            showNotification(title, body)
-
-            // Broadcast message to MainActivity
-            val intent = Intent(ACTION_MESSAGE_RECEIVED).apply {
-                putExtra(EXTRA_MESSAGE, body)
-                setPackage(packageName)
-            }
-            sendBroadcast(intent)
-        }
-
-        // Handle data payload
-        if (remoteMessage.data.isNotEmpty()) {
-            val message = remoteMessage.data["message"] ?: remoteMessage.data["body"]
-            if (message != null) {
-                showNotification("Most Wanted", message)
-                val intent = Intent(ACTION_MESSAGE_RECEIVED).apply {
-                    putExtra(EXTRA_MESSAGE, message)
-                    setPackage(packageName)
-                }
-                sendBroadcast(intent)
+        // Angol sablon / notification-only üzenetek magyarra
+        if (dataType == "capture_confirmed" || finalTitle.contains("capture confirmed", ignoreCase = true)) {
+            finalTitle = "Elfogás megerősítve"
+            if (finalBody.isBlank() || finalBody.contains("capture confirmed", ignoreCase = true)) {
+                finalBody = "Elfogtak titeket. Kövesd a szervezők utasításait."
             }
         }
+
+        if (finalBody.isBlank()) {
+            return
+        }
+
+        showNotification(finalTitle, finalBody)
+        saveEvent(
+            title = finalTitle,
+            body = finalBody,
+            type = dataType ?: "message",
+            priority = remoteMessage.data["priority"] ?: "normal",
+        )
+
+        val intent = Intent(ACTION_MESSAGE_RECEIVED).apply {
+            putExtra(EXTRA_MESSAGE, finalBody)
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
     }
 
-    private fun handleForceLogout() {
+    private enum class SessionEndReason {
+        ForceLogout,
+        PairDeleted,
+    }
+
+    private fun handleForceLogout(reason: SessionEndReason) {
         val prefs = PreferencesHelper(this)
         prefs.setLoggingOut(true)
 
@@ -94,10 +118,35 @@ class FcmService : FirebaseMessagingService() {
                 // Clear preferences
                 prefs.clear()
                 
-                // Show notification
-                showNotification("Kijelentkeztetés", "Az adminisztrátor kijelentkeztetett az eszközről.")
+                when (reason) {
+                    SessionEndReason.PairDeleted -> {
+                        showNotification(
+                            "Pár törölve",
+                            "A párt törölték. Lépj be egy érvényes számmal.",
+                        )
+                        saveEvent(
+                            title = "Pár törölve",
+                            body = "A szervertől érkező jel szerint ez a páros regisztráció megszűnt.",
+                            type = "security",
+                            priority = "high",
+                        )
+                    }
+
+                    SessionEndReason.ForceLogout -> {
+                        showNotification(
+                            "Kijelentkeztetés",
+                            "Az adminisztrátor kijelentkeztetett az eszközről.",
+                        )
+                        saveEvent(
+                            title = "Admin kijelentkeztetés",
+                            body = "A munkamenetet az adminisztrátor zárta le távolról.",
+                            type = "security",
+                            priority = "high",
+                        )
+                    }
+                }
                 
-                // Broadcast logout event to MainActivity if it's running
+                // Broadcast logout event to the compose host activity if it's running
                 val intent = Intent("com.mostwanted.app.FORCE_LOGOUT").apply {
                     setPackage(packageName)
                 }
@@ -110,7 +159,7 @@ class FcmService : FirebaseMessagingService() {
         android.util.Log.d("FcmService", "Handling location update request")
         val serviceIntent = Intent(this, com.mostwanted.app.service.LocationService::class.java)
         serviceIntent.action = "UPDATE_LOCATION"
-        startService(serviceIntent)
+        ContextCompat.startForegroundService(this, serviceIntent)
     }
 
     override fun onNewToken(token: String) {
@@ -118,11 +167,15 @@ class FcmService : FirebaseMessagingService() {
         val prefs = PreferencesHelper(this)
         prefs.saveFcmToken(token)
 
-        // Try to update token on backend if logged in
+        // Sync token to backend immediately when session is active.
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // TODO: Send token update to backend if needed
-                // For now, token will be sent on next login
+                if (prefs.isLoggedIn() && prefs.getToken() != null) {
+                    val apiService = com.mostwanted.app.api.ApiService.create(this@FcmService)
+                    apiService.updateDeviceFcmToken(
+                        com.mostwanted.app.api.UpdateDeviceFcmTokenRequest(token),
+                    )
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -145,7 +198,7 @@ class FcmService : FirebaseMessagingService() {
     }
 
     private fun showNotification(title: String, body: String) {
-        val intent = Intent(this, MainActivity::class.java).apply {
+        val intent = Intent(this, AppActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = android.app.PendingIntent.getActivity(
@@ -158,7 +211,7 @@ class FcmService : FirebaseMessagingService() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(body)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_stat_notification)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -167,5 +220,16 @@ class FcmService : FirebaseMessagingService() {
 
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+
+    private fun saveEvent(title: String, body: String, type: String, priority: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            EventRepository(applicationContext).addEvent(
+                title = title,
+                body = body,
+                type = type,
+                priority = priority,
+            )
+        }
     }
 }

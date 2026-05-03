@@ -9,12 +9,18 @@ import { Pair } from '../entities/pair.entity';
 import { FcmModule } from '../fcm/fcm.module';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 import { DeviceAuthGuard } from '../auth/device-auth.guard';
+import { WebSocketModule } from '../websocket/websocket.module';
+import { RuleViolationsModule } from '../rule-violations/rule-violations.module';
+import { MobileModule } from '../mobile/mobile.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Device, Pair]),
     AuditLogsModule,
     ConfigModule,
+    MobileModule,
+    WebSocketModule,
+    RuleViolationsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

@@ -54,6 +54,7 @@ import './App.css';
 import SmoothAnimatedMarker from './components/SmoothAnimatedMarker';
 import { buildPairMarkerDivHtml } from './utils/pairMapMarkerHtml';
 import { apiUrl } from '@/config/env';
+import { maybeReportPursuerLiveLocation } from '@/utils/reportPursuerLiveLocation';
 
 interface Geofence {
   id: number;
@@ -78,6 +79,7 @@ interface ActiveGameAreaViolation {
   pairName: string | null;
   description: string;
   createdAt: string;
+  violationType?: string;
 }
 
 // Component to handle map resize dynamically using ResizeObserver
@@ -977,6 +979,7 @@ function MapView() {
             pairName: violation.pairName ?? null,
             description: violation.description || 'Pár kilépett a játéktérből',
             createdAt: violation.createdAt,
+            violationType: violation.violationType,
           };
         }
         setActiveGameAreaExitViolations(map);
@@ -1005,6 +1008,7 @@ function MapView() {
       const saveLocation = (lat: number, lon: number) => {
         setBrowserLocation({ lat, lon });
         localStorage.setItem('browserLocation', JSON.stringify({ lat, lon }));
+        maybeReportPursuerLiveLocation(lat, lon);
       };
       navigator.geolocation.getCurrentPosition(
         (p) => saveLocation(p.coords.latitude, p.coords.longitude),
@@ -1254,8 +1258,18 @@ function MapView() {
         } as any;
       });
     });
+    const handleGlobalToast = (data: { message?: string; variant?: string }) => {
+      const msg = (data?.message ?? '').trim();
+      if (!msg) return;
+      const v = (data?.variant ?? 'info').toLowerCase();
+      const level: 'info' | 'error' | 'success' =
+        v === 'error' ? 'error' : v === 'success' ? 'success' : 'info';
+      addNotification(level, msg, true);
+    };
+    socket.on('globalToast', handleGlobalToast);
     socket.on('ruleViolation', (data: any) => {
-      if (!data || data.violationType !== 'game_area_exit') return;
+      const vType = data?.violationType;
+      if (!data || (vType !== 'game_area_exit' && vType !== 'vehicle_time_exceeded')) return;
       const pairId = Number(data.pairId);
       if (!pairId) return;
 
@@ -1273,8 +1287,13 @@ function MapView() {
               pairsState.find((p) => p.id === pairId)?.name ??
               pairs.find((p) => p.id === pairId)?.name ??
               null,
-            description: data.description || 'Pár kilépett a játéktérből',
+            description:
+              data.description ||
+              (vType === 'vehicle_time_exceeded'
+                ? 'Járműhasználati idő túllépve'
+                : 'Pár kilépett a játéktérből'),
             createdAt: data.createdAt || data.timestamp || new Date().toISOString(),
+            violationType: vType,
           },
         }));
         const targetPair =
@@ -1282,11 +1301,11 @@ function MapView() {
         const pairText = targetPair
           ? `${targetPair.assignedNumber}. pár${targetPair.name ? ` (${targetPair.name})` : ''}`
           : `${pairId}. azonosítójú pár`;
-        addNotification(
-          'error',
-          `Szabálysértés: a(z) ${pairText} elhagyta az aktív játékterületet. Ettől kezdve folyamatosan láthatja ezt a párost a térképen, amíg a játékterületre nem tér vissza.`,
-          true, // global
-        );
+        const body =
+          vType === 'vehicle_time_exceeded'
+            ? `Szabálysértés: a(z) ${pairText} túllépte a járműhasználati időt. Ettől kezdve kb. 15 percig folyamatosan látható a térképen (élő pozíció). Ezután a szabályszegés jelzése lezárul.`
+            : `Szabálysértés: a(z) ${pairText} elhagyta az aktív játékterületet. Ettől kezdve folyamatosan láthatja ezt a párost a térképen, amíg a játékterületre nem tér vissza.`;
+        addNotification('error', body, true);
       } else {
         freezeCurrentLastPosition(pairId, data.lastLivePosition ?? null);
         setActiveGameAreaExitViolations((prev) => {
@@ -1312,6 +1331,7 @@ function MapView() {
       socket.off('gameAreaUpdate');
       socket.off('gameRuntimeUpdate');
       socket.off('ruleViolation');
+      socket.off('globalToast', handleGlobalToast);
     };
   }, [socket, gameSettings, refetch, addNotification, pairsState, pairs]);
 
@@ -1447,7 +1467,11 @@ function MapView() {
       const res = await fetch(apiUrl('/api/messages/send'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ pairId: pairId || undefined, title, body }),
+        body: JSON.stringify({
+          ...(pairId != null ? { pairId } : {}),
+          title,
+          body,
+        }),
       });
       const data = await res.json();
       if (data.success) {

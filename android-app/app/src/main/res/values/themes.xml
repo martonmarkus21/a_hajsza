@@ -1,17 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.MostWanted" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <style name="Theme.MostWanted" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">#000000</item>
         <item name="colorPrimaryDark">#000000</item>
         <item name="colorAccent">#FF6B35</item>
-        <item name="android:windowBackground">#000000</item>
-        <item name="android:statusBarColor">#000000</item>
-        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <!-- Edge-to-edge: a Compose háttér és az enableEdgeToEdge() tölti ki a sávokat -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+
+    <style name="Theme.MostWanted.Splash" parent="Theme.SplashScreen">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="windowSplashScreenBackground">@drawable/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo_mw</item>
+        <item name="postSplashScreenTheme">@style/Theme.MostWanted</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 </resources>
-
-
-
-
-
-

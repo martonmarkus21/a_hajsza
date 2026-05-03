@@ -6,8 +6,8 @@ const LIVE_KEY_PREFIX = 'mw:live:position:';
 const STAY_ANCHOR_PREFIX = 'mw:stay:anchor:';
 /** Longer than the 30-minute "active device" window so keys stay while pairs are online */
 const LIVE_TTL_SECONDS = 45 * 60;
-/** A játéknap zárását követő maradási bázis (ugyanazon naphoz) */
-const STAY_ANCHOR_TTL_SECONDS = 24 * 60 * 60;
+/** Lehet több nap a két ütemezett játéknap között — a maradást ugyanahhoz a naphoz kötjük (`anchorYmd`) addig */
+const STAY_ANCHOR_TTL_SECONDS = 14 * 24 * 60 * 60;
 
 export type LivePositionPayload = {
   lat: number;
@@ -109,5 +109,13 @@ export class RedisPositionService {
     } catch {
       return null;
     }
+  }
+
+  /** Játéknap zárása pillanatában: pontos bázis felülírása (pl. élő pozíció a zárás percben). */
+  async overwriteEndOfDayStayAnchor(ymd: string, pairId: number, lat: number, lon: number): Promise<void> {
+    const k = stayAnchorKey(ymd, pairId);
+    await this.redis.set(k, JSON.stringify({ lat, lon, setAt: new Date().toISOString() }), {
+      EX: STAY_ANCHOR_TTL_SECONDS,
+    });
   }
 }

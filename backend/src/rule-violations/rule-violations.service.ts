@@ -14,6 +14,7 @@ import { MwFlag } from '../entities/mw-flag.entity';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
 import { RedisPositionService } from '../redis/redis-position.service';
+import { RedisStayRuleService } from '../redis/redis-stay-rule.service';
 import { haversineKm } from '../common/haversine-km';
 
 @Injectable()
@@ -33,12 +34,14 @@ export class RuleViolationsService {
     private fcmService: FcmService,
     private auditLogsService: AuditLogsService,
     private redisPositionService: RedisPositionService,
+    private redisStayRuleService: RedisStayRuleService,
   ) {}
 
+  /** Aktív, térképen „élő követéses” szabályszegések: játékterület elhagyása + jármű idő túllépés. */
   async getActiveGameAreaViolations() {
     const active = await this.ruleViolationRepository.find({
       where: {
-        violationType: 'game_area_exit',
+        violationType: In(['game_area_exit', 'vehicle_time_exceeded']),
         resolved: false,
       },
       order: { createdAt: 'DESC' },
@@ -367,50 +370,136 @@ export class RuleViolationsService {
       }
     }
 
-    // Check vehicle time limit violations
-    if (position.vehicleMode && position.vehicleSessionRemaining !== null) {
-      if (position.vehicleSessionRemaining <= 0) {
-        const existingViolation = await this.ruleViolationRepository.findOne({
-          where: {
-            pairId,
-            violationType: 'vehicle_time_exceeded',
-            resolved: false,
-          },
-        });
-
-        if (!existingViolation) {
-          const violation = this.ruleViolationRepository.create({
-            pairId,
-            violationType: 'vehicle_time_exceeded',
-            description: 'Járműhasználati idő limit túllépve (40 perc)',
-            resolved: false,
-          });
-
-          const savedViolation = await this.ruleViolationRepository.save(violation);
-          violations.push(savedViolation);
-
-          this.webSocketGateway.broadcastRuleViolation({
-            pairId,
-            violationType: 'vehicle_time_exceeded',
-            description: 'Járműhasználati idő limit túllépve',
-            continuousMode: true,
-            timestamp: new Date().toISOString(),
-          });
-
-          // Send push notification
-          await this.fcmService.sendToPair(pairId, {
-            title: 'Szabálysértés',
-            body: 'Lejárt a 40 perces járműhasználati időtök!',
-          });
-        }
+    // Check vehicle time limit violations (pozíció jelzi: lejárt a számláló)
+    if (position.vehicleMode && position.vehicleSessionRemaining !== null && position.vehicleSessionRemaining <= 0) {
+      const created = await this.createActiveVehicleTimeExceededIfAbsent(pairId);
+      if (created) {
+        violations.push(created);
       }
     }
-
 
     // Check geofence completions (scenarios)
     await this.checkGeofenceCompletions(pairId, position);
 
     return { violations, gameAreaExitViolationActive };
+  }
+
+  /**
+   * Ha a játéknap épp RUNNING fázisba került: olyan párok, akiknél a maradás miatti térképreveláció aktív
+   * (következő nap első 30 perce) — egy központi toast a kezelőfelületnek.
+   */
+  async broadcastStayRevealMapToastIfActive(now: Date = new Date()): Promise<void> {
+    const rows = await this.ruleViolationRepository.find({
+      where: { violationType: 'end_of_day_stay', resolved: false },
+      select: ['pairId'],
+    });
+    if (rows.length === 0) return;
+
+    const revealPairIds: number[] = [];
+    for (const r of rows) {
+      if (await this.redisStayRuleService.isMapRevealActive(r.pairId, now)) {
+        revealPairIds.push(r.pairId);
+      }
+    }
+    if (revealPairIds.length === 0) return;
+
+    const pairs = await this.pairRepository.find({
+      where: { id: In(revealPairIds) },
+      select: ['id', 'assignedNumber', 'name'],
+    });
+    const labelFor = (id: number): string => {
+      const p = pairs.find((x) => x.id === id);
+      if (!p) return `${id}. pár`;
+      return `${p.assignedNumber ?? '?'}. pár${p.name ? ` (${p.name})` : ''}`;
+    };
+
+    const labels = revealPairIds.map(labelFor);
+    let message: string;
+    if (labels.length === 1) {
+      message = `Maradási szabály miatt a(z) ${labels[0]} mozgása a következő 30 percben folyamatosan látható a térképen.`;
+    } else {
+      message = `Maradási szabály miatt a(z) ${labels.join(', ')} mozgása a következő 30 percben folyamatosan látható a térképen.`;
+    }
+
+    this.webSocketGateway.broadcastGlobalToast({ message, variant: 'info' });
+  }
+
+  /** Android: 40 perc letelt, kikapcsolták a jármű módot — szerver oldali szabályszegés (ha még nincs). */
+  async ensureVehicleTimeoutFromApp(pairId: number): Promise<{ created: boolean }> {
+    const row = await this.createActiveVehicleTimeExceededIfAbsent(pairId);
+    return { created: row != null };
+  }
+
+  /**
+   * Folyamatos térképes követés jármű túllépésnél: max. 15 perc után automatikusan lezárjuk
+   * (mint a játékterület elhagyásánál a „folyamatos” ablak vége).
+   */
+  async resolveVehicleViolationsPastWindow(windowMs: number = 15 * 60 * 1000): Promise<void> {
+    const cutoff = new Date(Date.now() - windowMs);
+    const rows = await this.ruleViolationRepository.find({
+      where: { violationType: 'vehicle_time_exceeded', resolved: false },
+    });
+    for (const v of rows) {
+      const created = v.createdAt ? new Date(v.createdAt as Date) : null;
+      if (!created || created.getTime() > cutoff.getTime()) continue;
+
+      await this.ruleViolationRepository.update({ id: v.id }, { resolved: true, resolvedAt: new Date() });
+
+      const live = await this.redisPositionService.getLivePosition(v.pairId);
+      this.webSocketGateway.broadcastRuleViolation({
+        pairId: v.pairId,
+        violationType: 'vehicle_time_exceeded',
+        description: 'A járműhasználati folyamatos követési időablak lejárt.',
+        continuousMode: false,
+        resolved: true,
+        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        lastLivePosition:
+          live && Number.isFinite(live.lat) && Number.isFinite(live.lon)
+            ? { lat: live.lat, lon: live.lon, timestamp: live.timestamp }
+            : null,
+      });
+    }
+  }
+
+  private async createActiveVehicleTimeExceededIfAbsent(pairId: number): Promise<RuleViolation | null> {
+    const existingViolation = await this.ruleViolationRepository.findOne({
+      where: {
+        pairId,
+        violationType: 'vehicle_time_exceeded',
+        resolved: false,
+      },
+    });
+    if (existingViolation) return null;
+
+    const violation = this.ruleViolationRepository.create({
+      pairId,
+      violationType: 'vehicle_time_exceeded',
+      description: 'Járműhasználati idő limit túllépve (40 perc)',
+      resolved: false,
+    });
+
+    const savedViolation = await this.ruleViolationRepository.save(violation);
+    const createdIso = savedViolation.createdAt
+      ? new Date(savedViolation.createdAt as Date).toISOString()
+      : new Date().toISOString();
+
+    this.webSocketGateway.broadcastRuleViolation({
+      pairId,
+      violationType: 'vehicle_time_exceeded',
+      description: 'Járműhasználati idő limit túllépve',
+      continuousMode: true,
+      resolved: false,
+      timestamp: createdIso,
+      createdAt: createdIso,
+    });
+
+    await this.fcmService.sendToPair(pairId, {
+      title: 'Szabálysértés',
+      body: 'Lejárt a 40 perces járműhasználati időtök!',
+    });
+
+    return savedViolation;
   }
 
   private async checkGeofenceCompletions(pairId: number, position: PositionSnapshot) {
@@ -525,60 +614,69 @@ export class RuleViolationsService {
   }
 
   /**
-   * Játéknap lezárása után, ugyanazon naphoz rögzített bázis vs. élő hely; km küszöb: stayRadiusKm.
+   * Elérték a maradási szabályban engedélyezett kinti időt — szabályszegés + opcionális térképreveláció a következő nap elején.
    */
-  async checkEndOfDayStayRule(
-    pairId: number,
-    live: { lat: number; lon: number },
-    anchor: { lat: number; lon: number },
-    radiusKm: number,
-  ): Promise<void> {
-    const d = haversineKm(anchor.lat, anchor.lon, live.lat, live.lon);
+  async finalizeStayRuleViolation(pairId: number, mapRevealUntil: Date | null): Promise<boolean> {
     const existing = await this.ruleViolationRepository.findOne({
       where: { pairId, violationType: 'end_of_day_stay', resolved: false },
     });
+    if (existing) return false;
 
-    if (d > radiusKm) {
-      if (!existing) {
-        const v = this.ruleViolationRepository.create({
-          pairId,
-          violationType: 'end_of_day_stay',
-          description: 'A játéknap lezárása után túl messze a napi bázisponthoz (maradási kör).',
-          resolved: false,
-        });
-        const saved = await this.ruleViolationRepository.save(v);
-        const createdIso = saved.createdAt
-          ? new Date(saved.createdAt as Date).toISOString()
-          : new Date().toISOString();
-        this.webSocketGateway.broadcastRuleViolation({
-          pairId,
-          violationType: 'end_of_day_stay',
-          description: v.description,
-          continuousMode: true,
-          resolved: false,
-          timestamp: createdIso,
-          createdAt: createdIso,
-        });
-        await this.fcmService.sendToPair(pairId, {
-          title: 'Maradási szabály',
-          body: 'A játéknap lezárása után túl messze mentetek a bázisponthoz képest.',
-        });
-      }
-    } else if (existing) {
-      await this.ruleViolationRepository.update(
-        { id: existing.id },
-        { resolved: true, resolvedAt: new Date() },
-      );
-      this.webSocketGateway.broadcastRuleViolation({
-        pairId,
-        violationType: 'end_of_day_stay',
-        description: 'A megengedett maradási körön belül vagytok.',
-        continuousMode: false,
-        resolved: true,
-        timestamp: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-      });
+    const v = this.ruleViolationRepository.create({
+      pairId,
+      violationType: 'end_of_day_stay',
+      description:
+        'A játéknapok között a maradási körön kívül folyamatosan legalább 30 percig tartózkodtatok (megengedett kinti határidő túllépve).',
+      resolved: false,
+    });
+    const saved = await this.ruleViolationRepository.save(v);
+
+    if (mapRevealUntil != null && mapRevealUntil.getTime() > Date.now()) {
+      await this.redisStayRuleService.setMapRevealUntil(pairId, mapRevealUntil);
     }
+
+    const createdIso = saved.createdAt
+      ? new Date(saved.createdAt as Date).toISOString()
+      : new Date().toISOString();
+    this.webSocketGateway.broadcastRuleViolation({
+      pairId,
+      violationType: 'end_of_day_stay',
+      description: v.description,
+      continuousMode: true,
+      resolved: false,
+      timestamp: createdIso,
+      createdAt: createdIso,
+    });
+
+    await this.fcmService.sendToPair(pairId, {
+      title: 'Maradási szabály — súlyosítás',
+      body:
+        'Túlléptétek a megengedett kinti időt. Következő játéknap kezdetétől 30 percig az üldözők folyamatosan látják a mozgásotokat a térképen.',
+      data: { type: 'stay_rule_exit_violation', priority: 'high' },
+    });
+
+    return true;
+  }
+
+  /** Visszatértek a körön belülre — feloldjuk a nyitott maradás-sérülést (a térképreveláció változatlan marad és lejár). */
+  async resolveUnresolvedEndOfDayStayViolationForPair(pairId: number): Promise<void> {
+    const existing = await this.ruleViolationRepository.findOne({
+      where: { pairId, violationType: 'end_of_day_stay', resolved: false },
+    });
+    if (!existing) return;
+    await this.ruleViolationRepository.update(
+      { id: existing.id },
+      { resolved: true, resolvedAt: new Date() },
+    );
+    this.webSocketGateway.broadcastRuleViolation({
+      pairId,
+      violationType: 'end_of_day_stay',
+      description: 'Újra a megengedett maradási körön belül vagytok.',
+      continuousMode: false,
+      resolved: true,
+      timestamp: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    });
   }
 
   async resolveAllEndOfDayStayViolations(): Promise<void> {
@@ -587,6 +685,7 @@ export class RuleViolationsService {
     });
     if (rows.length === 0) return;
     for (const r of rows) {
+      await this.redisStayRuleService.clearMapReveal(r.pairId);
       await this.ruleViolationRepository.update(
         { id: r.id },
         { resolved: true, resolvedAt: new Date() },

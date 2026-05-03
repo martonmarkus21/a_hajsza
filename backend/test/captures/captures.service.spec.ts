@@ -11,6 +11,7 @@ import { WebSocketGateway } from '../../src/websocket/websocket.gateway';
 import { FcmService } from '../../src/fcm/fcm.service';
 import { AuditLogsService } from '../../src/audit-logs/audit-logs.service';
 import { RedisPositionService } from '../../src/redis/redis-position.service';
+import { GameRuntimeService } from '../../src/game-runtime/game-runtime.service';
 
 function repoMock() {
   return {
@@ -33,6 +34,9 @@ describe('CapturesService', () => {
   const fcm = { sendToPair: jest.fn(), sendToAllPairsExceptPair: jest.fn() };
   const audit = { log: jest.fn() };
   const redisPos = { getLivePosition: jest.fn().mockResolvedValue(null) };
+  const gameRuntime = {
+    getRuntimeContext: jest.fn().mockResolvedValue({ isGameActive: true }),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -48,6 +52,7 @@ describe('CapturesService', () => {
         { provide: FcmService, useValue: fcm },
         { provide: AuditLogsService, useValue: audit },
         { provide: RedisPositionService, useValue: redisPos },
+        { provide: GameRuntimeService, useValue: gameRuntime },
       ],
     }).compile();
     service = moduleRef.get(CapturesService);

@@ -3,12 +3,14 @@ package com.mostwanted.app.api
 import android.content.Context
 import android.content.Intent
 import com.mostwanted.app.util.PreferencesHelper
+import com.mostwanted.app.util.ServerConnectionStore
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
+import com.google.gson.annotations.SerializedName
 import retrofit2.http.GET
 import retrofit2.http.POST
 import java.util.concurrent.TimeUnit
@@ -16,6 +18,12 @@ import java.util.concurrent.TimeUnit
 interface ApiService {
     @GET("api/game-settings/countdown")
     suspend fun getGameCountdown(): GameCountdownResponse
+
+    @POST("api/devices/help-request")
+    suspend fun postHelpRequest(): BasicSuccessResponse
+
+    @POST("api/devices/vehicle-session-expired")
+    suspend fun postVehicleSessionExpired(): VehicleSessionExpiredResponse
 
     @POST("api/position")
     suspend fun sendPosition(
@@ -28,24 +36,35 @@ interface ApiService {
     @POST("api/devices/logout")
     suspend fun deviceLogout(): LogoutResponse
 
-    companion object {
-        private const val BASE_URL = "http://10.0.2.2:3000/" // Android emulator
-        // For real device, use your computer's IP: "http://192.168.x.x:3000/"
+    @POST("api/devices/fcm-token")
+    suspend fun updateDeviceFcmToken(@Body request: UpdateDeviceFcmTokenRequest): BasicSuccessResponse
 
-        fun create(context: Context? = null): ApiService {
+    companion object {
+        /** Megegyezik a backend `MOBILE_ENROLLMENT_HEADER` értékével (kis-nagybetű a HTTP-ben mindegy). */
+        const val ENROLLMENT_SECRET_HEADER = "X-Mw-Enrollment-Secret"
+
+        fun create(context: Context): ApiService {
+            val baseUrl = ServerConnectionStore(context).getApiBaseUrl()
+                ?: throw IllegalStateException("Nincs beállítva API cím. Előbb add meg a szerver kapcsolatot.")
+
             val loggingInterceptor = HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.BODY
             }
 
+            val prefs = PreferencesHelper(context)
+            val serverStore = ServerConnectionStore(context)
+
             val clientBuilder = OkHttpClient.Builder()
                 .addInterceptor(loggingInterceptor)
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .writeTimeout(30, TimeUnit.SECONDS)
-
-            if (context != null) {
-                val prefs = PreferencesHelper(context)
-                clientBuilder.addInterceptor(Interceptor { chain ->
+                .addInterceptor(Interceptor { chain ->
+                    val secret = serverStore.getEnrollmentSecret()
+                    val b = chain.request().newBuilder()
+                    if (secret.isNotBlank()) {
+                        b.addHeader(ENROLLMENT_SECRET_HEADER, secret)
+                    }
+                    chain.proceed(b.build())
+                })
+                .addInterceptor(Interceptor { chain ->
                     val token = prefs.getToken()
                     val request = if (token != null) {
                         chain.request().newBuilder()
@@ -64,12 +83,14 @@ interface ApiService {
                     }
                     response
                 })
-            }
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(30, TimeUnit.SECONDS)
 
             val retrofit = Retrofit.Builder()
-                .baseUrl(BASE_URL)
+                .baseUrl(baseUrl)
                 .client(clientBuilder.build())
-                .addConverterFactory(GsonConverterFactory.create())
+                .addConverterFactory(GsonConverterFactory.create(MwApiGson.gson))
                 .build()
 
             return retrofit.create(ApiService::class.java)
@@ -80,6 +101,23 @@ interface ApiService {
 data class CountdownValues(
     val minutes: Int = 0,
     val seconds: Int = 0,
+)
+
+data class GameDaySnippet(
+    val date: String? = null,
+    val startTime: String? = null,
+    val endTime: String? = null,
+    val isFinalDay: Boolean? = null,
+)
+
+data class ActiveRuleViolationDto(
+    val violationType: String? = null,
+    val description: String? = null,
+)
+
+data class VehicleSessionExpiredResponse(
+    val success: Boolean? = null,
+    val created: Boolean? = null,
 )
 
 /** Válasz a játékmotor / követési ciklus állapotához (páros kliens). */
@@ -96,6 +134,17 @@ data class GameCountdownResponse(
     val activeGameDayId: Int? = null,
     val lastLocationUpdate: String? = null,
     val nextLocationUpdate: String? = null,
+    /** Emberi magyar sorok a mai / következő játéknapról (backend). */
+    val pairScheduleLines: List<String>? = null,
+    val todayGameDay: GameDaySnippet? = null,
+    val nextGameDay: GameDaySnippet? = null,
+    val pairCaptured: Boolean? = null,
+    val activeRuleViolations: List<ActiveRuleViolationDto>? = null,
+    /** Játéknap lezárása utáni tartózkodás — explicit név Gson / broadcast körökben. */
+    @SerializedName("stayRuleEnabled")
+    val stayRuleEnabled: Boolean = false,
+    @SerializedName("stayRadiusKm")
+    val stayRadiusKm: Double? = null,
 )
 
 data class PositionRequest(
@@ -140,4 +189,13 @@ data class DeviceInfo(
 data class LogoutResponse(
     val success: Boolean,
     val message: String?
+)
+
+data class UpdateDeviceFcmTokenRequest(
+    val fcmToken: String?,
+)
+
+data class BasicSuccessResponse(
+    val success: Boolean,
+    val message: String?,
 )

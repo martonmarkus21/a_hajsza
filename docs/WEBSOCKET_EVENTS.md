@@ -125,7 +125,7 @@ Geofence esemény (belépés, kilépés, teljesítés).
 ```
 
 ### `ruleViolation`
-Szabályszegés észlelve vagy megszűnése.
+Szabályszegés észlelve vagy megszűnése (játékterület, jármű, maradás, stb.). A webes fő térkép / admin jelenleg **`game_area_exit`** és **`vehicle_time_exceeded`** esetén tesz globális toastot + „folyamatos követés” jelölést — a **`end_of_day_stay`** külön `globalToast`-tal is kiegészülhet (lásd lent).
 
 ```json
 {
@@ -141,6 +141,18 @@ Szabályszegés észlelve vagy megszűnése.
 
 > **Megjegyzés**: Ha `resolved: true`, a szabályszegés megszűnt (a pár visszatért a
 > játékterületre). A `continuousMode` ilyenkor `false` értékű.
+
+### `globalToast`
+Egysoros, minden bejelentkezett webes kliensnek szóló üzenet (pl. segítségkérés, maradás miatti **következő nap első 30 perces** követés emlékeztető).
+
+```json
+{
+  "message": "Maradási szabály miatt a(z) 3. pár mozgása a következő 30 percben folyamatosan látható a térképen.",
+  "variant": "info"
+}
+```
+
+> **`variant`** tipikusan `info` | `success` | `error` — a frontend a toast színére használja.
 
 ### `pairStatusUpdate`
 Pár státusz változás (aktív, inaktív, stb.).

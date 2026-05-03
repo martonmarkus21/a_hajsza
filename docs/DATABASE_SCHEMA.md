@@ -118,6 +118,24 @@ CREATE TABLE users (
 );
 ```
 
+### `game_settings`
+Globális játékbeállítások (egyetlen „első sor” szerint dolgozik a rendszer olvasóként).
+
+```sql
+CREATE TABLE game_settings (
+  id SERIAL PRIMARY KEY,
+  location_update_interval_minutes INTEGER NOT NULL DEFAULT 20,
+  game_enabled BOOLEAN NOT NULL DEFAULT false,
+  stay_rule_enabled BOOLEAN NOT NULL DEFAULT false,
+  stay_radius_km DOUBLE PRECISION NOT NULL DEFAULT 5,
+  mobile_enrollment_secret VARCHAR(255),
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+> **`stay_rule_*`**: játéknapok között a zárás bázisa körül engedélyezett maximális távolság (cron + Redis, lásd scheduler). **`mobile_enrollment_secret`**: Android első párosítás fejléc-titkosítása — felülírható `MOBILE_ENROLLMENT_SECRET` `.env` változóval.
+
 ### `game_days`
 Játék napok táblája.
 
@@ -204,7 +222,7 @@ Szabályszegések táblája.
 CREATE TABLE rule_violations (
   id SERIAL PRIMARY KEY,
   pair_id INTEGER REFERENCES pairs(id) ON DELETE CASCADE,
-  violation_type VARCHAR(100) NOT NULL, -- 'game_area_exit', 'vehicle_time_exceeded', 'crossing_point_violation'
+  violation_type VARCHAR(100) NOT NULL, -- többek között: 'game_area_exit', 'vehicle_time_exceeded', 'end_of_day_stay', 'crossing_point_violation'
   description TEXT,
   position_id INTEGER REFERENCES positions(id),
   resolved BOOLEAN DEFAULT false,

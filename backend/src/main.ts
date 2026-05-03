@@ -2,10 +2,18 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { DataSource } from 'typeorm';
+import { ensureBootstrapAdmin } from './database/bootstrap-admin';
 import { seedDatabase } from './database/seed';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  try {
+    const dataSourceBoot = app.get(DataSource);
+    await ensureBootstrapAdmin(dataSourceBoot);
+  } catch (error) {
+    console.error('Bootstrap admin failed:', error);
+  }
 
   const httpServer = app.getHttpAdapter().getInstance() as { set?: (k: string, v: unknown) => void };
   if (typeof httpServer?.set === 'function') {

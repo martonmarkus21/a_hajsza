@@ -5,9 +5,10 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [PositionEntity::class], version = 1, exportSchema = false)
+@Database(entities = [PositionEntity::class, EventEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun positionDao(): PositionDao
+    abstract fun eventDao(): EventDao
 
     companion object {
         @Volatile
@@ -18,8 +19,10 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "most_wanted_database"
-                ).build()
+                    "most_wanted_database",
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

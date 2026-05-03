@@ -38,7 +38,10 @@ docker compose up -d postgres redis
 2. Állítsd be a Firebase projektet:
    - Töltsd le a `google-services.json` fájlt a Firebase konzolból
    - Helyezd el az `app/` mappába
-3. Futtasd az alkalmazást
+3. Indítás előtt a páros appnak **backend API alapszint URL** és a szerverhez tartozó **beiratkozási titok** kell — ezt az admin (**Eszközök → Android kapcsolat**, QR / másolás) adja. Részletesen: `android-app/README.md` és `docs/API_SPEC.md` (`GET /api/mobile/verify`).
+4. Futtasd az alkalmazást
+
+**Megjegyzés:** nem kell a forráskódba beleégetett `BASE_URL`; a páros eszköz `EncryptedSharedPreferences`-ben tárolja a szervert és a Retrofit-et futás közben állítja be.
 
 ## Környezeti változók
 
@@ -75,6 +78,8 @@ CORS_ORIGIN=http://localhost:3001
 
 **Opcionális** (részletek az `.env.example`-ben):
 
+- `APP_TIMEZONE` — játéknap / cron faliórája (pl. `Europe/Budapest`)
+- `MOBILE_ENROLLMENT_SECRET`, `PUBLIC_API_BASE_URL` — mobil párosítás és publikus API alap URL (proxy mögött használd inkább ezt explicit)
 - `RECENT_DEVICE_PAIR_IDS_CACHE_MS` — aktív eszközök pár-ID listájának memóriabeli cache ideje
 - `TYPEORM_LOGGING`, `LOG_VERBOSE` — SQL / részletes alkalmazáslog
 - `SEED_DB`, `SEED_PAIRS` — csak fejlesztési seed

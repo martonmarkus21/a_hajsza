@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PositionsController } from './positions.controller';
 import { AdminPositionsController } from './admin-positions.controller';
 import { LatestSavedPositionsController } from './latest-saved-positions.controller';
+import { PursuerLiveController } from './pursuer-live.controller';
 import { PositionsService } from './positions.service';
 import { Position } from '../entities/position.entity';
 import { Geofence } from '../entities/geofence.entity';
@@ -16,6 +17,7 @@ import { DeviceAuthGuard } from '../auth/device-auth.guard';
 import { JwtModule } from '@nestjs/jwt';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 import { GameRuntimeModule } from '../game-runtime/game-runtime.module';
+import { MobileModule } from '../mobile/mobile.module';
 
 @Module({
   imports: [
@@ -30,6 +32,7 @@ import { GameRuntimeModule } from '../game-runtime/game-runtime.module';
     RuleViolationsModule,
     AuditLogsModule,
     GameRuntimeModule,
+    MobileModule,
     ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -42,7 +45,12 @@ import { GameRuntimeModule } from '../game-runtime/game-runtime.module';
       inject: [ConfigService],
     }),
   ],
-  controllers: [PositionsController, AdminPositionsController, LatestSavedPositionsController],
+  controllers: [
+    PositionsController,
+    AdminPositionsController,
+    LatestSavedPositionsController,
+    PursuerLiveController,
+  ],
   providers: [PositionsService, DeviceAuthGuard],
   exports: [PositionsService],
 })

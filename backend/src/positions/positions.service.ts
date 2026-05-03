@@ -10,9 +10,10 @@ import { CreatePositionDto } from './dto/create-position.dto';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { RuleViolationsService } from '../rule-violations/rule-violations.service';
 import { RedisPositionService } from '../redis/redis-position.service';
+import { RedisStayRuleService } from '../redis/redis-stay-rule.service';
 import { RecentDevicePairIdsService } from '../device-activity/recent-device-pair-ids.service';
 import { PositionSnapshot } from './position-snapshot';
-import { logVerbose } from '../common/verbose-log';
+import { logVerbosePosition, logVerbosePositionThrottled } from '../common/verbose-log';
 import { QueryAdminPositionsDto } from './dto/query-admin-positions.dto';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
@@ -43,6 +44,7 @@ export class PositionsService {
     private webSocketGateway: WebSocketGateway,
     private ruleViolationsService: RuleViolationsService,
     private redisPositionService: RedisPositionService,
+    private redisStayRuleService: RedisStayRuleService,
     private recentDevicePairIdsService: RecentDevicePairIdsService,
     private auditLogsService: AuditLogsService,
     private gameRuntimeService: GameRuntimeService,
@@ -139,14 +141,6 @@ export class PositionsService {
   }
 
   async create(createPositionDto: CreatePositionDto, devicePayload?: any) {
-    logVerbose('[Position] Received position:', {
-      deviceId: createPositionDto.deviceId,
-      pairId: createPositionDto.pairId,
-      lat: createPositionDto.lat,
-      lon: createPositionDto.lon,
-      devicePayload: devicePayload ? { deviceId: devicePayload.deviceId, pairId: devicePayload.pairId } : null,
-    });
-
     if (!devicePayload?.authenticated || !devicePayload?.deviceId) {
       throw new UnauthorizedException('Authenticated device token required');
     }
@@ -208,7 +202,6 @@ export class PositionsService {
     };
 
     await this.redisPositionService.setLivePosition(pairId, snapshot);
-    logVerbose('[Position] Live position stored in Redis for pairId:', pairId);
 
     const gameCtx = await this.gameRuntimeService.getRuntimeContext();
     const { violations, gameAreaExitViolationActive } = await this.ruleViolationsService.checkViolations(
@@ -217,8 +210,12 @@ export class PositionsService {
       { applyGameRules: gameCtx.isGameActive },
     );
 
+    const vehicleTimeExceededActive =
+      (await this.ruleViolationRepository.count({
+        where: { pairId, violationType: 'vehicle_time_exceeded', resolved: false },
+      })) > 0;
+
     // Straight-line distance for pursuers is computed in the browser (geolocation + pair coords).
-    logVerbose('[Position] Broadcasting distance update via WebSocket for pairId:', pairId);
     this.webSocketGateway.broadcastDistanceUpdate({
       pairId: pairId,
       lat: createPositionDto.lat,
@@ -231,25 +228,30 @@ export class PositionsService {
     let shouldShowOnMap = false;
     let pairAddedToCycleThisRequest = false;
 
+    const stayRuleMapRevealActive = await this.redisStayRuleService.isMapRevealActive(
+      pairId,
+      serverTimestamp,
+    );
+
     if (pairCaptured) {
       shouldShowOnMap = true;
       pairAddedToCycleThisRequest = false;
     } else if (runtime.campaignStatus !== 'RUNNING' && runtime.allowPositionUpdatesForMap !== true) {
-      logVerbose(
+      logVerbosePosition(
         '[Position] Runtime does not allow sampled map position now. pairId:',
         pairId,
         'motorPhase:',
         runtime.campaignStatus,
       );
     } else {
-      shouldShowOnMap = gameAreaExitViolationActive;
+      shouldShowOnMap =
+        gameAreaExitViolationActive || vehicleTimeExceededActive || stayRuleMapRevealActive;
 
       if (runtime.allowPositionUpdatesForMap === true) {
         const consume = await this.gameRuntimeService.tryConsumePairCycleSlot(pairId);
         if (consume.allowed) {
           shouldShowOnMap = true;
           pairAddedToCycleThisRequest = true;
-          logVerbose('[Position] Pair position update allowed in runtime cycle. pairId:', pairId);
 
           const activePairIdsRaw = await this.recentDevicePairIdsService.getDistinctRecentDevicePairIds();
           const capturedRows = activePairIdsRaw.length
@@ -263,8 +265,8 @@ export class PositionsService {
           await this.gameRuntimeService.closeCycleWindowIfAllPairsSent(activePairIds);
         }
       } else {
-        if (!gameAreaExitViolationActive) {
-          logVerbose(
+        if (!gameAreaExitViolationActive && !vehicleTimeExceededActive) {
+          logVerbosePosition(
             '[Position] Position updates for map are not allowed (allowPositionUpdatesForMap = false). pairId:',
             pairId,
           );
@@ -290,10 +292,6 @@ export class PositionsService {
         hadRuleViolationAtSave,
       });
       savedPosition = await this.positionRepository.save(positionRow);
-      logVerbose('[Position] Sampled position persisted to PostgreSQL (counter cycle):', {
-        id: savedPosition.id,
-        pairId: savedPosition.pairId,
-      });
       this.webSocketGateway.broadcastSavedPositionSample({
         pairId: savedPosition.pairId,
         id: savedPosition.id,
@@ -303,7 +301,6 @@ export class PositionsService {
     const mapTimestamp = savedPosition?.timestamp?.toISOString() ?? serverTimestamp.toISOString();
 
     if (shouldShowOnMap) {
-      logVerbose('[Position] Broadcasting position update for map via WebSocket for pairId:', pairId, 'at:', mapTimestamp);
       this.webSocketGateway.broadcastPositionUpdate({
         pairId: pairId,
         lat: createPositionDto.lat,
@@ -314,23 +311,33 @@ export class PositionsService {
         vehicleMode: createPositionDto.vehicleMode || false,
         distanceToNearestOfficer: null,
       });
-    } else {
-      const allowUpdates = runtime.allowPositionUpdatesForMap ?? false;
-      logVerbose(
-        '[Position] Position update NOT broadcasted for map (cycle or pair already sent) for pairId:',
-        pairId,
-        'allowPositionUpdatesForMap:',
-        allowUpdates,
-        'motorPhase:',
-        runtime.campaignStatus,
-      );
     }
+
+    logVerbosePositionThrottled(
+      `position:${pairId}`,
+      '[Position]',
+      {
+        pairId,
+        deviceId: createPositionDto.deviceId,
+        lat: createPositionDto.lat,
+        lon: createPositionDto.lon,
+        liveRedisStored: true,
+        distanceWsBroadcast: true,
+        mapWsSent: shouldShowOnMap,
+        motorPhase: runtime.campaignStatus,
+        allowPositionUpdatesForMap: runtime.allowPositionUpdatesForMap ?? false,
+        pairAlreadyCaptured: pairCaptured,
+        sampledDbRowId: savedPosition?.id ?? null,
+        pairAddedCycleThisRequest: pairAddedToCycleThisRequest,
+      },
+    );
 
     return {
       success: true,
       message: 'Position recorded',
       violationDetected: violations.length > 0,
-      continuousMode: gameAreaExitViolationActive,
+      continuousMode:
+        gameAreaExitViolationActive || vehicleTimeExceededActive || stayRuleMapRevealActive,
     };
   }
 

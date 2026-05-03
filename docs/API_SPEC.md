@@ -39,6 +39,17 @@ Content-Type: application/json
 - **`GET /api/devices/active`** - Visszaadja az online/aktív eszközöket (JWT: admin vagy officer).
 - **`POST /api/devices/logout`** - Kijelentkezteti az aktuális eszközt.
 - **`POST /api/devices/force-logout/:deviceId`** - Kijelentkeztet egy adott eszközt (Admin).
+- **`GET /api/devices/admin/mobile-connection`** - (Admin JWT) Android kapcsolódási csomag: `apiBaseUrl`, `enrollmentEnabled`, `enrollmentSecret`, `enrollmentSecretFromEnv` (.env felülírja-e a titkot).
+- **`POST /api/devices/admin/mobile-connection/regenerate`** - (Admin JWT) új véletlen titok az adatbázisban (`mobile_enrollment_secret`); nem fut, ha van `MOBILE_ENROLLMENT_SECRET` az `.env`-ben. Napló: `mobile_enrollment_secret_regenerated`.
+- **`POST /api/devices/fcm-token`** - (Enrollment + Device JWT) opcionális / frissített FCM push token a `devices.fcm_token` mezőben.
+- **`POST /api/devices/help-request`** - (Enrollment + Device JWT) globális „segítség kérése” toast a webes klienseknek.
+- **`POST /api/devices/vehicle-session-expired`** - (Enrollment + Device JWT) 40 perc jármű mód local lejára után: szerver oldali `vehicle_time_exceeded` rekord biztosítása, ha még nincs.
+
+### Mobil (nyilvános előellenőrzés)
+
+- **`GET /api/mobile/verify`**
+  - Token nélkül hívható; ha a szerveren van effektív beiratkozási titok (`.env` vagy `game_settings.mobile_enrollment_secret`), a kérésben kötelező a **`X-Mw-Enrollment-Secret`** fejléc (azonosító érték, mint az app „szerver kapcsolat” beállításánál).
+  - **Response**: `{ ok: true, enrollmentRequired: boolean }` — `enrollmentRequired: false`, ha egyáltalán nincs titok beállítva (fejléc opcionális).
 
 ### Users (Admin)
 - **`GET /api/users`** - Felhasználók (adminok/officerek) listázása.
@@ -61,7 +72,7 @@ Content-Type: application/json
   - Menekülő app küldi a pozíciót.
   - **Body**: `{ "deviceId": "string", "pairId": 1, "lat": 47.4, "lon": 19.0, "accuracy": 10, "speed": 0, "timestamp": "...", "vehicleMode": false, "vehicleSessionRemaining": 0 }`
   - **Viselkedés (Redis + PostgreSQL)**:
-    - Minden fogadott minta bekerül a **Redis** „élő pozíció” kulcsba (pár szerint), így a játéktér / szabályszegés ellenőrzés és a scheduler ebből is tud dolgozni.
+    - Minden fogadott minta bekerül a **Redis** „élő pozíció” kulcsba (pár szerint), így a játéktér / jármű / **maradási szabály** ellenőrzés és a scheduler ebből is tud dolgozni (játéknapon kívül is, ha az app küld).
     - **PostgreSQL** `positions` táblába nem minden kérés ír: sor a játékidőzítő és az `allowPositionUpdatesForMap` / ciklus-szabályok szerint keletkezik (lásd `PositionsService`). A `game_area_exit` szabályszegés lezáródásakor (pár vissza a játékterületre) **nem** jön létre önálló `positions` sor.
     - Amikor új `positions` sor keletkezik, a szerver elmenti a **mentéskor aktív játékterület(ek) pillanatképét** (`game_area_snapshot_json`) és azt, hogy **volt-e meg nem oldott szabályszegése** a párnak (`had_rule_violation_at_save`).
     - **WebSocket**: `distanceUpdate` gyakrabban megy ki (távolságszámítás a kliensen); `positionUpdate` csak akkor, ha a térképen szabad frissíteni (pl. nyitott „pozíció ablak”, vagy aktív `game_area_exit` folyamatos követés). Új PG-s minta után globálisan kimegy a `savedPositionSample` esemény is (`pairId`, `id`). Admin törlés után: `savedPositionsDeleted` (`pairId`, `deleted`) — a kliensek frissíthetik a mentett pozíciók listáját.
@@ -73,6 +84,9 @@ Content-Type: application/json
 - **`POST /api/positions/admin/delete-by-ids`** (Admin JWT) — **Body**: `{ "pairId": number, "ids": number[] }` (minden ID-nek létező, ehhez a `pairId`-hez tartozó sornak kell lennie). **Response**: `{ "deleted": number }`. WebSocket: `savedPositionsDeleted`.
 - **`GET /api/positions/pair/:pairId/latest-saved`** (JWT: **admin** vagy **officer**)
   - A megadott pár **legutóbbi mentett** pozíciósora (vagy `null`), ugyanazzal a mezőkészlettel, mint a list API elemek (pl. térkép modál / pár részletek).
+- **`POST /api/positions/pursuer-live`** (JWT: **admin** vagy **officer**)
+  - A webes böngésző aktuális GPS-e **Redisben**, üldözői távolsághoz — pl. napzárás FCM-ben a párhoz írt távolságsorhoz szükséges.
+  - **Body**: `{ "lat": number, "lon": number }`. **HTTP 204** üres válasszal.
 
 ### Párok
 - **`GET /api/pairs`** - Összes pár lekérése (opcionális `?active=true` szűréssel).
@@ -131,18 +145,19 @@ Content-Type: application/json
 - **`DELETE /api/game-days/:id`** - Versenynap törlése (Admin).
 
 ### Game Settings (Játék beállítások & Időzítők)
-- **`GET /api/game-settings/countdown`** - Visszaszámláló és játékmotor állapot mezők (JWT: bejelentkezett felhasználó, admin vagy officer). Tartalmazza a `campaignStatus`, `isGameActive`, és a következő frissítési ciklus (`nextLocationUpdate`) adatait.
-- **`GET /api/game-settings`** - Teljes globális beállítások + játékmotor állapot (`runtime`) (JWT: **csak admin**).
-- **`PUT /api/game-settings`** - Beállítások frissítése (JWT: **csak admin**). Sikeres mentés után napló: `game_settings_update` (`audit_logs`).
+- **`GET /api/game-settings/countdown`** — Olvasási „irányítópult” (JWT: **device** token vagy **admin/officer web**). Tartalmazza többek között: `campaignStatus`, `isGameActive`, `stayRuleEnabled`, `stayRadiusKm`, páridőzítő (`nextLocationUpdate`), **nyitott szabályszegések** listája a bejelentkezett pár szerint (`activeRuleViolations`), játéknap összefoglalók, elfogás jelző.
+- **`GET /api/game-settings`** — Teljes globális beállítások + `runtime` (JWT: **csak admin**). A beállítások között például `gameEnabled`, `locationUpdateIntervalMinutes`, **`stayRuleEnabled`**, **`stayRadiusKm`** (km), **`mobileEnrollmentSecret`** (opcionális; az admin mobil QR / csatlakozás képernyőjéhez ugyanez más alapon is lekérhető).
+- **`PUT /api/game-settings`** — Beállítások frissítése (JWT: **csak admin**), köztük opcionálisan `stayRuleEnabled`, `stayRadiusKm`. Sikeres mentés után napló: `game_settings_update` (`audit_logs`).
 - **`POST /api/game-settings/timer/start`** — Játékmotor kézi indítása (JWT: **csak admin**). Napló: `game_runtime_engine_start`.
 - **`POST /api/game-settings/timer/stop`** — Játékmotor kézi leállítása (JWT: **csak admin**). Napló: `game_runtime_engine_stop`.
 
 > **Megjegyzés**: További admin műveletek is bekerülnek az eseménynaplóba (payload a `data_json` mezőben), például geofence aktiválás / deaktiválás / tömeges státusz (`geofence_activate`, `geofence_deactivate`, `geofence_bulk_status`), mentett pozíciók törlése (`position_delete_pair`, `position_delete_batch`), lezárt szabályszegés törlése (`rule_violation_delete`).
 
 ### Szabályszegések (Rule Violations)
-- **`GET /api/rule-violations/active-game-area`** - Aktív játékterület-elhagyás szabályszegések lekérése.
+- **`GET /api/rule-violations/active-game-area`** - Aktív „térképen folyamatosan követett” szabályszegések: `game_area_exit` és/vagy `vehicle_time_exceeded` nyitott sorai.
 - **`GET /api/rule-violations/list`** - Szabályszegések lapozott listája szűréssel és rendezéssel (Admin).
-  - **Query params**: `page`, `pageSize`, `type` (`all` | `game_area_exit` | `vehicle_time_exceeded`), `status` (`all` | `active` | `resolved`), `search`, `sortBy`, `sortDir`.
+  - **Query params**: `page`, `pageSize`, `type` (`all` vagy egy konkrét `violation_type` string, például `game_area_exit`, `vehicle_time_exceeded`, `end_of_day_stay`), `status`, `search`, `sortBy`, `sortDir`.
+  - **`end_of_day_stay`** (maradási szabály): játéknapok között túllépett bentmaradás; opcionális **következő játéknap első 30 percében** térképes követés (Redis + háttér pozíció). A percenkénti motor és FCM dokumentálva `SchedulerService`, `finalizeStayRuleViolation`.
 - **`DELETE /api/rule-violations/:id`** - Lezárt szabályszegés törlése (Admin).
 
 ---

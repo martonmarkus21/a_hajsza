@@ -31,27 +31,27 @@ export class DeviceAuthGuard implements CanActivate {
     }
 
     if (!token) {
-      throw new UnauthorizedException('Device authentication required');
+      throw new UnauthorizedException('Bejelentkezés szükséges. Add meg a párszámot és a jelszót.');
     }
 
     try {
       const payload = this.jwtService.verify(token);
       if (payload.type !== 'device') {
         logVerbose('[DeviceAuthGuard] Invalid token type:', payload.type);
-        throw new UnauthorizedException('Invalid token type');
+        throw new UnauthorizedException('Érvénytelen munkamenet-típus. Lépj be újra az alkalmazásban.');
       }
       const row = await this.deviceRepository.findOne({
         where: { imeiOrDeviceId: payload.deviceId },
         select: ['id', 'pairId', 'loggedOutAt'],
       });
       if (!row) {
-        throw new UnauthorizedException('Device not registered or session invalid; please log in again');
+        throw new UnauthorizedException('Az eszköz nincs regisztrálva, vagy a munkamenet érvénytelen. Lépj be újra.');
       }
       if (row.loggedOutAt != null) {
-        throw new UnauthorizedException('Device session ended; please log in again');
+        throw new UnauthorizedException('A munkamenet lezárult. Lépj be újra.');
       }
       if (payload.pairId != null && row.pairId != null && Number(row.pairId) !== Number(payload.pairId)) {
-        throw new UnauthorizedException('Device session invalid; please log in again');
+        throw new UnauthorizedException('A munkamenet nem egyezik az eszközzel. Lépj be újra.');
       }
       request.device = payload;
       request.device.authenticated = true;
@@ -61,7 +61,7 @@ export class DeviceAuthGuard implements CanActivate {
         throw error;
       }
       logVerbose('[DeviceAuthGuard] Token verification failed:', error?.message ?? error);
-      throw new UnauthorizedException('Invalid device token');
+      throw new UnauthorizedException('Érvénytelen eszköz-munkamenet. Lépj be újra.');
     }
   }
 }

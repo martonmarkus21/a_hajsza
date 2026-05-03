@@ -1,126 +1,71 @@
 # Most Wanted - Android App
 
-Android alkalmazás a menekülő párok számára.
+Android alkalmazás a menekülő párok számára (**Jetpack Compose**, egy fő `AppActivity`).
 
 ## Funkciók
 
-- ✅ Device bejelentkezés (pár száma alapján)
-- ✅ Minimal UI (fekete háttér, rövid üzenetek)
-- ✅ **LocationService** (előtér-szolgáltatás): folyamatos GPS + pozícióküldés a szervernek (távolságszámításhoz is)
-- ✅ FCM push értesítések fogadása
-- ✅ Járműhasználat követése (40 perc limit)
-- ✅ Offline cache és sync (`PositionRepository`)
-- ✅ Játékállapot / countdown lekérés (`GET /api/game-settings/countdown`) — értesítés és főképernyő frissítés
+- **Szerver beállítás** (első indítás): publikus API URL + beiratkozási titok (kézi vagy QR; admin felület „Android kapcsolat”). Opcionális ellenőrzés: `GET /api/mobile/verify` és `X-Mw-Enrollment-Secret` fejléc.
+- **Bejelentkezés** pár felhasználónév / jelszóval és eszközazonosítóval (`POST /api/devices/login`, `MobileEnrollmentGuard`).
+- **Főképernyő**: játékállapot sorok (`GET /api/game-settings/countdown`), élő állapot mapper, lokális **események** (Room / `EventRepository`).
+- **LocationService**: előtér / háttér helykövetés és `POST /api/position` (jármű mód és `vehicleSessionRemaining` másodperc mezőkkel — a jármű 40 percének végekor `POST /api/devices/vehicle-session-expired`).
+- **FCM** push fogadása, értesítési képernyő típus szerint összesítve.
+- **„Segítség kérése”** → szerver globális toast a webhez (`POST /api/devices/help-request`).
 
 ## Technológia
 
-- Kotlin
-- MVVM architektúra
-- Google Play Services Location API
-- Firebase Cloud Messaging
-- Room Database (offline cache)
-- Retrofit (API kommunikáció)
+- Kotlin, Jetpack Compose, Navigation
+- MVVM (`MainViewModel`, `AuthViewModel`)
+- Retrofit / OkHttp (**dinamikus base URL**, `ApiService.create(context)`)
+- `EncryptedSharedPreferences` (`ServerConnectionStore`), Gson + szükség szerint `LenientBooleanDeserializer`
+- Google Play Services Location, Firebase Messaging
+- Room (offline cache, események)
 
 ## Beállítás
 
-### 1. Firebase beállítás
+### Firebase
 
-1. Hozz létre egy Firebase projektet a [Firebase Console](https://console.firebase.google.com/)-ban
-2. Add hozzá az Android alkalmazást a projekthez
-3. Töltsd le a `google-services.json` fájlt
-4. Helyezd el a fájlt az `app/` mappába
+`google-services.json` → `android-app/app/`
 
-### 2. Backend URL beállítása
+### Backend elérése
 
-Módosítsd az `ApiService.kt` fájlban a `BASE_URL` értékét:
+Az API címet **nem** kötelező a forráskódba írni: az app a szerver párosító képernyőről tárolja. Fejlesztői esetekben tipikus érték: emulator `http://10.0.2.2:3000/`, fizikai készülék `http://<LAN-IP>:3000/`.
 
-```kotlin
-// Android emulator esetén:
-private const val BASE_URL = "http://10.0.2.2:3000/"
+## Build
 
-// Valós eszköz esetén (cseréld le a saját IP-dre):
-private const val BASE_URL = "http://192.168.x.x:3000/"
-```
+Android Studio → `android-app` modul futtatása. ProGuard konfig ha release: `app/proguard-rules.pro`.
 
-### 3. Build és futtatás
-
-1. Nyisd meg Android Studio-ban
-2. Importáld a projektet
-3. Várj, amíg a Gradle szinkronizál
-4. Futtasd az alkalmazást
-
-## Használat
-
-### Bejelentkezés
-
-1. Indítsd el az alkalmazást
-2. Add meg a pár számát (username)
-3. Add meg a jelszót (ugyanaz, mint a pár száma)
-4. Kattints a "Bejelentkezés" gombra
-
-### Fő funkciók
-
-- **Üzenetek**: A főképernyőn jelennek meg az üzenetek
-- **Segítség kérése**: Kattints a "Segítség kérése" gombra
-- **Járműhasználat**: Indítsd/állítsd le a járműhasználatot (40 perc limit)
-
-### Háttér működés
-
-- A **LocationService** küldi a pozíciót (folyamatos / gyakori mintavétel a kliensen; a játékmotor ciklusa a szerveren dől el)
-- Offline módban a pozíciók lokálisan tárolódnak és később szinkronizálódnak
-- FCM push értesítések automatikusan megjelennek
-
-## Engedélyek
-
-Az alkalmazás a következő engedélyeket kéri (a `AndroidManifest.xml` szerint):
-
-- **Helymeghatározás** (fine / coarse, szükség szerint háttér hely): pozíció küldéshez
-- **Értesítések** (Android 13+): FCM push értesítésekhez
-- **Foreground service** (location típusú): háttérben futó helyszolgáltatás
-
-A bejelentkezéskor küldött `deviceId` előállítása: `LoginActivity` (`Settings.Secure.ANDROID_ID`).
-
-## Hibaelhárítás
-
-### Nem lehet bejelentkezni
-
-- Ellenőrizd, hogy a backend fut-e
-- Ellenőrizd a `BASE_URL` beállítását
-- Ellenőrizd, hogy a pár létezik-e az adatbázisban
-
-### Pozíció nem küldődik
-
-- Ellenőrizd a helymeghatározás engedélyt
-- Ellenőrizd az internetkapcsolatot
-- Nézd meg a logokat (Logcat)
-
-### FCM nem működik
-
-- Ellenőrizd, hogy a `google-services.json` fájl helyesen van-e beállítva
-- Ellenőrizd a Firebase projekt beállításait
-
-## Fejlesztés
-
-### Projekt struktúra
+## Projekt struktúra (válogatás)
 
 ```
 app/src/main/java/com/mostwanted/app/
-├── api/              # API interfészek
-├── database/         # Room database
-├── repository/       # Adat réteg
-├── service/          # Háttér szolgáltatások
-├── util/             # Segéd osztályok
-├── viewmodel/        # ViewModel osztályok
-├── LoginActivity.kt  # Bejelentkezési képernyő
-└── MainActivity.kt  # Főképernyő
+├── AppActivity.kt
+├── api/                   # Retrofit + enrollment probe + Gson részletek
+├── ui/                    # Compose képernyők (Login, Dashboard, Admin-szerű folyamat, Server setup, Notifications)
+├── service/               # LocationService, FcmService
+├── viewmodel/
+├── repository/            # Offline / események
+├── database/
+├── splash/
+├── model/
+└── util/                  # ServerConnectionStore, QR parser, countdown / játék státusz formázók
 ```
 
-### API Endpoints
+## API végpontok (rövid)
 
-- `POST /api/devices/login` - Device bejelentkezés
-- `GET /api/game-settings/countdown` - Játékállapot / számláló (JWT)
-- `POST /api/position` - Pozíció küldés
+| Funkció | Módszer / útvonal |
+|--------|---------------------|
+| Kapcsolat ellenőrzés | `GET /api/mobile/verify` |
+| Bejelentkezés | `POST /api/devices/login` |
+| Aktuális játékállapot összefoglaló | `GET /api/game-settings/countdown` |
+| Pozíció | `POST /api/position` |
+| FCM token | `POST /api/devices/fcm-token` |
+| Segítség | `POST /api/devices/help-request` |
+| Jármű 40 perc lejárta | `POST /api/devices/vehicle-session-expired` |
+| Kilépés eszköz munkamenetből | `POST /api/devices/logout` |
 
-### Adatbázis
+Részletesen: táblázatokkal és auth magyarázattal lásd **`docs/API_SPEC.md`**.
 
-A Room adatbázis offline pozíciók tárolására szolgál. A pozíciók automatikusan szinkronizálódnak, amikor az internetkapcsolat elérhető.
+## Engedélyek és háttér
+
+Helyzet, előtér-szolgáltatás (location típus), értesítések (Android 13+). Az eszközazonosítót a klasszikus bejelentkezési útvonal továbbra is az Android **`ANDROID_ID`** (vagy stabilebb alternatívák) szerint küldi a szervernek; részletek a `devices` táblában (`imei_or_device_id`).
+

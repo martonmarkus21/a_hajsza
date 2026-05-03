@@ -416,12 +416,13 @@ export class PairsService {
         if (device.fcmToken) {
           try {
             await this.fcmService.sendToDevice(device.fcmToken, {
-              title: 'Pár törölve',
-              body: 'A párt törölték. Kérjük, jelentkezz be újra.',
+              title: '',
+              body: '',
               data: {
                 type: 'pair_deleted',
                 action: 'logout',
               },
+              dataOnly: true,
             });
             console.log(`[Pair] Sent pair deletion FCM notification to device ${device.imeiOrDeviceId}`);
           } catch (error) {

@@ -75,6 +75,7 @@ const ACTION_LABELS: Record<string, string> = {
   message_sent: 'Üzenet küldve',
   device_logout: 'Eszköz kijelentkezés',
   device_force_logout: 'Eszköz kényszer-kijelentkezés',
+  mobile_enrollment_secret_regenerated: 'Mobil kapcsolódási titok megújítva',
   mw_flag: 'Most Wanted jelzés',
   audit_log_delete: 'Naplóbejegyzés törölve',
   game_settings_update: 'Játékbeállítások módosítva',
@@ -103,6 +104,7 @@ function actionBadgeClass(actionType: string): string {
   if (actionType.startsWith('game_settings')) return 'bg-indigo-500/15 text-indigo-200 border-indigo-500/25';
   if (actionType.startsWith('game_runtime')) return 'bg-indigo-500/15 text-indigo-200 border-indigo-500/25';
   if (actionType.startsWith('game_day')) return 'bg-blue-500/15 text-blue-200 border-blue-500/25';
+  if (actionType.startsWith('mobile_')) return 'bg-emerald-500/12 text-emerald-100 border-emerald-500/30';
   if (actionType.startsWith('device_')) return 'bg-slate-500/20 text-slate-200 border-slate-500/30';
   if (actionType.startsWith('message')) return 'bg-amber-500/15 text-amber-200 border-amber-500/30';
   if (actionType.startsWith('capture')) return 'bg-red-500/15 text-red-200 border-red-500/30';

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SchedulerService } from './scheduler.service';
+import { GameDayScheduledFcmService } from './game-day-scheduled-fcm.service';
 import { Position } from '../entities/position.entity';
 import { RuleViolation } from '../entities/rule-violation.entity';
 import { Pair } from '../entities/pair.entity';
@@ -11,6 +12,7 @@ import { RuleViolationsModule } from '../rule-violations/rule-violations.module'
 import { GameRuntimeModule } from '../game-runtime/game-runtime.module';
 import { GameDaysModule } from '../game-days/game-days.module';
 import { RedisModule } from '../redis/redis.module';
+import { FcmModule } from '../fcm/fcm.module';
 
 @Module({
   imports: [
@@ -20,9 +22,10 @@ import { RedisModule } from '../redis/redis.module';
     GameRuntimeModule,
     GameDaysModule,
     RedisModule,
+    FcmModule,
   ],
-  providers: [SchedulerService],
-  exports: [SchedulerService],
+  providers: [SchedulerService, GameDayScheduledFcmService],
+  exports: [SchedulerService, GameDayScheduledFcmService],
 })
 export class SchedulerModule {}
 

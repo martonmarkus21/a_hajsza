@@ -1,4 +1,10 @@
-import { Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan, Not, IsNull, QueryFailedError } from 'typeorm';
 import { Device } from '../entities/device.entity';
@@ -11,6 +17,8 @@ import { RecentDevicePairIdsService } from '../device-activity/recent-device-pai
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
 import { RedisPositionService } from '../redis/redis-position.service';
+import { WebSocketGateway } from '../websocket/websocket.gateway';
+import { RuleViolationsService } from '../rule-violations/rule-violations.service';
 
 @Injectable()
 export class DevicesService {
@@ -24,17 +32,19 @@ export class DevicesService {
     private recentDevicePairIdsService: RecentDevicePairIdsService,
     private auditLogsService: AuditLogsService,
     private redisPositionService: RedisPositionService,
+    private webSocketGateway: WebSocketGateway,
+    private ruleViolationsService: RuleViolationsService,
   ) {}
 
   async login(deviceLoginDto: DeviceLoginDto) {
     const pairNumber = parseInt(deviceLoginDto.username, 10);
     if (isNaN(pairNumber)) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Hibás belépési adatok.');
     }
 
     const incomingImei = String(deviceLoginDto.deviceId ?? '').trim();
     if (!incomingImei) {
-      throw new UnauthorizedException('Device ID is required');
+      throw new UnauthorizedException('Hiányzik az eszközazonosító. Indítsd újra az alkalmazást, majd próbáld újra.');
     }
 
     const pair = await this.pairRepository.findOne({
@@ -43,24 +53,24 @@ export class DevicesService {
 
     if (!pair) {
       console.error(`[Device] Pair not found for assignedNumber: ${pairNumber}`);
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Hibás belépési adatok.');
     }
 
     if (!pair.id || pair.id === null || pair.id === undefined) {
       console.error(`[Device] Pair found but pair.id is null/undefined! pair:`, JSON.stringify(pair, null, 2));
-      throw new UnauthorizedException('Invalid pair: missing ID');
+      throw new UnauthorizedException('A pár adatai hibásak. Kérj segítséget a szervezőktől.');
     }
 
     const validPairId = Number(pair.id);
     if (!validPairId || validPairId === 0 || isNaN(validPairId)) {
       console.error(`[Device] Invalid pair.id: ${pair.id}, type: ${typeof pair.id}, validPairId: ${validPairId}`);
-      throw new UnauthorizedException('Invalid pair: invalid ID');
+      throw new UnauthorizedException('A pár adatai hibásak. Kérj segítséget a szervezőktől.');
     }
 
     logVerbose(`[Device] Login attempt: pairNumber=${pairNumber}, pair.id=${pair.id}, validPairId=${validPairId}`);
 
     if (deviceLoginDto.password !== pairNumber.toString()) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Hibás belépési adatok.');
     }
 
     const deviceByImei = await this.deviceRepository.findOne({
@@ -125,15 +135,15 @@ export class DevicesService {
         throw e;
       }
       if (!device) {
-        throw new UnauthorizedException('Failed to create device');
+        throw new UnauthorizedException('Nem sikerült regisztrálni az eszközt. Próbáld újra, vagy kérj segítséget.');
       }
     } else {
       logVerbose(`[Device] Login rejected: unexpected device state for pair ${validPairId}, imei ${incomingImei}`);
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Hibás belépési adatok.');
     }
 
     if (!device) {
-      throw new UnauthorizedException('Failed to resolve device');
+      throw new UnauthorizedException('Az eszköz állapota nem egyértelmű. Próbáld újra a belépést.');
     }
 
     if (!pair.active) {
@@ -182,7 +192,7 @@ export class DevicesService {
     });
 
     if (!device) {
-      throw new UnauthorizedException('Device not found');
+      throw new UnauthorizedException('Az eszköz nem található. Lépj be újra.');
     }
 
     return {
@@ -193,6 +203,24 @@ export class DevicesService {
         pairName: device.pair.name,
         lastSeenAt: device.lastSeenAt,
       },
+    };
+  }
+
+  async updateFcmToken(deviceId: string, fcmToken?: string) {
+    const device = await this.deviceRepository.findOne({
+      where: { imeiOrDeviceId: deviceId },
+    });
+
+    if (!device) {
+      throw new NotFoundException('Az eszköz nem található.');
+    }
+
+    device.fcmToken = (fcmToken || '').trim() || null;
+    await this.deviceRepository.save(device);
+
+    return {
+      success: true,
+      message: 'Push értesítések frissítve.',
     };
   }
 
@@ -268,7 +296,7 @@ export class DevicesService {
     if (!device) {
       return {
         success: true,
-        message: 'Device not found',
+        message: 'Az eszköz már nem volt nyilvántartva — a művelet így is rendben van.',
       };
     }
 
@@ -276,12 +304,13 @@ export class DevicesService {
     if (isForceLogout && device.fcmToken) {
       try {
         await this.fcmService.sendToDevice(device.fcmToken, {
-          title: 'Kijelentkeztetés',
-          body: 'Az adminisztrátor kijelentkeztetett az eszközről.',
+          title: '',
+          body: '',
           data: {
             type: 'force_logout',
             action: 'logout',
           },
+          dataOnly: true,
         });
         logVerbose(`[Device] Sent force logout FCM notification to device ${deviceId}`);
       } catch (error) {
@@ -351,21 +380,47 @@ export class DevicesService {
 
     return {
       success: true,
-      message: isForceLogout ? 'Force logged out successfully' : 'Logged out successfully',
+      message: isForceLogout ? 'Kényszerített kijelentkezés megtörtént.' : 'Sikeres kijelentkezés.',
     };
+  }
+
+  async sendHelpRequestFromDevice(device: { pairId?: number | null }) {
+    const pairId = device.pairId != null ? Number(device.pairId) : NaN;
+    if (!Number.isFinite(pairId) || pairId < 1) {
+      throw new BadRequestException('Nincs érvényes pár azonosító a munkamenetben.');
+    }
+    const pair = await this.pairRepository.findOne({
+      where: { id: pairId },
+      select: ['assignedNumber'],
+    });
+    const n = pair?.assignedNumber ?? '?';
+    this.webSocketGateway.broadcastGlobalToast({
+      message: `A(z) ${n}. pár segítséget kér.`,
+      variant: 'info',
+    });
+    return { success: true };
+  }
+
+  async recordVehicleSessionExpiredFromDevice(device: { pairId?: number | null }) {
+    const pairId = device.pairId != null ? Number(device.pairId) : NaN;
+    if (!Number.isFinite(pairId) || pairId < 1) {
+      throw new BadRequestException('Nincs érvényes pár azonosító a munkamenetben.');
+    }
+    const out = await this.ruleViolationsService.ensureVehicleTimeoutFromApp(pairId);
+    return { success: true, ...out };
   }
 
   async delete(id: number) {
     if (!Number.isFinite(id) || id < 1) {
-      throw new NotFoundException('Device not found');
+      throw new NotFoundException('Az eszköz nem található.');
     }
     const device = await this.deviceRepository.findOne({ where: { id } });
     if (!device) {
-      throw new NotFoundException('Device not found');
+      throw new NotFoundException('Az eszköz nem található.');
     }
     await this.deviceRepository.remove(device);
     this.recentDevicePairIdsService.invalidateSnapshot();
-    return { success: true, message: 'Device deleted successfully' };
+    return { success: true, message: 'Az eszköz törölve lett.' };
   }
 }
 

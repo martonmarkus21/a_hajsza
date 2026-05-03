@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Kis értesítés-ikon maszk (fehér / átlátszó). Kör alakú célkereszt, lövészcső-szerű retikulum.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Külső kör gyűrű (evenOdd „fánk”) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M12,12m-11,0a11,11,0,1,1,22,0a11,11,0,1,1,-22,0 M12,12m-9,0a9,9,0,1,1,18,0a9,9,0,1,1,-18,0" />
+    <!-- Rövid célvezető vonalak, közép üreg (optikai retikulum) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M3,10.75h6v2.5H3zM15,10.75h6v2.5h-6zM10.75,3h2.5v6h-2.5zM10.75,15h2.5v6h-2.5z" />
+</vector>

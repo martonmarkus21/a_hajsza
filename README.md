@@ -41,9 +41,12 @@ Nyisd meg: `http://localhost:3001`
 
 ### Backend
 - ✅ REST API (NestJS)
-- ✅ WebSocket (Socket.IO) valós idejű frissítések (`positionUpdate`, `distanceUpdate`, `savedPositionSample`, stb.)
+- ✅ WebSocket (Socket.IO) valós idejű frissítések (`positionUpdate`, `distanceUpdate`, `savedPositionSample`, `globalToast`, stb.)
 - ✅ PostgreSQL adatbázis (pozícióminták, üzleti adatok)
-- ✅ Redis: élő pár-pozíciók + geofence gyorsítótár; ugyanazon példányon Bull/BullMQ is futhat
+- ✅ Redis: élő pár-pozíciók, üldöző böngésző-GPS (`pursuer-live`), maradási szabály állapota (anchor, kinti idő, következő napi térképreveláció), geofence gyorsítótár; ugyanazon példányon Bull/BullMQ is futhat
+- ✅ Játéknapok közötti **maradási szabály** (percenkénti ellenőrzés, FCM, `end_of_day_stay` rekord, következő nap első 30 perces térképláthatóság)
+- ✅ Ütemezett **játéknap** FCM / záró üzenetek, üldöző–pár távolság a nap végén (Redis üldöző pozíció alapján)
+- ✅ Mobil **csatlakoztatás**: nyilvános `GET /api/mobile/verify` + admin által forgatott titok (QR), `game_settings.mobile_enrollment_secret`
 - ✅ FCM (Firebase Cloud Messaging)
 - ✅ JWT autentikáció (admin/officer és device)
 - ✅ Device bejelentkezés rendszer
@@ -61,16 +64,21 @@ Nyisd meg: `http://localhost:3001`
 - ✅ Elfogás (bilincs) API: szigorúbb validáció, idempotencia, elfogás részletei modal (hely, rögzítő, információs szöveg)
 - ✅ Admin panel (teljes funkcionalitással)
 - ✅ Admin **Eseménynapló** (audit lista, szűrés, CSV export, törlés; menü csak **admin** számára)
+- ✅ Admin **Eszközök**: Android kapcsolat (API alap URL + QR, titok rotálás), páros eszközlista
+- ✅ **Üldöző élő hely** küldése böngészőből (`POST /api/positions/pursuer-live`) — térképes távolság a játéknap zárásánál
 - ✅ Admin listák: közös táblázat-kártya (`AdminDataTableCard`), `AdminTableKit` (egységes `mw-table` váz, lapozó, rendezhető fejléc), lapozás a párok / eszközök / felhasználók tábláin is
 - ✅ Modern UI (fekete-narancs színséma)
 
 ### Android App
-- ✅ Device bejelentkezés (POST /api/devices/login)
-- ✅ Háttér service (20 percenkénti pozícióküldés)
-- ✅ FCM push fogadás
-- ✅ Offline működés
+- ✅ Egy aktivitás + **Jetpack Compose** UI (bejelentkezés, főképernyő, értesítések); első indításkor **szerver beállítás** (API URL + titok, opcionálisan QR)
+- ✅ **EncryptedSharedPreferences** + dinamikus Retrofit alap URL (`ServerConnectionStore`)
+- ✅ Device bejelentkezés (`POST /api/devices/login`), FCM token frissítés, segítségkérés, jármű idő lejárata jelzése
+- ✅ **LocationService**: élő hely + jármű számláló mezők; a mintavételi gyakoriság a szerver játékmotorához igazodik
+- ✅ Lokális események (Room), FCM / foreground kezelés
 
 ## 📱 Telefonos bejelentkezés
+
+Az alkalmazás első konfigurálása: admin felületen generált **API URL + titok** (vagy QR). Részletek: `android-app/README.md`, `docs/API_SPEC.md` (`/api/mobile/verify`), `backend/.env.example` (`PUBLIC_API_BASE_URL`, `MOBILE_ENROLLMENT_SECRET`).
 
 **API Endpoint**: `POST /api/devices/login`
 

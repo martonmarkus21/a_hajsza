@@ -2,10 +2,20 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { initializeApp, cert, getApps, getApp, App } from 'firebase-admin/app';
 import { getMessaging, MulticastMessage, Message } from 'firebase-admin/messaging';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Device } from '../entities/device.entity';
 import { Pair } from '../entities/pair.entity';
 import { logVerbose } from '../common/verbose-log';
+
+/** Késlekedés mérséklése (Doze / normál háttér-prior alatti kézbesítés). */
+const FCM_DELIVERY_HEADERS: Pick<MulticastMessage, 'android' | 'apns'> = {
+  android: { priority: 'high' },
+  apns: {
+    headers: {
+      'apns-priority': '10',
+    },
+  },
+};
 
 @Injectable()
 export class FcmService implements OnModuleInit {
@@ -54,12 +64,12 @@ export class FcmService implements OnModuleInit {
     }
 
     const devices = await this.deviceRepository.find({
-      where: { pairId },
+      where: { pairId, loggedOutAt: IsNull() },
     });
 
     const tokens = devices
       .map((d) => d.fcmToken)
-      .filter((token) => token !== null && token !== undefined);
+      .filter((token) => token !== null && token !== undefined && String(token).trim() !== '');
 
     if (tokens.length === 0) {
       return { success: false, message: 'A párhoz nem tartozik aktív eszköz' };
@@ -72,14 +82,17 @@ export class FcmService implements OnModuleInit {
       },
       data: message.data || {},
       tokens,
+      ...FCM_DELIVERY_HEADERS,
     };
 
     try {
       const response = await getMessaging().sendEachForMulticast(messagePayload);
+      const ok = response.successCount > 0;
       return {
-        success: true,
+        success: ok,
         successCount: response.successCount,
         failureCount: response.failureCount,
+        message: ok ? undefined : 'Minden értesítés meghiúsult (ellenőrizd a Firebase / tokeneket)',
       };
     } catch (error) {
       console.error('FCM send error:', error);
@@ -141,6 +154,7 @@ export class FcmService implements OnModuleInit {
         body: message.body,
       },
       tokens,
+      ...FCM_DELIVERY_HEADERS,
     };
 
     try {
@@ -154,6 +168,76 @@ export class FcmService implements OnModuleInit {
       console.error('FCM send error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
+  }
+
+  /**
+   * Admin / front üzenetbroadcast: minden kijelentkezés NÉLKÜLI eszköz, aminek van FCM tokenje.
+   * (A sendToAllPairs a „utóbbi 30 percben aktív” szűrő miatt rendszeresen elveszítette a párokat.)
+   */
+  async sendBroadcastToAllStoredDevices(message: {
+    title: string;
+    body: string;
+    data?: Record<string, string>;
+  }) {
+    if (!this.firebaseApp) {
+      console.warn('FCM not initialized, skipping push notification');
+      return { success: false, message: 'FCM not initialized' };
+    }
+
+    const rows = await this.deviceRepository
+      .createQueryBuilder('device')
+      .where('device.fcmToken IS NOT NULL')
+      .andWhere("device.fcmToken != ''")
+      .andWhere('device.pairId IS NOT NULL')
+      .andWhere('device.loggedOutAt IS NULL')
+      .getMany();
+
+    const tokens = [...new Set(rows.map((d) => d.fcmToken).filter(Boolean))] as string[];
+
+    logVerbose(`[FCM broadcast] Stored devices with tokens: ${tokens.length}`);
+
+    if (tokens.length === 0) {
+      return {
+        success: false,
+        message:
+          'Jelenleg nincs olyan bejelentkezett pár (aktív alkalmazás-munkamenet), amelynek érvényes FCM tokenje lenne — az üzenetet senki sem kapja meg.',
+      };
+    }
+
+    const chunkSize = 500;
+    let ok = 0;
+    let fail = 0;
+    for (let i = 0; i < tokens.length; i += chunkSize) {
+      const slice = tokens.slice(i, i + chunkSize);
+      const payload: MulticastMessage = {
+        notification: { title: message.title, body: message.body },
+        tokens: slice,
+        ...FCM_DELIVERY_HEADERS,
+      };
+      if (message.data && Object.keys(message.data).length > 0) {
+        payload.data = Object.fromEntries(
+          Object.entries(message.data).map(([k, v]) => [k, String(v)]),
+        );
+      }
+      const messagePayload = payload;
+      try {
+        const response = await getMessaging().sendEachForMulticast(messagePayload);
+        ok += response.successCount;
+        fail += response.failureCount;
+      } catch (error) {
+        console.error('FCM broadcast chunk error:', error);
+        fail += slice.length;
+      }
+    }
+    return {
+      success: ok > 0,
+      successCount: ok,
+      failureCount: fail,
+      message:
+        ok === 0 && fail > 0
+          ? 'FCM küldés sikertelen (minden token meghiúsult)'
+          : undefined,
+    };
   }
 
   /**
@@ -194,6 +278,7 @@ export class FcmService implements OnModuleInit {
         body: message.body,
       },
       tokens,
+      ...FCM_DELIVERY_HEADERS,
     };
 
     try {
@@ -211,7 +296,7 @@ export class FcmService implements OnModuleInit {
 
   async sendToDevice(
     token: string,
-    message: { title: string; body: string; data?: Record<string, string> },
+    message: { title: string; body: string; data?: Record<string, string>; dataOnly?: boolean },
   ) {
     if (!this.firebaseApp) {
       console.warn('FCM not initialized, skipping push notification');
@@ -223,13 +308,16 @@ export class FcmService implements OnModuleInit {
     }
 
     const messagePayload: Message = {
-      notification: {
-        title: message.title,
-        body: message.body,
-      },
       data: message.data || {},
       token,
+      ...FCM_DELIVERY_HEADERS,
     };
+    if (!message.dataOnly && (message.title || message.body)) {
+      messagePayload.notification = {
+        title: message.title,
+        body: message.body,
+      };
+    }
 
     try {
       const response = await getMessaging().send(messagePayload);

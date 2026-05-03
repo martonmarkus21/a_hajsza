@@ -27,6 +27,10 @@ export class GameSettings {
   @Column({ name: 'stay_radius_km', type: 'float', default: 5 })
   stayRadiusKm: number;
 
+  /** Páros Android kliens fejléc-titok (auto-generált az admin felületen); a MOBILE_ENROLLMENT_SECRET .env felülírhatja. */
+  @Column({ name: 'mobile_enrollment_secret', type: 'varchar', length: 255, nullable: true })
+  mobileEnrollmentSecret: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

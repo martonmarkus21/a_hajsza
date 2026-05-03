@@ -345,7 +345,7 @@ export class CapturesService {
 
     await this.fcmService.sendToAllPairsExceptPair(createCaptureDto.pairId, {
       title: 'Elfogás',
-      body: 'Egy másik párt elfogtak. Nálatok nem változik semmi, játszatok tovább a szabályok szerint.',
+      body: 'Egy másik párt elfogtak. Nálatok nem változik semmi, játsszatok tovább a szabályok szerint.',
     });
 
     await this.auditLogsService.log({

@@ -22,6 +22,7 @@ import { UsersModule } from './users/users.module';
 import { GameSettingsModule } from './game-settings/game-settings.module';
 import { RedisModule } from './redis/redis.module';
 import { RecentDevicePairIdsModule } from './device-activity/recent-device-pair-ids.module';
+import { MobileModule } from './mobile/mobile.module';
 
 function typeOrmLogging(): boolean | ('error' | 'warn' | 'info' | 'log' | 'schema' | 'query' | 'migration')[] {
   const v = (process.env.TYPEORM_LOGGING || '').toLowerCase().trim();
@@ -74,6 +75,7 @@ function typeOrmLogging(): boolean | ('error' | 'warn' | 'info' | 'log' | 'schem
     DevicesModule,
     UsersModule,
     GameSettingsModule,
+    MobileModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -30,8 +30,8 @@ export class MessagesService {
 
       return result;
     } else {
-      // Send to all pairs
-      const result = await this.fcmService.sendToAllPairs({
+      // Küldés minden tárolt, bejelentkezettnek számító eszközre (nem csak az utolsó 30 percben látottakra).
+      const result = await this.fcmService.sendBroadcastToAllStoredDevices({
         title: sendMessageDto.title,
         body: sendMessageDto.body,
       });

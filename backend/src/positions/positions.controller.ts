@@ -2,13 +2,14 @@ import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from
 import { PositionsService } from './positions.service';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { DeviceAuthGuard } from '../auth/device-auth.guard';
+import { MobileEnrollmentGuard } from '../mobile/mobile-enrollment.guard';
 
 @Controller('api/position')
 export class PositionsController {
   constructor(private readonly positionsService: PositionsService) {}
 
   @Post()
-  @UseGuards(DeviceAuthGuard)
+  @UseGuards(MobileEnrollmentGuard, DeviceAuthGuard)
   @HttpCode(HttpStatus.OK)
   async create(@Body() createPositionDto: CreatePositionDto, @Request() req: any) {
     return await this.positionsService.create(createPositionDto, req.device);

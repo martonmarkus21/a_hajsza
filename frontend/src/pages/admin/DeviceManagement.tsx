@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import QRCode from 'qrcode';
 import {
     FiSmartphone,
     FiTrash2,
@@ -9,6 +10,11 @@ import {
     FiXCircle,
     FiAlertCircle,
     FiActivity,
+    FiPlus,
+    FiCopy,
+    FiRefreshCw,
+    FiInfo,
+    FiAlertTriangle,
 } from 'react-icons/fi';
 import { DateTimeStackCell } from '../../utils/formatDateTimeBudapest';
 import MwTableSearchInput from '../../components/MwTableSearchInput';
@@ -22,6 +28,21 @@ import {
     AdminTablePaginationFooter,
 } from '../../components/admin/AdminTableKit';
 import { DEFAULT_ADMIN_TABLE_PAGE_SIZE, useAdminListPagination } from '../../hooks/useAdminListPagination';
+import Modal from '../../components/Modal';
+import ConfirmationModal from '../../components/ConfirmationModal';
+import { apiUrl } from '@/config/env';
+import { encodeMwMobileQrPayload } from '../../utils/mobileConnectionQr';
+import { useNotification } from '../../contexts/NotificationContext';
+import { extractApiErrorMessage } from '../../utils/extractApiErrorMessage';
+
+async function parseFetchFailureMessage(res: Response): Promise<string> {
+    const raw = await res.text();
+    try {
+        return extractApiErrorMessage(JSON.parse(raw), `HTTP ${res.status}`);
+    } catch {
+        return raw.trim() || `HTTP ${res.status}`;
+    }
+}
 
 /** Egyetlen megjelenített időpont: kijelentkezett eszköznél a kijelentkezés, különben az utolsó szerverkapcsolat. */
 function deviceListTimestampIso(device: { loggedOutAt?: string | null; lastSeenAt?: string | null }): string | null {
@@ -50,6 +71,137 @@ export default function DeviceManagement({
     activeGameAreaExitViolations,
     onOpenViolationDetails
 }: DeviceManagementProps) {
+    const { addNotification } = useNotification();
+    const [showAndroidConnModal, setShowAndroidConnModal] = useState(false);
+    const [androidConnLoading, setAndroidConnLoading] = useState(false);
+    const [androidConnError, setAndroidConnError] = useState<string | null>(null);
+    const [androidConn, setAndroidConn] = useState<{
+        apiBaseUrl: string;
+        enrollmentEnabled: boolean;
+        enrollmentSecret: string;
+        enrollmentSecretFromEnv: boolean;
+    } | null>(null);
+    const [androidQrDataUrl, setAndroidQrDataUrl] = useState<string | null>(null);
+    const [androidConnRegenerating, setAndroidConnRegenerating] = useState(false);
+    const [androidCopiedField, setAndroidCopiedField] = useState<'url' | 'secret' | null>(null);
+    const androidCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [showRegenerateSecretConfirm, setShowRegenerateSecretConfirm] = useState(false);
+
+    useEffect(() => {
+        return () => {
+            if (androidCopyResetRef.current) clearTimeout(androidCopyResetRef.current);
+        };
+    }, []);
+
+    const applyAndroidConnPayload = async (
+        data: {
+            apiBaseUrl: string;
+            enrollmentEnabled: boolean;
+            enrollmentSecret: string;
+            enrollmentSecretFromEnv: boolean;
+        },
+    ) => {
+        setAndroidConn(data);
+        const qrText = encodeMwMobileQrPayload(data.apiBaseUrl, data.enrollmentSecret || '');
+        const url = await QRCode.toDataURL(qrText, {
+            width: 176,
+            margin: 1,
+            color: { dark: '#0f0f0fff', light: '#ffffffff' },
+        });
+        setAndroidQrDataUrl(url);
+    };
+
+    useEffect(() => {
+        if (!showAndroidConnModal) return;
+        let cancelled = false;
+        (async () => {
+            setAndroidConnLoading(true);
+            setAndroidConnError(null);
+            setAndroidConn(null);
+            setAndroidQrDataUrl(null);
+            try {
+                const res = await fetch(apiUrl('/api/devices/admin/mobile-connection'), {
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                });
+                if (!res.ok) {
+                    throw new Error(await parseFetchFailureMessage(res));
+                }
+                const data = (await res.json()) as {
+                    apiBaseUrl: string;
+                    enrollmentEnabled: boolean;
+                    enrollmentSecret: string;
+                    enrollmentSecretFromEnv: boolean;
+                };
+                if (cancelled) return;
+                await applyAndroidConnPayload(data);
+            } catch (e: unknown) {
+                if (!cancelled) {
+                    setAndroidConnError(e instanceof Error ? e.message : 'Ismeretlen hiba');
+                }
+            } finally {
+                if (!cancelled) setAndroidConnLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [showAndroidConnModal]);
+
+    useEffect(() => {
+        if (!showAndroidConnModal) {
+            setAndroidCopiedField(null);
+            if (androidCopyResetRef.current) {
+                clearTimeout(androidCopyResetRef.current);
+                androidCopyResetRef.current = null;
+            }
+        }
+    }, [showAndroidConnModal]);
+
+    const runRegenerateAndroidSecret = async () => {
+        if (androidConnRegenerating) return;
+        setAndroidConnRegenerating(true);
+        setAndroidConnError(null);
+        try {
+            const res = await fetch(apiUrl('/api/devices/admin/mobile-connection/regenerate'), {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+            });
+            if (!res.ok) {
+                throw new Error(await parseFetchFailureMessage(res));
+            }
+            const data = (await res.json()) as {
+                apiBaseUrl: string;
+                enrollmentEnabled: boolean;
+                enrollmentSecret: string;
+                enrollmentSecretFromEnv: boolean;
+            };
+            await applyAndroidConnPayload(data);
+            addNotification('success', 'Új kapcsolódási titok került generálásra.');
+        } catch (e: unknown) {
+            setAndroidConnError(e instanceof Error ? e.message : 'A generálás nem sikerült.');
+        } finally {
+            setAndroidConnRegenerating(false);
+            setShowRegenerateSecretConfirm(false);
+        }
+    };
+
+    const flashAndroidCopied = (field: 'url' | 'secret') => {
+        if (androidCopyResetRef.current) clearTimeout(androidCopyResetRef.current);
+        setAndroidCopiedField(field);
+        androidCopyResetRef.current = setTimeout(() => {
+            setAndroidCopiedField(null);
+            androidCopyResetRef.current = null;
+        }, 2000);
+    };
+
+    const copyAndroidField = async (field: 'url' | 'secret', text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            flashAndroidCopied(field);
+        } catch {
+            addNotification('error', 'A másolás nem sikerült — próbálja meg újra.');
+        }
+    };
 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
@@ -117,6 +269,170 @@ export default function DeviceManagement({
 
     return (
         <div className="space-y-6">
+            <Modal
+                isOpen={showAndroidConnModal}
+                onClose={() => setShowAndroidConnModal(false)}
+                maxWidth="max-w-[min(100vw-1.25rem,24rem)] sm:max-w-xl md:max-w-2xl"
+                headerPaddingClass="p-4 sm:p-5"
+                title={
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                        <div className="flex-shrink-0 p-1.5 sm:p-2 bg-orange-500/20 rounded-lg flex items-center justify-center ring-1 ring-orange-500/25">
+                            <FiSmartphone className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-white leading-snug">
+                            Android alkalmazás kapcsolódása
+                        </span>
+                    </div>
+                }
+            >
+                <div className="p-4 sm:p-5 text-gray-300 text-sm leading-relaxed max-h-[min(85dvh,32rem)] overflow-y-auto custom-scrollbar">
+                    {androidConnLoading && (
+                        <div className="flex items-center gap-2 text-gray-400 py-2">
+                            <span className="inline-block w-4 h-4 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin shrink-0" />
+                            <span className="text-xs sm:text-sm">Adatok betöltése…</span>
+                        </div>
+                    )}
+                    {androidConnError && (
+                        <div className="flex gap-2.5 items-start rounded-xl border border-red-500/35 bg-red-500/10 px-3 py-2.5 text-red-200/95 text-xs sm:text-sm">
+                            <FiAlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" aria-hidden />
+                            <p className="min-w-0">{androidConnError}</p>
+                        </div>
+                    )}
+                    {androidConn && !androidConnLoading && (
+                        <div className="flex flex-col md:flex-row md:items-start gap-4 md:gap-5 pt-1">
+                            <div className="flex-1 min-w-0 space-y-3">
+                                {androidConn.enrollmentSecretFromEnv ? (
+                                    <div className="flex gap-2.5 rounded-xl border border-amber-500/35 bg-amber-950/40 px-3 py-2.5 text-amber-100/95 text-xs sm:text-sm leading-snug">
+                                        <FiAlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400/90" aria-hidden />
+                                        <p>
+                                            Amit itt lát, a szerver beállítófájljából (<code className="text-orange-300/95 font-mono text-[11px]">.env</code>) jön, nem ezen az oldalon generálódik. A titkot a <code className="text-orange-300/95 font-mono text-[11px]">MOBILE_ENROLLMENT_SECRET</code> sorban lehet megváltoztatni – utána mindenképp indítsa újra a játék API-ját, különben a régi érték marad érvényben.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2.5 rounded-xl border border-violet-500/30 bg-violet-950/35 px-3 py-2.5 text-violet-100/95 text-xs sm:text-sm leading-snug">
+                                        <FiInfo className="w-4 h-4 shrink-0 mt-0.5 text-violet-400/90" aria-hidden />
+                                        <p>
+                                            A webcím és a titok együtt mondja meg az alkalmazásnak, melyik szerverhez csatlakozzon. A titok véletlen kulcs, a szerver tárolja – első alkalommal itt jön létre, ha eddig nem volt. QR-rel nem kell gépelni; új kulcshoz (pl. kiszivárgás után) lent a „Új titok generálása” gomb.
+                                        </p>
+                                    </div>
+                                )}
+                                <div>
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500">
+                                            Szerver webcíme (API)
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => void copyAndroidField('url', androidConn.apiBaseUrl)}
+                                            className={`p-1 rounded-md transition-colors ${
+                                                androidCopiedField === 'url'
+                                                    ? 'text-emerald-400 bg-emerald-500/15'
+                                                    : 'text-gray-400 hover:text-orange-300 hover:bg-white/10'
+                                            }`}
+                                            title="Másolás a vágólapra"
+                                            aria-label="API URL másolása"
+                                        >
+                                            {androidCopiedField === 'url' ? (
+                                                <FiCheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden />
+                                            ) : (
+                                                <FiCopy className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden />
+                                            )}
+                                        </button>
+                                    </div>
+                                    <div className="font-mono text-[11px] sm:text-xs break-all bg-black/35 border border-white/10 rounded-lg px-2.5 py-2 text-orange-200/90 leading-snug">
+                                        {androidConn.apiBaseUrl}
+                                    </div>
+                                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                                        A telefonon ezt a címet kell megadni; a QR tartalmazza.
+                                    </p>
+                                </div>
+                                <div>
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-500">
+                                            Titkos kapcsolódási kulcs
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                void copyAndroidField('secret', androidConn.enrollmentSecret || '')
+                                            }
+                                            className={`p-1 rounded-md transition-colors ${
+                                                androidCopiedField === 'secret'
+                                                    ? 'text-emerald-400 bg-emerald-500/15'
+                                                    : 'text-gray-400 hover:text-orange-300 hover:bg-white/10'
+                                            } disabled:opacity-40 disabled:pointer-events-none`}
+                                            title="Másolás a vágólapra"
+                                            aria-label="Titok másolása"
+                                            disabled={!androidConn.enrollmentSecret}
+                                        >
+                                            {androidCopiedField === 'secret' ? (
+                                                <FiCheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden />
+                                            ) : (
+                                                <FiCopy className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden />
+                                            )}
+                                        </button>
+                                    </div>
+                                    <div className="font-mono text-[11px] sm:text-xs break-all bg-black/35 border border-white/10 rounded-lg px-2.5 py-2 text-emerald-200/85 leading-snug min-h-[2.25rem]">
+                                        {androidConn.enrollmentSecret || '— (nincs elérhető titok)'}
+                                    </div>
+                                    <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                                        A telefonra ezt is be kell írni; a QR ezt is átadja.
+                                    </p>
+                                </div>
+                            </div>
+                            {androidQrDataUrl && (
+                                <div className="flex flex-col items-center gap-1.5 md:w-[11.5rem] shrink-0 mx-auto md:mx-0 md:pt-0.5 border-t border-white/10 md:border-t-0 md:border-l md:pl-5 md:border-white/10 pt-3 md:pt-0">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 text-center md:text-left w-full">
+                                        QR-kód
+                                    </span>
+                                    <img
+                                        src={androidQrDataUrl}
+                                        alt="Android kapcsolódási QR-kód"
+                                        className="rounded-lg border border-white/10 bg-white p-1.5 w-[148px] h-[148px] sm:w-[168px] sm:h-[168px] object-contain shadow-inner"
+                                    />
+                                    <p className="text-[10px] sm:text-[11px] text-gray-500 text-center leading-snug max-w-[14rem] md:max-w-none">
+                                        Beolvasás az appban, vagy a szerver beállításánál a webcím és a kulcs bemásolása.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+                <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-t border-white/5 bg-black/25 flex flex-wrap items-center justify-end gap-2">
+                    {androidConn && !androidConn.enrollmentSecretFromEnv && (
+                        <button
+                            type="button"
+                            onClick={() => setShowRegenerateSecretConfirm(true)}
+                            disabled={androidConnLoading || androidConnRegenerating}
+                            className="mw-btn mw-btn-secondary flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-bold disabled:opacity-50"
+                        >
+                            <FiRefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${androidConnRegenerating ? 'animate-spin' : ''}`} />
+                            Új titok generálása
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => setShowAndroidConnModal(false)}
+                        className="px-4 py-2 sm:px-5 sm:py-2.5 bg-white/10 hover:bg-white/15 text-white rounded-xl font-semibold text-xs sm:text-sm transition-colors"
+                    >
+                        Bezárás
+                    </button>
+                </div>
+            </Modal>
+
+            <ConfirmationModal
+                isOpen={showRegenerateSecretConfirm}
+                title="Új kapcsolódási titok"
+                message={
+                    'Létrejön egy új titok. A régi QR és a régi titok nem működik tovább – a telefonokon frissíteni kell (új QR vagy másolás).\n\nSzóljon előre a pároknak, vagy küldje el az új adatokat.\n\nBiztosan folytatja?'
+                }
+                confirmLabel={androidConnRegenerating ? 'Generálás…' : 'Új titok generálása'}
+                cancelLabel="Mégse"
+                isDangerous
+                onCancel={() => !androidConnRegenerating && setShowRegenerateSecretConfirm(false)}
+                onConfirm={() => void runRegenerateAndroidSecret()}
+            />
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="mw-card relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -177,6 +493,18 @@ export default function DeviceManagement({
                 icon={<FiSmartphone className="w-6 h-6" />}
                 iconTone="blue"
                 countBadge={`${pagination.totalFiltered} találat`}
+                headerActions={
+                    <button
+                        type="button"
+                        onClick={() => setShowAndroidConnModal(true)}
+                        onMouseUp={(e) => e.currentTarget.blur()}
+                        className="mw-btn mw-btn-primary shrink-0 flex items-center gap-2 px-4 py-2.5 text-sm font-bold"
+                        title="Android kapcsolódási QR és titok"
+                    >
+                        <FiPlus className="w-4 h-4 shrink-0" />
+                        Android kapcsolat
+                    </button>
+                }
                 scrollClassName="overflow-x-auto"
                 footer={
                     <AdminTablePaginationFooter

@@ -14,12 +14,14 @@ import android.os.IBinder
 import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
-import com.mostwanted.app.MainActivity
+import com.mostwanted.app.AppActivity
 import com.mostwanted.app.R
 import com.mostwanted.app.api.ApiService
+import com.mostwanted.app.api.MwApiGson
 import com.mostwanted.app.database.PositionEntity
 import com.mostwanted.app.repository.PositionRepository
 import com.mostwanted.app.util.GameRuntimeFormatter
+import androidx.core.app.NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE
 import com.mostwanted.app.util.PreferencesHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +37,7 @@ import java.util.Timer
 import java.util.TimerTask
 
 class LocationService : Service() {
-    private val CHANNEL_ID = "LocationServiceChannel"
+    private val CHANNEL_ID = "LocationServiceChannel_v2"
     private lateinit var positionRepository: PositionRepository
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationRequest: LocationRequest
@@ -49,6 +51,9 @@ class LocationService : Service() {
     companion object {
         const val ACTION_RUNTIME_SUMMARY = "com.mostwanted.app.GAME_RUNTIME_SUMMARY"
         const val EXTRA_RUNTIME_SUMMARY = "runtime_summary"
+        const val EXTRA_RUNTIME_JSON = "runtime_json"
+
+        private val gson get() = MwApiGson.gson
     }
 
     override fun onCreate() {
@@ -60,6 +65,7 @@ class LocationService : Service() {
         startLocationUpdates()
         startPositionSendTimer() // Start timer to guarantee 1-second updates
         startGameRuntimePolling()
+        startOfflineSyncLoop()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -90,10 +96,12 @@ class LocationService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Location Service",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Folyamatos lokációkövetés a Most Wanted alkalmazásban"
+                description = "Folyamatos lokációkövetés és játék státusz (előtérbeli szolgáltatás)"
                 setShowBadge(false)
+                enableVibration(false)
+                setSound(null, null)
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
@@ -101,21 +109,29 @@ class LocationService : Service() {
     }
 
     private fun buildForegroundNotification(body: String): Notification {
-        val intent = Intent(this, MainActivity::class.java)
+        val intent = Intent(this, AppActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val b = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.location_service_title))
             .setContentText(body)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_stat_notification)
             .setContentIntent(pendingIntent)
-            .setOngoing(true) // Make notification persistent
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            b.setForegroundServiceBehavior(FOREGROUND_SERVICE_IMMEDIATE)
+        }
+        return b.build().apply {
+            flags = flags or Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR
+        }
     }
 
     private fun startGameRuntimePolling() {
@@ -126,13 +142,15 @@ class LocationService : Service() {
                     if (prefs.isLoggedIn() && prefs.getToken() != null) {
                         val api = ApiService.create(this@LocationService)
                         val r = api.getGameCountdown()
-                        val line = GameRuntimeFormatter.statusLine(r)
+                        val line = GameRuntimeFormatter.foregroundStatus(r)
+                        val jsonPayload = gson.toJson(r)
                         withContext(Dispatchers.Main) {
                             val nm = getSystemService(NotificationManager::class.java)
                             nm.notify(1, buildForegroundNotification(line))
                             sendBroadcast(
                                 Intent(ACTION_RUNTIME_SUMMARY).apply {
                                     putExtra(EXTRA_RUNTIME_SUMMARY, line)
+                                    putExtra(EXTRA_RUNTIME_JSON, jsonPayload)
                                     setPackage(packageName)
                                 },
                             )
@@ -141,7 +159,20 @@ class LocationService : Service() {
                 } catch (e: Exception) {
                     android.util.Log.w("LocationService", "Game countdown poll: ${e.message}")
                 }
-                delay(45_000L)
+                delay(1_000L)
+            }
+        }
+    }
+
+    private fun startOfflineSyncLoop() {
+        serviceScope.launch {
+            while (isActive) {
+                try {
+                    positionRepository.syncOfflinePositions()
+                } catch (e: Exception) {
+                    android.util.Log.w("LocationService", "Offline sync loop error: ${e.message}")
+                }
+                delay(60_000L)
             }
         }
     }

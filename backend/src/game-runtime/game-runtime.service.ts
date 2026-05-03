@@ -9,6 +9,9 @@ import { GameAreaService } from '../game-area/game-area.service';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { FcmService } from '../fcm/fcm.service';
 import { GameDay } from '../entities/game-day.entity';
+import { hmInGameTimeZone, minuteOfDayInGameTimeZone } from '../common/game-schedule-wall-clock';
+import { normalizeClockHm } from '../common/scheduled-game-push.util';
+import { RuleViolationsService } from '../rule-violations/rule-violations.service';
 
 type IntervalScheduleItem = {
   from: string;
@@ -35,6 +38,7 @@ export class GameRuntimeService {
     private readonly gameAreaService: GameAreaService,
     private readonly webSocketGateway: WebSocketGateway,
     private readonly fcmService: FcmService,
+    private readonly ruleViolationsService: RuleViolationsService,
   ) {}
 
   async getRuntimeContext(now: Date = new Date()) {
@@ -195,11 +199,15 @@ export class GameRuntimeService {
     return saved;
   }
 
+  /**
+   * A hívónak előtte friss állapotra kell hívnia {@link tick}-et (`createPosition` már teszi).
+   * Dupla tick elkerülése — ez a függvény ezrért nem hív motort.
+   */
   async tryConsumePairCycleSlot(pairId: number): Promise<{ allowed: boolean; allPairsSent: boolean }> {
-    await this.tick();
     return await this.gameRuntimeRepository.manager.transaction(async (tx) => {
       const runtime = await tx.findOne(GameRuntimeState, {
         where: {},
+        order: { id: 'ASC' },
         lock: { mode: 'pessimistic_write' },
       });
       if (!runtime) {
@@ -235,7 +243,10 @@ export class GameRuntimeService {
   }
 
   private async ensureRuntimeState(): Promise<GameRuntimeState> {
-    let state = await this.gameRuntimeRepository.findOne({ where: {} });
+    let state = await this.gameRuntimeRepository.findOne({
+      where: {},
+      order: { id: 'ASC' },
+    });
     if (!state) {
       state = this.gameRuntimeRepository.create({
         campaignStatus: 'IDLE',
@@ -254,7 +265,11 @@ export class GameRuntimeService {
   }
 
   private async ensureGameSettings(): Promise<GameSettings> {
-    let settings = await this.gameSettingsRepository.findOne({ where: {} });
+    /* Ugyanaz a kulcsminta mint a GameSettingsService: több véletlen sor esetén is az első (id ASC) egy legyen. */
+    let settings = await this.gameSettingsRepository.findOne({
+      where: {},
+      order: { id: 'ASC' },
+    });
     if (!settings) {
       settings = this.gameSettingsRepository.create({
         gameEnabled: false,
@@ -268,7 +283,7 @@ export class GameRuntimeService {
   }
 
   private isWithinWindow(now: Date, start: string, end: string): boolean {
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentMinutes = minuteOfDayInGameTimeZone(now);
     const startMinutes = this.parseClockMinutes(start);
     const endMinutes = this.parseClockMinutes(end);
     if (startMinutes == null || endMinutes == null) return false;
@@ -277,9 +292,7 @@ export class GameRuntimeService {
   }
 
   private toTimeString(d: Date): string {
-    const h = d.getHours().toString().padStart(2, '0');
-    const m = d.getMinutes().toString().padStart(2, '0');
-    return `${h}:${m}`;
+    return hmInGameTimeZone(d);
   }
 
   private parseClockMinutes(value: string | undefined): number | null {
@@ -348,11 +361,16 @@ export class GameRuntimeService {
     const schedule: IntervalScheduleItem[] = Array.isArray(specialRules?.locationIntervalSchedule)
       ? specialRules.locationIntervalSchedule
       : [];
+    const clockNorm = normalizeClockHm(currentTime);
     for (const item of schedule) {
       if (!item?.from || !item?.intervalMinutes) continue;
+      const fromNorm = normalizeClockHm(item.from);
+      const toNorm = item.to ? normalizeClockHm(item.to) : '';
       const inSlot =
-        currentTime >= item.from &&
-        (item.to ? currentTime < item.to : true);
+        !!clockNorm &&
+        !!fromNorm &&
+        clockNorm.localeCompare(fromNorm) >= 0 &&
+        (!item.to ? true : !!toNorm && clockNorm.localeCompare(toNorm) < 0);
       if (inSlot) {
         return item.intervalMinutes;
       }
@@ -371,9 +389,13 @@ export class GameRuntimeService {
     if (schedule.length === 0) return;
 
     const currentTime = this.toTimeString(now);
+    const curN = normalizeClockHm(currentTime);
     const activeItem = schedule
-      .filter((s) => s?.from && s.from <= currentTime)
-      .sort((a, b) => a.from.localeCompare(b.from))
+      .filter((s) => {
+        const fn = normalizeClockHm(s.from);
+        return s?.from && !!fn && !!curN && fn.localeCompare(curN) <= 0;
+      })
+      .sort((a, b) => normalizeClockHm(a.from).localeCompare(normalizeClockHm(b.from)))
       .pop();
     if (!activeItem) return;
 
@@ -388,33 +410,7 @@ export class GameRuntimeService {
       activeRegions: regions,
     });
     runtime.lastAppliedAreaScheduleKey = key;
-    const countyCount = counties.length;
-    const regionCount = regions.length;
-    const detailParts: string[] = [];
-    const huOnly =
-      countyCount === 1 && String(counties[0]).toLowerCase().replace(/á/g, 'a') === 'magyarorszag';
-    if (huOnly) {
-      detailParts.push('Magyarország');
-    } else if (countyCount > 0) {
-      detailParts.push(
-        countyCount === 1 ? '1 kijelölt vármegye' : `${countyCount} kijelölt vármegye`,
-      );
-    }
-    if (regionCount > 0) {
-      detailParts.push(
-        regionCount === 1 ? '1 egyéni zóna' : `${regionCount} egyéni zóna`,
-      );
-    }
-    const body =
-      detailParts.length > 0
-        ? `Az ütemezett játéktér frissült (${activeItem.from}): ${detailParts.join(' · ')}.`
-        : `Az ütemezett játéktér frissült (${activeItem.from}).`;
-    void this.fcmService
-      .sendToAllPairs({
-        title: 'Játéktér (ütemezés)',
-        body,
-      })
-      .catch(() => undefined);
+    /** FCM-et a GameDayScheduledFcmService küldi (jószándékú előzetes üzenetek + hatályonkénti részletes). */
   }
 
   private async broadcastRuntimeIfChanged(
@@ -466,16 +462,13 @@ export class GameRuntimeService {
     }
 
     if (
-      isGameActive &&
-      previousSnapshot.intervalMinutes !== intervalMinutes
+      runtime.campaignStatus === 'RUNNING' &&
+      previousSnapshot.campaignStatus !== 'RUNNING'
     ) {
-      void this.fcmService
-        .sendToAllPairs({
-          title: 'Követési intervallum',
-          body: `Az aktuális helyzetfrissítési ciklus ${intervalMinutes} percre változott (játékmotor).`,
-        })
-        .catch(() => undefined);
+      void this.ruleViolationsService.broadcastStayRevealMapToastIfActive(new Date()).catch(() => undefined);
     }
+
+    /** Helyzetfrissítő intervallum-váltások FCM-je GameDayScheduledFcmService szerint történik. */
   }
 }
 

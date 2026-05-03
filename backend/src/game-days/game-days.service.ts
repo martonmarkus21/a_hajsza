@@ -4,13 +4,29 @@ import { Repository } from 'typeorm';
 import { GameDay } from '../entities/game-day.entity';
 import { CreateGameDayDto } from './dto/create-game-day.dto';
 import { UpdateGameDayDto } from './dto/update-game-day.dto';
+import {
+  calendarYmdFromDbDateOnly,
+  calendarYmdInGameTimeZone,
+  hmInGameTimeZone,
+  minuteOfDayInGameTimeZone,
+  utcInstantFromWallCalendar,
+} from '../common/game-schedule-wall-clock';
+import { clockToMinutes, normalizeClockHm } from '../common/scheduled-game-push.util';
+
+const LAST_SCHEDULED_END_CACHE_MS = 15_000;
 
 @Injectable()
 export class GameDaysService {
+  private lastScheduledDayEndCache: { expiresAtMs: number; value: Date | null } | null = null;
+
   constructor(
     @InjectRepository(GameDay)
     private gameDayRepository: Repository<GameDay>,
   ) {}
+
+  private invalidateLastScheduledDayEndCache(): void {
+    this.lastScheduledDayEndCache = null;
+  }
 
   async findAll() {
     return await this.gameDayRepository.find({
@@ -19,10 +35,7 @@ export class GameDaysService {
   }
 
   async findToday(): Promise<GameDay | null> {
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${(today.getMonth() + 1)
-      .toString()
-      .padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
+    const todayStr = calendarYmdInGameTimeZone(new Date());
     return await this.gameDayRepository
       .createQueryBuilder('gameDay')
       .where('DATE(gameDay.date) = :date', { date: todayStr })
@@ -51,7 +64,9 @@ export class GameDaysService {
       specialRulesJson: createGameDayDto.specialRules,
     });
 
-    return await this.gameDayRepository.save(gameDay);
+    const saved = await this.gameDayRepository.save(gameDay);
+    this.invalidateLastScheduledDayEndCache();
+    return saved;
   }
 
   async update(id: number, dto: UpdateGameDayDto) {
@@ -89,7 +104,9 @@ export class GameDaysService {
       gameDay.specialRulesJson = dto.specialRules;
     }
 
-    return await this.gameDayRepository.save(gameDay);
+    const saved = await this.gameDayRepository.save(gameDay);
+    this.invalidateLastScheduledDayEndCache();
+    return saved;
   }
 
   async delete(id: number) {
@@ -98,6 +115,7 @@ export class GameDaysService {
       return { success: false };
     }
     await this.gameDayRepository.remove(row);
+    this.invalidateLastScheduledDayEndCache();
     return { success: true };
   }
 
@@ -106,8 +124,7 @@ export class GameDaysService {
     if (!gameDay) return false;
 
     const now = new Date();
-    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    
+    const currentTime = hmInGameTimeZone(now);
     return currentTime >= gameDay.startTime && currentTime <= gameDay.endTime;
   }
 
@@ -126,28 +143,151 @@ export class GameDaysService {
       .getOne();
   }
 
-  ymdLocal(d: Date): string {
-    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d
-      .getDate()
-      .toString()
-      .padStart(2, '0')}`;
+  /** Mai naptári naptól vagy későbbi első beütemezett játéknap. */
+  async findEarliestFromTodayOnward(): Promise<GameDay | null> {
+    const ymd = calendarYmdInGameTimeZone(new Date());
+    return await this.gameDayRepository
+      .createQueryBuilder('g')
+      .where('DATE(g.date) >= :ymd', { ymd })
+      .orderBy('g.date', 'ASC')
+      .addOrderBy('g.id', 'ASC')
+      .getOne();
+  }
+
+  /** Egy adott naptári nap UTÁNI első ütemezett játéknap (másik naptári nap). */
+  async findEarliestStrictlyAfterCalendarDate(dayDate: Date): Promise<GameDay | null> {
+    const base = calendarYmdFromDbDateOnly(dayDate);
+    const [yy, mm, dd] = base.split('-').map((s) => Number(s.trim()));
+    const u = new Date(Date.UTC(yy, mm - 1, dd + 1));
+    const ymd = `${u.getUTCFullYear()}-${String(u.getUTCMonth() + 1).padStart(2, '0')}-${String(u.getUTCDate()).padStart(2, '0')}`;
+    return await this.gameDayRepository
+      .createQueryBuilder('g')
+      .where('DATE(g.date) >= :ymd', { ymd })
+      .orderBy('g.date', 'ASC')
+      .addOrderBy('g.id', 'ASC')
+      .getOne();
   }
 
   /**
-   * Utolsó ütemezett játéknap záró pillanata: a naptári `date` + `endTime` a szerver helyi idejében
-   * (ugyanúgy, mint a játékablak ellenőrzés).
+   * A megadott naptári napnál korábbi, legsűrűbben ütemezett utolsó játéknap.
+   */
+  async findLatestStrictlyBeforeCalendarYmd(ymd: string): Promise<GameDay | null> {
+    return await this.gameDayRepository
+      .createQueryBuilder('g')
+      .where('DATE(g.date) < :ymd', { ymd })
+      .orderBy('g.date', 'DESC')
+      .addOrderBy('g.id', 'DESC')
+      .getOne();
+  }
+
+  /** Játéknap kezdőpillanata a naptár + startTime szerint (`APP_TIMEZONE`). */
+  getLocalStartOfGameDay(gameDay: GameDay): Date {
+    const ymd = calendarYmdFromDbDateOnly(gameDay.date);
+    const hm = normalizeClockHm(gameDay.startTime) || '00:00';
+    return utcInstantFromWallCalendar(ymd, hm);
+  }
+
+  /** `specialRulesJson.isFinalDay`: utolsó hivatalos játéknap (kampányvége előtti zárás). */
+  isFinalScheduledGameDayRow(gameDay: GameDay): boolean {
+    const v = gameDay?.specialRulesJson?.isFinalDay;
+    return v === true;
+  }
+
+  /**
+   * Maradási szabály: csak játszódnapok között (egy nap vége → következő nap közti kezdete között).
+   * Játéknap aktív óráiban és az utolsó ütemezett nap lezárása után nem érvényes.
+   */
+  async getStayRuleEnforcementContext(now: Date = new Date()): Promise<{
+    anchorGameDay: GameDay;
+    anchorYmd: string;
+  } | null> {
+    if (await this.isPastEndOfLastScheduledGameDay(now)) {
+      return null;
+    }
+
+    const nowMs = now.getTime();
+    const gdToday = await this.findToday();
+    const todayYmd = calendarYmdInGameTimeZone(now);
+
+    if (gdToday) {
+      // Ugyanaz a percbeli logika, mint az isWithinTimeWindow: a záró HH:mm percében még játék van.
+      const nowMo = minuteOfDayInGameTimeZone(now);
+      const startMo = clockToMinutes(normalizeClockHm(gdToday.startTime));
+      const endMo = clockToMinutes(normalizeClockHm(gdToday.endTime));
+      if (startMo == null || endMo == null) return null;
+
+      if (nowMo >= startMo && nowMo <= endMo) {
+        return null;
+      }
+
+      if (nowMo > endMo) {
+        if (this.isFinalScheduledGameDayRow(gdToday)) return null;
+        return {
+          anchorGameDay: gdToday,
+          anchorYmd: calendarYmdFromDbDateOnly(gdToday.date),
+        };
+      }
+
+      // Reggel, a mai kezdés előtt: előző lezárt nap bázisához kötött maradás
+      const prevGd = await this.findLatestStrictlyBeforeCalendarYmd(todayYmd);
+      if (!prevGd || this.isFinalScheduledGameDayRow(prevGd)) return null;
+      const startTodayMs = this.getLocalStartOfGameDay(gdToday).getTime();
+      const prevEndMs = this.getLocalEndOfGameDay(prevGd).getTime();
+      if (nowMs >= prevEndMs && nowMs < startTodayMs) {
+        return {
+          anchorGameDay: prevGd,
+          anchorYmd: calendarYmdFromDbDateOnly(prevGd.date),
+        };
+      }
+      return null;
+    }
+
+    const nextGd = await this.findEarliestFromTodayOnward();
+    const prevGd = await this.findLatestStrictlyBeforeCalendarYmd(todayYmd);
+    if (!nextGd || !prevGd || this.isFinalScheduledGameDayRow(prevGd)) return null;
+    const nextStartMs = this.getLocalStartOfGameDay(nextGd).getTime();
+    const prevEndMs = this.getLocalEndOfGameDay(prevGd).getTime();
+    if (nowMs >= prevEndMs && nowMs < nextStartMs) {
+      return {
+        anchorGameDay: prevGd,
+        anchorYmd: calendarYmdFromDbDateOnly(prevGd.date),
+      };
+    }
+
+    return null;
+  }
+
+  ymdLocal(d: Date): string {
+    return calendarYmdInGameTimeZone(d);
+  }
+
+  /**
+   * Utolsó ütemezett játéknap záró pillanata: naptári `date` + `endTime` falióra (`APP_TIMEZONE`).
    */
   getLocalEndOfGameDay(gameDay: GameDay): Date {
-    return this.combineDateAndTimeLocal(new Date(gameDay.date), gameDay.endTime);
+    const ymd = calendarYmdFromDbDateOnly(gameDay.date);
+    const hm = normalizeClockHm(gameDay.endTime) || '23:59';
+    return utcInstantFromWallCalendar(ymd, hm);
   }
 
   /**
    * A legkésőbbi játéknap (dátum szerint) záró időpontja; nincs játéknap → null.
    */
   async getEndOfLastScheduledGameDayAt(): Promise<Date | null> {
+    const nowMs = Date.now();
+    if (
+      this.lastScheduledDayEndCache !== null &&
+      nowMs < this.lastScheduledDayEndCache.expiresAtMs
+    ) {
+      return this.lastScheduledDayEndCache.value;
+    }
     const last = await this.findLatestScheduled();
-    if (!last) return null;
-    return this.getLocalEndOfGameDay(last);
+    const value = last ? this.getLocalEndOfGameDay(last) : null;
+    this.lastScheduledDayEndCache = {
+      expiresAtMs: nowMs + LAST_SCHEDULED_END_CACHE_MS,
+      value,
+    };
+    return value;
   }
 
   /**
@@ -158,17 +298,6 @@ export class GameDaysService {
     const endAt = await this.getEndOfLastScheduledGameDayAt();
     if (!endAt) return false;
     return now.getTime() > endAt.getTime();
-  }
-
-  private combineDateAndTimeLocal(dayDate: Date, hhmm: string): Date {
-    const normalized = this.normalizeTimeToHm(hhmm);
-    const m = /^(\d{2}):(\d{2})$/.exec(normalized);
-    const hh = m ? Math.min(23, Math.max(0, parseInt(m[1], 10))) : 0;
-    const mm = m ? Math.min(59, Math.max(0, parseInt(m[2], 10))) : 0;
-    const y = dayDate.getFullYear();
-    const mo = dayDate.getMonth();
-    const d = dayDate.getDate();
-    return new Date(y, mo, d, hh, mm, 0, 0);
   }
 
   private validateTimeRange(start: string, end: string) {
