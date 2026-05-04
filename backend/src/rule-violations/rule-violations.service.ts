@@ -148,6 +148,15 @@ export class RuleViolationsService {
         ) {
           typeHints.push(`v.violationType = 'vehicle_time_exceeded'`);
         }
+        if (
+          norm.includes('marad') ||
+          norm.includes('stay') ||
+          norm.includes('end_of_day') ||
+          norm.includes('jateknap') ||
+          norm.includes('kint')
+        ) {
+          typeHints.push(`v.violationType = 'end_of_day_stay'`);
+        }
         const hintSql = typeHints.length ? ` OR (${typeHints.join(' OR ')})` : '';
         qb.andWhere(
           '(v.description ILIKE :like OR CAST(v.pairId AS text) ILIKE :like OR pair.name ILIKE :like OR CAST(pair.assignedNumber AS text) ILIKE :like OR v.violationType ILIKE :like' +

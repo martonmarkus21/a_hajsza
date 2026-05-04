@@ -55,6 +55,7 @@ import SmoothAnimatedMarker from './components/SmoothAnimatedMarker';
 import { buildPairMarkerDivHtml } from './utils/pairMapMarkerHtml';
 import { apiUrl } from '@/config/env';
 import { maybeReportPursuerLiveLocation } from '@/utils/reportPursuerLiveLocation';
+import { logGeolocationError } from '@/utils/geolocationQuietError';
 
 interface Geofence {
   id: number;
@@ -853,6 +854,8 @@ function MapView() {
   const [capturePairId, setCapturePairId] = useState<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Utolsó sikeres böngésző-GPS fix (watch vagy getCurrentPosition); a tartalék polling csak „szárazon” fut. */
+  const lastBrowserGeoFixMsRef = useRef(0);
   const mapRef = useRef<L.Map | null>(null);
   const [selectedPair, setSelectedPair] = useState<Pair | null>(null);
   const [pairsState, setPairsState] = useState<Pair[]>([]);
@@ -973,13 +976,18 @@ function MapView() {
           const pairId = Number(violation.pairId);
           if (!pairId) continue;
           map[pairId] = true;
+          const vType = violation.violationType as string | undefined;
           details[pairId] = {
             pairId,
             assignedNumber: violation.assignedNumber ?? null,
             pairName: violation.pairName ?? null,
-            description: violation.description || 'Pár kilépett a játéktérből',
+            description:
+              violation.description ||
+              (vType === 'vehicle_time_exceeded'
+                ? 'Járműhasználati idő limit túllépve'
+                : 'Pár kilépett a játéktérből'),
             createdAt: violation.createdAt,
-            violationType: violation.violationType,
+            violationType: vType,
           };
         }
         setActiveGameAreaExitViolations(map);
@@ -997,7 +1005,10 @@ function MapView() {
     if (savedLocation) {
       try {
         const parsed = JSON.parse(savedLocation);
-        if (parsed.lat && parsed.lon) setBrowserLocation({ lat: parsed.lat, lon: parsed.lon });
+        if (parsed.lat && parsed.lon) {
+          setBrowserLocation({ lat: parsed.lat, lon: parsed.lon });
+          lastBrowserGeoFixMsRef.current = Date.now();
+        }
       } catch (e) {
         console.error('Error parsing saved browser location:', e);
       }
@@ -1005,26 +1016,29 @@ function MapView() {
     if (navigator.geolocation) {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
       if (locationIntervalRef.current !== null) clearInterval(locationIntervalRef.current);
+      const geoStaleMs = 2000;
       const saveLocation = (lat: number, lon: number) => {
+        lastBrowserGeoFixMsRef.current = Date.now();
         setBrowserLocation({ lat, lon });
         localStorage.setItem('browserLocation', JSON.stringify({ lat, lon }));
         maybeReportPursuerLiveLocation(lat, lon);
       };
       navigator.geolocation.getCurrentPosition(
         (p) => saveLocation(p.coords.latitude, p.coords.longitude),
-        (e) => console.error('Error:', e),
+        (e) => logGeolocationError('getCurrentPosition (initial)', e),
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
       watchIdRef.current = navigator.geolocation.watchPosition(
         (p) => saveLocation(p.coords.latitude, p.coords.longitude),
-        (e) => console.error('Error:', e),
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        (e) => logGeolocationError('watchPosition', e),
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
       );
       locationIntervalRef.current = setInterval(() => {
+        if (Date.now() - lastBrowserGeoFixMsRef.current < geoStaleMs) return;
         navigator.geolocation.getCurrentPosition(
           (p) => saveLocation(p.coords.latitude, p.coords.longitude),
-          (e) => console.error('Error:', e),
-          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+          (e) => logGeolocationError('getCurrentPosition (interval)', e),
+          { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
         );
       }, 1000);
       return () => {
@@ -1880,6 +1894,11 @@ function MapView() {
             ? activeGameAreaViolationDetails[selectedViolationPairId]?.createdAt ?? null
             : null
         }
+        initialLiveViolationType={
+          selectedViolationPairId != null
+            ? activeGameAreaViolationDetails[selectedViolationPairId]?.violationType ?? 'game_area_exit'
+            : null
+        }
       />
 
       <ConfirmationModal
@@ -1909,7 +1928,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { logVerbose } from '../common/verbose-log';
 
 interface GeoJSONFeature {
   type: string;
@@ -43,7 +44,7 @@ export function loadCountiesFromGeoJSON(): Record<string, CountyData> {
     return {};
   }
   
-  console.log(`Loading GeoJSON from: ${geojsonPath}`);
+  logVerbose(`Loading GeoJSON from: ${geojsonPath}`);
 
   try {
     const fileContent = fs.readFileSync(geojsonPath, 'utf-8');
@@ -83,7 +84,7 @@ export function loadCountiesFromGeoJSON(): Record<string, CountyData> {
       };
     }
 
-    console.log(`Loaded ${Object.keys(counties).length} counties from GeoJSON`);
+    logVerbose(`Loaded ${Object.keys(counties).length} counties from GeoJSON`);
     return counties;
   } catch (error) {
     console.error('Error loading GeoJSON file:', error);
@@ -119,7 +120,7 @@ export function loadHungaryBoundaryFromGeoJSON(): number[][] | null {
         const name = feature.properties.megye || feature.properties.name || '';
         // Exact match for "Magyarország" (case-insensitive)
         if (name.toLowerCase() === 'magyarország' || name.toLowerCase() === 'hungary') {
-          console.log(`Found Hungary boundary with name: "${name}"`);
+          logVerbose(`Found Hungary boundary with name: "${name}"`);
           return feature.geometry.coordinates[0];
         }
       }
@@ -130,7 +131,7 @@ export function loadHungaryBoundaryFromGeoJSON(): number[][] | null {
       if (feature.geometry.type === 'Polygon') {
         const name = feature.properties.megye || feature.properties.name || '';
         if (name.toLowerCase().includes('magyarország') || name.toLowerCase().includes('hungary')) {
-          console.log(`Found Hungary boundary with partial match: "${name}"`);
+          logVerbose(`Found Hungary boundary with partial match: "${name}"`);
           return feature.geometry.coordinates[0];
         }
       }
@@ -153,7 +154,7 @@ export function loadHungaryBoundaryFromGeoJSON(): number[][] | null {
     }
 
     if (largestPolygon) {
-      console.log('Using largest polygon as Hungary boundary');
+      logVerbose('Using largest polygon as Hungary boundary');
     }
     return largestPolygon;
   } catch (error) {

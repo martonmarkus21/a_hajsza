@@ -41,7 +41,8 @@ export interface AdminRuleViolationRow {
 
 const TYPE_LABELS: Record<string, string> = {
   game_area_exit: 'Játékterület elhagyása',
-  vehicle_time_exceeded: 'Járműhasználat',
+  vehicle_time_exceeded: 'Járműhasználati idő túllépése',
+  end_of_day_stay: 'Maradási szabály (játéknapok között)',
 };
 
 function typeLabel(type: string): string {
@@ -71,6 +72,7 @@ const TYPE_FILTER_OPTIONS: MwDropdownOption[] = [
   { value: 'all', label: 'Minden típus' },
   { value: 'game_area_exit', label: TYPE_LABELS.game_area_exit },
   { value: 'vehicle_time_exceeded', label: TYPE_LABELS.vehicle_time_exceeded },
+  { value: 'end_of_day_stay', label: TYPE_LABELS.end_of_day_stay },
 ];
 type SortKey =
   | 'id'
@@ -520,16 +522,18 @@ export default function RuleViolationsManagement({
                     </td>
                     <td className="text-right pr-6 py-4 align-middle">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
-                        {row.violationType === 'game_area_exit' && (
-                          <button
-                            type="button"
-                            onClick={() => onOpenGameAreaDetails(row)}
-                            className="p-2 text-red-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors"
-                            title="Részletek"
-                          >
-                            <FiInfo className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => onOpenGameAreaDetails(row)}
+                          className={`p-2 rounded-lg transition-colors ${
+                            row.violationType === 'game_area_exit'
+                              ? 'text-red-400 hover:text-white hover:bg-red-500/20'
+                              : 'text-amber-400 hover:text-white hover:bg-amber-500/20'
+                          }`}
+                          title="Részletek"
+                        >
+                          <FiInfo className="w-4 h-4" />
+                        </button>
                         {row.resolved && (
                           <button
                             type="button"

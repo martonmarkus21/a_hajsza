@@ -37,6 +37,7 @@ import 'leaflet/dist/leaflet.css';
 import { Pair } from '../types';
 import { apiUrl } from '@/config/env';
 import { maybeReportPursuerLiveLocation } from '@/utils/reportPursuerLiveLocation';
+import { logGeolocationError } from '@/utils/geolocationQuietError';
 
 interface Geofence {
   id: number;
@@ -221,13 +222,18 @@ export default function Admin() {
         const pairId = Number(violation.pairId);
         if (!pairId) continue;
         map[pairId] = true;
+        const vType = violation.violationType as string | undefined;
         details[pairId] = {
           pairId,
           assignedNumber: violation.assignedNumber ?? null,
           pairName: violation.pairName ?? null,
-          description: violation.description || 'Pár kilépett a játéktérből',
+          description:
+            violation.description ||
+            (vType === 'vehicle_time_exceeded'
+              ? 'Járműhasználati idő limit túllépve'
+              : 'Pár kilépett a játéktérből'),
           createdAt: violation.createdAt,
-          violationType: violation.violationType,
+          violationType: vType,
         };
       }
 
@@ -516,6 +522,7 @@ export default function Admin() {
   // Browser location - same logic as App.tsx for continuous updates
   const watchIdRef = useRef<number | null>(null);
   const locationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastBrowserGeoFixMsRef = useRef(0);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -529,8 +536,9 @@ export default function Admin() {
         locationIntervalRef.current = null;
       }
 
-      // Helper function to save location
+      const geoStaleMs = 2000;
       const saveLocation = (lat: number, lon: number) => {
+        lastBrowserGeoFixMsRef.current = Date.now();
         setBrowserLocation({ lat, lon });
         maybeReportPursuerLiveLocation(lat, lon);
       };
@@ -541,7 +549,7 @@ export default function Admin() {
           saveLocation(position.coords.latitude, position.coords.longitude);
         },
         (error) => {
-          console.error('Error getting browser location:', error);
+          logGeolocationError('getCurrentPosition (initial)', error);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
@@ -552,24 +560,25 @@ export default function Admin() {
           saveLocation(position.coords.latitude, position.coords.longitude);
         },
         (error) => {
-          console.error('Error watching browser location:', error);
+          logGeolocationError('watchPosition', error);
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
       );
       watchIdRef.current = watchId;
 
-      // Also update browser location every second using interval as fallback
+      // Tartalék: csak ha ~2 s óta nem érkezett fix (watch leáll / lassú böngésző), kérünk újat — maximumAge 0, mozgásnál friss térkép
       const locationInterval = setInterval(() => {
+        if (Date.now() - lastBrowserGeoFixMsRef.current < geoStaleMs) return;
         navigator.geolocation.getCurrentPosition(
           (position) => {
             saveLocation(position.coords.latitude, position.coords.longitude);
           },
           (error) => {
-            console.error('Error getting browser location:', error);
+            logGeolocationError('getCurrentPosition (interval)', error);
           },
-          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+          { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
         );
-      }, 1000); // Update every second
+      }, 1000);
       locationIntervalRef.current = locationInterval;
 
       return () => {
@@ -1399,7 +1408,7 @@ export default function Admin() {
     if (res.ok) {
       fetchGeofences();
       setNewGeofence({ ...newGeofence, name: '' });
-      addNotification('success', 'Geofence létrehozva');
+      addNotification('success', 'Zóna létrehozva.');
     }
   };
 
@@ -1820,6 +1829,11 @@ export default function Admin() {
                 ? violationModalArchive?.createdAt ??
                   activeGameAreaViolationDetails[selectedViolationPairId]?.createdAt ??
                   null
+                : null
+            }
+            initialLiveViolationType={
+              selectedViolationPairId != null
+                ? activeGameAreaViolationDetails[selectedViolationPairId]?.violationType ?? 'game_area_exit'
                 : null
             }
           />

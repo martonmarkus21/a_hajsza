@@ -313,91 +313,11 @@ export default function GeofenceManager({
     };
 
     const handleCreate = async () => {
-        // Prepare base payload
-        const payload: any = {
-            name: newGeofence.name,
-            centerLat: newGeofence.centerLat,
-            centerLon: newGeofence.centerLon,
-            radiusM: newGeofence.radiusM,
-            geofenceType: newGeofence.geofenceType,
-            active: true // Default to active
-        };
-
-        // If Hungary is active -> Create as INACTIVE, then Atomic Switch
-        if (hungaryGeofence?.active && hungaryGeofence.id) {
-            payload.active = false;
-        }
-
-        // Call createGeofence with modified payload
-        // We need to modify createGeofence to accept payload or modify it before calling
-        // Since createGeofence is a prop, we assume it takes the state 'newGeofence'. 
-        // But 'newGeofence' state doesn't have 'active'.
-        // We need to verify how createGeofence works.
-        // Looking at Admin.tsx via previous reads or inferred: 
-        // createGeofence usually reads 'newGeofence' state from parent? 
-        // No, createGeofence in Admin.tsx takes NO arguments and reads 'newGeofence' state from Admin.tsx.
-        // BUT here in GeofenceManager, 'newGeofence' and 'setNewGeofence' are props passed DOWN.
-        // So if we update 'newGeofence' state here, it updates in parent.
-        // However, 'active' property might not be on the 'newGeofence' object structure defined in types?
-        // Let's check Geofence structure or NewGeofence type.
-        // Assuming we can add 'active' to it. If not, we might need to cast.
-
-        // A better approach if we can't easily change the prop signature or type immediately:
-        // We might need to manually call the fetch here if createGeofence is too rigid.
-        // Let's look at how createGeofence is implemented in Admin.tsx.
-        // It uses 'newGeofence' state.
-
-        // Converting this thought process to action:
-        // I will first check Admin.tsx to see if I can override 'active' or if I should implement the fetch here locally.
-        // Actually, to ensure professional efficiency, I will IMPLEMENT THE FETCH HERE LOCALLY 
-        // for the atomic path, or pass the 'active' flag if possible.
-        // Given I cannot see Admin.tsx createGeofence implementation right now (I saw it earlier but verify),
-        // I'll implement a local create logic for the special case to be safe and precise.
-
         try {
-            const token = localStorage.getItem('token');
-            const body = { ...newGeofence, active: true };
-
-            // Special Case: Atomic Switch from Hungary
-            if (hungaryGeofence?.active && hungaryGeofence.id) {
-                body.active = false;
-
-                // 1. Create Inactive
-                const res = await fetch(apiUrl('/api/geofence'), {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify(body)
-                });
-
-                if (res.ok) {
-                    const data = await res.json();
-                    const newZoneId = data.geofence.id;
-
-                    // 2. Atomic Switch
-                    await fetch(apiUrl('/api/geofence/bulk-status'), {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({
-                            activateIds: [newZoneId],
-                            deactivateIds: [hungaryGeofence.id]
-                        }),
-                    });
-
-                    if (onToggleHungary) onToggleHungary(false);
-                    addNotification('success', 'Új zóna létrehozva és aktiválva');
-                    onRefresh();
-                    handleModalClose();
-                    setNewGeofence({ name: '', centerLat: 47.4979, centerLon: 19.0402, radiusM: 25000, geofenceType: 'scenario' });
-                    return;
-                }
-            }
-
-            // Standard Create (Active by default)
             await createGeofence();
             onRefresh();
             handleModalClose();
             setNewGeofence({ name: '', centerLat: 47.4979, centerLon: 19.0402, radiusM: 25000, geofenceType: 'scenario' });
-
         } catch (error) {
             console.error(error);
             addNotification('error', 'Hálózati hiba');

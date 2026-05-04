@@ -8,6 +8,7 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
 import { loadCountiesFromGeoJSON, loadHungaryBoundaryFromGeoJSON } from './load-geojson';
 import { RedisGeofenceCacheService } from '../redis/redis-geofence-cache.service';
+import { logVerbose } from '../common/verbose-log';
 
 @Injectable()
 export class GameAreaService implements OnModuleInit {
@@ -29,7 +30,7 @@ export class GameAreaService implements OnModuleInit {
       if (Object.keys(this.counties).length === 0) {
         console.warn('No counties loaded from GeoJSON, using fallback');
       } else {
-        console.log(`Successfully loaded ${Object.keys(this.counties).length} counties from GeoJSON`);
+        logVerbose(`Successfully loaded ${Object.keys(this.counties).length} counties from GeoJSON`);
       }
     } catch (error) {
       console.error('Error loading GeoJSON data:', error);
@@ -167,7 +168,7 @@ export class GameAreaService implements OnModuleInit {
       { active: false },
     );
 
-    console.log('Deactivated all game area geofences');
+    logVerbose('Deactivated all game area geofences');
 
     // If counties are specified, create geofences for each county
     if (updateGameAreaDto.activeCounties && updateGameAreaDto.activeCounties.length > 0) {
@@ -197,7 +198,7 @@ export class GameAreaService implements OnModuleInit {
               type: 'polygon',
             } as any;
             await this.geofenceRepository.save(existing);
-            console.log(`Updated geofence for ${countyData.name} with polygon`);
+            logVerbose(`Updated geofence for ${countyData.name} with polygon`);
           } else {
             const newGeofence = this.geofenceRepository.create({
               name: countyData.name,
@@ -214,7 +215,7 @@ export class GameAreaService implements OnModuleInit {
               } as any,
             });
             await this.geofenceRepository.save(newGeofence);
-            console.log(`Created new geofence for ${countyData.name} with polygon`);
+            logVerbose(`Created new geofence for ${countyData.name} with polygon`);
           }
         }
       }
@@ -228,11 +229,11 @@ export class GameAreaService implements OnModuleInit {
       if (hungaryCounty) {
         // Use the "Magyarország" county polygon
         hungaryPolygon = hungaryCounty.polygon;
-        console.log('Using "Magyarország" county polygon from counties data');
+        logVerbose('Using "Magyarország" county polygon from counties data');
       } else {
         // Fall back to hungaryBoundary
         hungaryPolygon = this.hungaryBoundary || this.getFallbackHungaryBoundary();
-        console.log('Using Hungary boundary from separate boundary data');
+        logVerbose('Using Hungary boundary from separate boundary data');
       }
 
       if (!hungaryPolygon) {
@@ -257,7 +258,7 @@ export class GameAreaService implements OnModuleInit {
           type: 'polygon',
         } as any;
         await this.geofenceRepository.save(gameAreaGeofence);
-        console.log('Updated Hungary geofence with polygon');
+        logVerbose('Updated Hungary geofence with polygon');
       } else {
         const newGeofence = this.geofenceRepository.create({
           name: 'Magyarország',
@@ -274,7 +275,7 @@ export class GameAreaService implements OnModuleInit {
           } as any,
         });
         await this.geofenceRepository.save(newGeofence);
-        console.log('Created new Hungary geofence with polygon');
+        logVerbose('Created new Hungary geofence with polygon');
       }
     }
 

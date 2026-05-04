@@ -4,10 +4,81 @@ import Modal from './Modal';
 import { formatDateTimeBudapest } from '../utils/formatDateTimeBudapest';
 import { apiUrl } from '@/config/env';
 
+/** A backend `rule_violations.violation_type` értékeivel egyezik (`RuleViolationsService`). */
 const TYPE_LABELS: Record<string, string> = {
   game_area_exit: 'Játékterület elhagyása',
-  vehicle_time_exceeded: 'Járműhasználat',
+  vehicle_time_exceeded: 'Járműhasználati idő túllépése',
+  end_of_day_stay: 'Maradási szabály (játéknapok között)',
 };
+
+function archiveModalVariant(violationType: string, resolved: boolean): 'red' | 'green' | 'orange' {
+  if (violationType === 'game_area_exit') return resolved ? 'green' : 'red';
+  return resolved ? 'green' : 'orange';
+}
+
+function archiveExplanationPrimary(
+  violationType: string,
+  resolved: boolean,
+  pairLabel: string,
+): string | null {
+  if (violationType === 'game_area_exit') {
+    return resolved
+      ? `A(z) ${pairLabel} ezen a bejegyzés szerint már visszatért a játékterületre — a szabályszegés lezárult. (A párnak jelenleg lehet másik, aktív figyelmeztetése is a térképen; ez a nézet mindig ehhez a naplósorhoz tartozik.)`
+      : `A(z) ${pairLabel} ezen bejegyzés szerint elhagyta az aktív játékterületet. A lent látható időpontok ehhez a konkrét naplósorhoz tartoznak — nem az esetleges jelenlegi, élő figyelmeztetéshez.`;
+  }
+  if (violationType === 'vehicle_time_exceeded') {
+    return resolved
+      ? `A(z) ${pairLabel} járműhasználati szabályszegéséhez tartozó folyamatos térképes követési időablak lejárt, vagy a bejegyzés egyéb okból lezárult. A páros pozíciója ismét a szokásos lokációfrissítési szabályok szerint jelenhet meg — hacsak nincs másik, aktív szabályszegés (például játékterület elhagyása).`
+      : `A(z) ${pairLabel} túllépte az épp futó járműhasználati szakasz legfeljebb 40 perces idejét (minden jármű bekapcsolásakor a számláló elölről indul; egy napon több ilyen szakasz és több külön naplóbejegyzés is lehet). Ilyenkor az üldözők ugyanúgy folyamatos, valós idejű pozíciófrissítést látnak a térképen, mint játékterület elhagyásakor. A rendszer legfeljebb kb. 15 perc után automatikusan lezárja ezt a „folyamatos követéses” ablakot, ha addig nem történik más változás.`;
+  }
+  if (violationType === 'end_of_day_stay') {
+    return resolved
+      ? `A(z) ${pairLabel} ezen maradási szabályszegés bejegyzése lezárult — például visszatértek a megengedett maradási körön belülre, vagy időzített, rendszeres lezárás történt. A térképreveláció (ha volt) továbbra is a játékszabályok és az ütemezés szerint érvényes lehet.`
+      : `A(z) ${pairLabel} a játéknapok közötti maradási szabályt sértette: a megengedett körön kívül tartózkodás folyamatos, legalább 30 perces túllépése. Erre súlyosításként a következő játéknap elején korlátozott ideig az üldözők folyamatosan láthatják a mozgásukat a térképen (amennyiben ez a funkció éppen aktív).`;
+  }
+  return null;
+}
+
+function emphasisPairInLead(full: string, pairLabel: string) {
+  const i = full.indexOf(pairLabel);
+  if (i < 0) {
+    return full;
+  }
+  return (
+    <>
+      {full.slice(0, i)}
+      <span className="text-white">{pairLabel}</span>
+      {full.slice(i + pairLabel.length)}
+    </>
+  );
+}
+
+/** Élő térkép / pár részletek: csak olyan típusok, amelyek az `active-game-area` API-ban szerepelhetnek. */
+function liveTitleSubtitle(violationType: string, active: boolean): string {
+  if (!active) return 'A szabályszegés-jelzés megszűnt';
+  if (violationType === 'game_area_exit') return 'Aktív játékterület elhagyása';
+  if (violationType === 'vehicle_time_exceeded') return `Aktív: ${TYPE_LABELS.vehicle_time_exceeded}`;
+  return `Aktív: ${TYPE_LABELS[violationType] || violationType}`;
+}
+
+function liveCalloutPrimary(violationType: string, active: boolean, pairLabel: string): string {
+  if (active) {
+    if (violationType === 'vehicle_time_exceeded') {
+      return `A(z) ${pairLabel} túllépte a járműhasználati időkeretet. Az üldözők folyamatos, valós idejű pozíciófrissítést látnak a térképen (a szokásos lokációszámlálótól függetlenül). A rendszer legfeljebb kb. 15 perc után automatikusan lezárja ezt az ablakot.`;
+    }
+    if (violationType === 'game_area_exit') {
+      return `A(z) ${pairLabel} elhagyta az aktív játékterületet. A szabály szerint Ön és a többi üldöző folyamatos, valós idejű pozíciófrissítést lát erről a párról a térképen, a szokásos lokációfrissítési számlálótól függetlenül.`;
+    }
+    return `A(z) ${pairLabel} aktív szabályszegés alatt áll (${TYPE_LABELS[violationType] || violationType}).`;
+  }
+  if (violationType === 'vehicle_time_exceeded') {
+    return `A(z) ${pairLabel} járműhasználati, folyamatos követéses jelzése lejárt a térképen. A pozíció megjelenítése ismét a szokásos szabályok szerint történik — kivéve, ha más szabályszegés is aktív ennél a párnál.`;
+  }
+  if (violationType === 'game_area_exit') {
+    return `A(z) ${pairLabel} visszatért az aktív játékterületre. A szabályszegés megszűnt: a páros pozíciója ismét a normál lokációfrissítési szabályok szerint jelenik meg a térképen.`;
+  }
+  return `A(z) ${pairLabel} szabályszegés-jelzése megszűnt a térképen.`;
+}
 
 export interface RuleViolationArchiveSnapshot {
   violationId: number;
@@ -25,6 +96,8 @@ interface RuleViolationDetailsModalProps {
   initialAssignedNumber?: number | null;
   initialPairName?: string | null;
   initialStartedAt?: string | null;
+  /** Élő nézet: `active-game-area` válaszból / socketből — a szöveg ehhez igazodik (játékterület vs. jármű). */
+  initialLiveViolationType?: string | null;
   /** Admin napló: adott sor pillanatképe — nem írjuk felül az élő API-val */
   archiveSnapshot?: RuleViolationArchiveSnapshot | null;
 }
@@ -36,11 +109,13 @@ export default function RuleViolationDetailsModal({
   initialAssignedNumber,
   initialPairName,
   initialStartedAt,
+  initialLiveViolationType,
   archiveSnapshot,
 }: RuleViolationDetailsModalProps) {
   const isArchive = archiveSnapshot != null;
 
   const [liveActive, setLiveActive] = useState(true);
+  const [liveViolationType, setLiveViolationType] = useState<string>('game_area_exit');
   const [assignedNumber, setAssignedNumber] = useState<number | null>(initialAssignedNumber ?? null);
   const [pairName, setPairName] = useState<string | null>(initialPairName ?? null);
   const [displayStartedAt, setDisplayStartedAt] = useState<string | null>(initialStartedAt ?? null);
@@ -55,8 +130,18 @@ export default function RuleViolationDetailsModal({
     setDisplayStartedAt(start);
     if (!isArchive) {
       setLiveActive(true);
+      const t = (initialLiveViolationType || 'game_area_exit').trim();
+      setLiveViolationType(t || 'game_area_exit');
     }
-  }, [isOpen, pairId, initialAssignedNumber, initialPairName, initialStartedAt, isArchive]);
+  }, [
+    isOpen,
+    pairId,
+    initialAssignedNumber,
+    initialPairName,
+    initialStartedAt,
+    initialLiveViolationType,
+    isArchive,
+  ]);
 
   useEffect(() => {
     if (!isOpen || pairId == null || isArchive) return;
@@ -79,6 +164,8 @@ export default function RuleViolationDetailsModal({
           setLiveActive(true);
           if (v.assignedNumber != null) setAssignedNumber(v.assignedNumber);
           if (v.pairName !== undefined) setPairName(v.pairName);
+          const vt = typeof v.violationType === 'string' && v.violationType.trim() ? v.violationType : 'game_area_exit';
+          setLiveViolationType(vt);
           const ca = v.createdAt as string;
           if (ca) {
             lastStartedAtRef.current = ca;
@@ -114,8 +201,21 @@ export default function RuleViolationDetailsModal({
       : null;
     const typeLabel = TYPE_LABELS[snap.violationType] || snap.violationType;
     const archiveResolved = snap.resolved;
-    const isGameArea = snap.violationType === 'game_area_exit';
-    const modalVariant = !isGameArea ? 'orange' : archiveResolved ? 'green' : 'red';
+    const modalVariant = archiveModalVariant(snap.violationType, archiveResolved);
+    const primaryExpl = archiveExplanationPrimary(snap.violationType, archiveResolved, pairLabel);
+    const calloutClass =
+      modalVariant === 'red'
+        ? 'border-red-500/30 bg-red-500/10 text-red-100'
+        : modalVariant === 'green'
+          ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-100'
+          : 'border-orange-500/30 bg-orange-500/10 text-orange-100';
+    const accentIconClass =
+      modalVariant === 'red' ? 'text-red-400' : modalVariant === 'green' ? 'text-emerald-400' : 'text-orange-400';
+    const leadParagraph =
+      primaryExpl ??
+      (snap.description
+        ? `Egyéni vagy ismeretlen szabályszegés-típus (${snap.violationType}). A részleteket a szerver a naplóban rögzítette — lent a szöveges leírás.`
+        : `Ismeretlen szabályszegés-típus: ${snap.violationType}. Nincs előre definiált magyarázat ehhez a típushoz, és a naplóban sincs rögzített leírás.`);
 
     return (
       <Modal
@@ -127,19 +227,19 @@ export default function RuleViolationDetailsModal({
           <div className="flex items-center gap-4 min-w-0">
             <div
               className={`flex-shrink-0 p-2 rounded-lg flex items-center justify-center ${
-                !isGameArea
-                  ? 'bg-orange-500/20'
-                  : archiveResolved
+                modalVariant === 'red'
+                  ? 'bg-red-500/20'
+                  : modalVariant === 'green'
                     ? 'bg-emerald-500/20'
-                    : 'bg-red-500/20'
+                    : 'bg-orange-500/20'
               }`}
             >
-              {!isGameArea ? (
-                <FiActivity className="w-5 h-5 text-orange-400" />
-              ) : archiveResolved ? (
-                <FiCheckCircle className="w-5 h-5 text-emerald-400" />
+              {modalVariant === 'green' ? (
+                <FiCheckCircle className={`w-5 h-5 ${accentIconClass}`} />
+              ) : modalVariant === 'red' ? (
+                <FiAlertTriangle className={`w-5 h-5 ${accentIconClass}`} />
               ) : (
-                <FiAlertTriangle className="w-5 h-5 text-red-400" />
+                <FiActivity className={`w-5 h-5 ${accentIconClass}`} />
               )}
             </div>
             <div className="flex flex-col min-w-0 justify-center leading-tight gap-0.5">
@@ -152,107 +252,66 @@ export default function RuleViolationDetailsModal({
         }
       >
         <div className="p-6 space-y-5">
-          {isGameArea ? (
-            archiveResolved ? (
-              <>
-                <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-4">
-                  <p className="text-emerald-100 font-semibold leading-relaxed">
-                    A(z) <span className="text-white">{pairLabel}</span> ezen a bejegyzés szerint már visszatért a
-                    játékterületre — a szabályszegés lezárult. (A párnak jelenleg lehet másik, aktív figyelmeztetése is
-                    a térképen; ez a nézet mindig ehhez a naplósorhoz tartozik.)
-                  </p>
+          <div className={`rounded-xl border p-4 ${calloutClass}`}>
+            <p className="font-semibold leading-relaxed">{emphasisPairInLead(leadParagraph, pairLabel)}</p>
+          </div>
+
+          {snap.description ? (
+            <div className="rounded-xl border border-white/10 bg-black/25 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                Naplóban rögzített leírás (szerver)
+              </div>
+              <p className="text-sm text-gray-300 leading-relaxed">{snap.description}</p>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
+                <FiMapPin className={`w-3 h-3 shrink-0 ${accentIconClass}`} /> Érintett páros
+              </div>
+              <div className="text-sm text-white font-semibold break-words">{pairLabel}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
+                <FiClock className={`w-3 h-3 shrink-0 ${accentIconClass}`} /> Kezdete
+              </div>
+              <div className="text-sm text-white font-semibold">{formattedStartArchive}</div>
+            </div>
+            {archiveResolved ? (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
+                  <FiCheckCircle className={`w-3 h-3 shrink-0 ${accentIconClass}`} /> Lezárva
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                      <FiMapPin className="w-3 h-3 text-emerald-400 shrink-0" /> Érintett páros
-                    </div>
-                    <div className="text-sm text-white font-semibold break-words">{pairLabel}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                      <FiClock className="w-3 h-3 text-emerald-400 shrink-0" /> Kezdete
-                    </div>
-                    <div className="text-sm text-white font-semibold">{formattedStartArchive}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                      <FiCheckCircle className="w-3 h-3 text-emerald-400 shrink-0" /> Lezárva
-                    </div>
-                    <div className="text-sm text-emerald-300 font-semibold">{formattedResolvedArchive || '—'}</div>
-                  </div>
+                <div
+                  className={`text-sm font-semibold ${modalVariant === 'green' ? 'text-emerald-300' : 'text-white'}`}
+                >
+                  {formattedResolvedArchive || '—'}
                 </div>
-              </>
+              </div>
             ) : (
-              <>
-                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-                  <p className="text-red-100 font-semibold leading-relaxed">
-                    A(z) <span className="text-white">{pairLabel}</span> ezen bejegyzés szerint elhagyta az aktív
-                    játékterületet. A lent látható időpontok ehhez a konkrét naplósorhoz tartoznak — nem az esetleges
-                    jelenlegi, élő figyelmeztetéshez.
-                  </p>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
+                  <FiActivity className={`w-3 h-3 shrink-0 ${accentIconClass}`} /> Állapot (napló)
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                      <FiMapPin className="w-3 h-3 text-red-400 shrink-0" /> Érintett páros
-                    </div>
-                    <div className="text-sm text-white font-semibold break-words">{pairLabel}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                      <FiClock className="w-3 h-3 text-red-400 shrink-0" /> Kezdete
-                    </div>
-                    <div className="text-sm text-white font-semibold">{formattedStartArchive}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                      <FiActivity className="w-3 h-3 text-red-400 shrink-0" /> Állapot (napló)
-                    </div>
-                    <div className="text-sm text-red-400 font-bold">Aktív</div>
-                  </div>
+                <div
+                  className={`text-sm font-bold ${modalVariant === 'orange' ? 'text-orange-400' : 'text-red-400'}`}
+                >
+                  Aktív
                 </div>
-              </>
-            )
-          ) : (
-            <>
-              <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 p-4">
-                <p className="text-orange-100 font-semibold leading-relaxed">
-                  {snap.description || 'Nincs részletes leírás.'}
-                </p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1">Típus</div>
-                  <div className="text-sm text-white font-semibold">{typeLabel}</div>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1">Állapot</div>
-                  <div className={`text-sm font-bold ${archiveResolved ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {archiveResolved ? 'Lezárt' : 'Aktív'}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                    <FiClock className="w-3 h-3 shrink-0" /> Kezdete
-                  </div>
-                    <div className="text-sm text-white font-semibold">{formattedStartArchive}</div>
-                </div>
-                {archiveResolved && (
-                  <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                    <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1">Lezárva</div>
-                    <div className="text-sm text-white font-semibold">{formattedResolvedArchive || '—'}</div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
       </Modal>
     );
   }
 
   const formattedStartLive = formatDateTimeBudapest(displayStartedAt);
+  const liveLead = liveCalloutPrimary(liveViolationType, liveActive, pairLabel);
+  const liveAccent = liveActive ? 'text-red-400' : 'text-emerald-400';
+  const liveBorder = liveActive ? 'border-red-500/30 bg-red-500/10' : 'border-emerald-500/35 bg-emerald-500/10';
+  const liveTextTone = liveActive ? 'text-red-100' : 'text-emerald-100';
 
   return (
     <Modal
@@ -280,80 +339,46 @@ export default function RuleViolationDetailsModal({
                 liveActive ? 'text-red-300/85' : 'text-emerald-300/90'
               }`}
             >
-              {liveActive ? 'Aktív játéktér elhagyása' : 'A szabályszegés megszűnt'}
+              {liveTitleSubtitle(liveViolationType, liveActive)}
             </span>
           </div>
         </div>
       }
     >
       <div className="p-6 space-y-5">
-        {liveActive ? (
-          <>
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-              <p className="text-red-100 font-semibold leading-relaxed">
-                A(z) <span className="text-white">{pairLabel}</span> elhagyta az aktív játékterületet. A szabály szerint
-                Ön és a többi üldöző folyamatos, valós idejű pozíciófrissítést lát erről a párról a térképen, a szokásos
-                lokációfrissítési számlálótól függetlenül.
-              </p>
+        <div className={`rounded-xl border p-4 ${liveBorder}`}>
+          <p className={`${liveTextTone} font-semibold leading-relaxed`}>
+            {emphasisPairInLead(liveLead, pairLabel)}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Típus (élő)</span>
+          <span className="text-sm text-gray-200 font-medium">{TYPE_LABELS[liveViolationType] || liveViolationType}</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
+              <FiMapPin className={`w-3 h-3 shrink-0 ${liveAccent}`} /> Érintett páros
             </div>
+            <div className="text-sm text-white font-semibold break-words">{pairLabel}</div>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                  <FiMapPin className="w-3 h-3 text-red-400 shrink-0" /> Érintett páros
-                </div>
-                <div className="text-sm text-white font-semibold break-words">{pairLabel}</div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                  <FiClock className="w-3 h-3 text-red-400 shrink-0" /> Kezdete
-                </div>
-                <div className="text-sm text-white font-semibold">{formattedStartLive}</div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                  <FiActivity className="w-3 h-3 text-red-400 shrink-0" /> Állapot
-                </div>
-                <div className="text-sm text-red-400 font-bold">Aktív</div>
-              </div>
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
+              <FiClock className={`w-3 h-3 shrink-0 ${liveAccent}`} /> {liveActive ? 'Kezdete' : 'Szabályszegés kezdete'}
             </div>
-          </>
-        ) : (
-          <>
-            <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-4">
-              <p className="text-emerald-100 font-semibold leading-relaxed">
-                A(z) <span className="text-white">{pairLabel}</span> visszatért az aktív játékterületre. A
-                szabályszegés megszűnt: a páros pozíciója ismét a normál lokációfrissítési szabályok szerint jelenik meg
-                a térképen.
-              </p>
+            <div className="text-sm text-white font-semibold">{formattedStartLive}</div>
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
+              <FiActivity className={`w-3 h-3 shrink-0 ${liveAccent}`} /> Állapot
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                  <FiMapPin className="w-3 h-3 text-emerald-400 shrink-0" /> Érintett páros
-                </div>
-                <div className="text-sm text-white font-semibold break-words">{pairLabel}</div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                  <FiClock className="w-3 h-3 text-emerald-400 shrink-0" /> Szabályszegés kezdete
-                </div>
-                <div className="text-sm text-white font-semibold">{formattedStartLive}</div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-bold mb-1 flex items-center gap-1">
-                  <FiActivity className="w-3 h-3 text-emerald-400 shrink-0" /> Állapot
-                </div>
-                <div className="text-sm text-emerald-400 font-bold">Megoldódott</div>
-              </div>
-            </div>
-          </>
-        )}
+            <div className={`text-sm font-bold ${liveAccent}`}>{liveActive ? 'Aktív' : 'Megoldódott'}</div>
+          </div>
+        </div>
       </div>
     </Modal>
   );

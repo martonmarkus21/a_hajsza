@@ -3,25 +3,22 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Geofence } from '../entities/geofence.entity';
 import { CreateGeofenceDto } from './dto/create-geofence.dto';
-import { FcmService } from '../fcm/fcm.service';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
-import { PairsService } from '../pairs/pairs.service';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { loadHungaryBoundaryFromGeoJSON } from '../game-area/load-geojson';
 import { RedisGeofenceCacheService } from '../redis/redis-geofence-cache.service';
+import { logVerbose } from '../common/verbose-log';
 
 @Injectable()
 export class GeofencesService {
   constructor(
     @InjectRepository(Geofence)
     private geofenceRepository: Repository<Geofence>,
-    private fcmService: FcmService,
     private auditLogsService: AuditLogsService,
-    private pairsService: PairsService,
     private webSocketGateway: WebSocketGateway,
     private redisGeofenceCache: RedisGeofenceCacheService,
-  ) { }
+  ) {}
 
   async findAll() {
     const geofences = await this.geofenceRepository.find({
@@ -50,22 +47,11 @@ export class GeofencesService {
       activeUntil: createGeofenceDto.activeUntil ? new Date(createGeofenceDto.activeUntil) : null,
       geofenceType: createGeofenceDto.geofenceType || 'scenario',
       metadataJson: createGeofenceDto.metadataJson,
-      active: createGeofenceDto.active !== undefined ? createGeofenceDto.active : true, // Default to true if not specified
+      active: createGeofenceDto.active ?? false,
     });
 
     const savedGeofence = await this.geofenceRepository.save(geofence);
     await this.redisGeofenceCache.invalidateActiveGeofences();
-
-    // Send push notification to all pairs
-    const pairs = await this.pairsService.findAll(true);
-    for (const pair of pairs.pairs) {
-      if (pair.active && !pair.captured) {
-        await this.fcmService.sendToPair(pair.id, {
-          title: 'Új feladat',
-          body: `${createGeofenceDto.name} — nézzetek rá az alkalmazásban.`,
-        });
-      }
-    }
 
     // Broadcast update to all clients (Main Map) active or not, to keep lists in sync
     this.webSocketGateway.broadcastGameAreaUpdate({
@@ -115,7 +101,7 @@ export class GeofencesService {
             type: 'polygon',
           } as any;
 
-          console.log('Updated Hungary geofence with polygon data on activation');
+          logVerbose('Updated Hungary geofence with polygon data on activation');
         }
       }
     }

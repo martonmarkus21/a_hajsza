@@ -42,25 +42,36 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const s = io(WS_GAME_URL, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-    });
+    /** React 18 Strict Mode lefuttatja a mount→cleanup→mount ciklust: ha itt azonnal `io()`, az első socket „félbemarad” és zajos WS-hibát ír a konzolra. */
+    let socketInstance: Socket | null = null;
+    const scheduleId = window.setTimeout(() => {
+      if (readToken() !== token) return;
+      const s = io(WS_GAME_URL, {
+        auth: { token },
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+      });
+      socketInstance = s;
 
-    s.on('connect', () => {
-      setConnected(true);
-      s.emit('subscribe:positions');
-    });
-    s.on('disconnect', () => setConnected(false));
+      s.on('connect', () => {
+        setConnected(true);
+        s.emit('subscribe:positions');
+      });
+      s.on('disconnect', () => setConnected(false));
 
-    setSocket(s);
+      setSocket(s);
+    }, 0);
 
     return () => {
-      s.removeAllListeners();
-      s.close();
+      window.clearTimeout(scheduleId);
+      if (socketInstance) {
+        socketInstance.removeAllListeners();
+        socketInstance.close();
+        socketInstance = null;
+      }
+      setSocket(null);
       setConnected(false);
     };
   }, [tokenEpoch]);
