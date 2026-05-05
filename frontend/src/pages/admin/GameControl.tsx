@@ -29,7 +29,7 @@ import {
   FiZap,
 } from 'react-icons/fi';
 import { apiUrl } from '@/config/env';
-import MwSwitch from '../../components/admin/MwSwitch';
+import CkSwitch from '../../components/admin/CkSwitch';
 import GameDayEditorPanel, {
   type GameDayDraft as EditorDraft,
 } from '../../components/admin/gameControl/GameDayEditorPanel';
@@ -533,7 +533,7 @@ function EngineHero({
   const nextCycleText = nextCycle ? new Date(nextCycle).toLocaleTimeString('hu-HU') : '—';
 
   return (
-    <section className="mw-card !p-0 overflow-hidden">
+    <section className="ck-card !p-0 overflow-hidden">
       <div className="flex flex-col gap-6 p-6 sm:p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4 min-w-0">
@@ -575,8 +575,8 @@ function EngineHero({
             type="button"
             onClick={onToggle}
             onMouseUp={(e) => e.currentTarget.blur()}
-            className={`mw-btn text-sm justify-center px-6 py-3 ${
-              enabled ? 'mw-btn-danger' : 'mw-btn-primary'
+            className={`ck-btn text-sm justify-center px-6 py-3 ${
+              enabled ? 'ck-btn-danger' : 'ck-btn-primary'
             }`}
           >
             <FiPower className="h-4 w-4" />
@@ -758,7 +758,7 @@ function CardActionFooter({
           disabled={!dirty}
           aria-hidden={!dirty}
           tabIndex={dirty ? 0 : -1}
-          className={`mw-btn mw-btn-secondary text-sm transition-opacity duration-300 ${
+          className={`ck-btn ck-btn-secondary text-sm transition-opacity duration-300 ${
             dirty ? 'opacity-100' : 'pointer-events-none opacity-0'
           }`}
         >
@@ -769,7 +769,7 @@ function CardActionFooter({
           type="button"
           onClick={onApply}
           disabled={!dirty}
-          className="mw-btn mw-btn-primary text-sm transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-40"
+          className="ck-btn ck-btn-primary text-sm transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <FiSave className="h-4 w-4" />
           {applyLabel}
@@ -796,7 +796,7 @@ function TrackingIntervalCard({
 }) {
   const presets = [5, 10, 20, 30, 60];
   return (
-    <article className="mw-card !p-0 overflow-hidden flex flex-col">
+    <article className="ck-card !p-0 overflow-hidden flex flex-col">
       <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.02] p-6">
         <div className="flex items-center gap-3 min-w-0">
           <div className="p-2 rounded-xl shrink-0 bg-orange-500/20 text-orange-500">
@@ -838,8 +838,8 @@ function TrackingIntervalCard({
             step={1}
             value={value}
             onChange={(e) => onValueChange(Number(e.target.value))}
-            className="mw-range-slider w-full"
-            style={{ ['--mw-range-progress' as any]: `${((value - 1) / 119) * 100}%` }}
+            className="ck-range-slider w-full"
+            style={{ ['--ck-range-progress' as any]: `${((value - 1) / 119) * 100}%` }}
             aria-label="Követési ciklus perce"
           />
           <SliderTicks
@@ -920,7 +920,7 @@ function StayRuleCard({
   const isExact = (p: number) => Math.abs(value - p) < 0.05;
 
   return (
-    <article className="mw-card !p-0 overflow-hidden flex flex-col">
+    <article className="ck-card !p-0 overflow-hidden flex flex-col">
       <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.02] p-6">
         <div className="flex items-center gap-3 min-w-0">
           <div
@@ -937,7 +937,7 @@ function StayRuleCard({
             </p>
           </div>
         </div>
-        <MwSwitch checked={enabled} onChange={onToggle} srLabel="Maradási szabály kapcsoló" size="lg" />
+        <CkSwitch checked={enabled} onChange={onToggle} srLabel="Maradási szabály kapcsoló" size="lg" />
       </header>
 
       <div className={`flex-1 p-6 space-y-5 transition-opacity ${enabled ? '' : 'opacity-60'}`}>
@@ -968,8 +968,8 @@ function StayRuleCard({
             step={0.1}
             value={sliderValue}
             onChange={(e) => onValueChange(Number(e.target.value))}
-            className="mw-range-slider mw-range-slider--emerald w-full"
-            style={{ ['--mw-range-progress' as any]: `${sliderProgress}%` }}
+            className="ck-range-slider ck-range-slider--emerald w-full"
+            style={{ ['--ck-range-progress' as any]: `${sliderProgress}%` }}
             aria-label="Maradási sugár (km)"
           />
           <SliderTicks
@@ -1108,7 +1108,7 @@ function GameDayTimeline({
     : -1;
 
   return (
-    <section className="mw-card !p-0 overflow-hidden flex flex-col">
+    <section className="ck-card !p-0 overflow-hidden flex flex-col">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[0.02] p-6">
         <div className="flex items-center gap-3 min-w-0">
           <div className="p-2 rounded-xl shrink-0 bg-orange-500/20 text-orange-500">
@@ -1121,7 +1121,7 @@ function GameDayTimeline({
             </p>
           </div>
         </div>
-        <button type="button" onClick={onCreate} className="mw-btn mw-btn-primary text-sm">
+        <button type="button" onClick={onCreate} className="ck-btn ck-btn-primary text-sm">
           <FiPlus className="h-4 w-4" />
           Új játéknap
         </button>
@@ -1149,7 +1149,7 @@ function GameDayTimeline({
         ) : (
           <div
             ref={scrollerRef}
-            className="custom-scrollbar mw-edge-fade-x flex snap-x snap-proximity items-stretch gap-0 overflow-x-auto overflow-y-hidden px-6 pb-2 scroll-px-6"
+            className="custom-scrollbar ck-edge-fade-x flex snap-x snap-proximity items-stretch gap-0 overflow-x-auto overflow-y-hidden px-6 pb-2 scroll-px-6"
           >
             {days.map((day, idx) => {
               const state = dayStates[idx];

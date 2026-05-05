@@ -151,7 +151,7 @@ function SavedGameAreaPopupBody({
   radiusM?: number;
 }) {
   return (
-    <div className="mw-ga-popup-inner flex max-w-[min(92vw,256px)] min-w-[184px] flex-col px-3 pt-3 pb-0.5">
+    <div className="ck-ga-popup-inner flex max-w-[min(92vw,256px)] min-w-[184px] flex-col px-3 pt-3 pb-0.5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-sky-400 shadow-[0_0_10px] shadow-sky-500" />
@@ -201,7 +201,7 @@ function SavedGameAreaLayer({ geofences }: { geofences: GeofenceMapShape[] }) {
                 opacity: 0.85,
               }}
             >
-              <Popup className="custom-popup-dark mw-ga-popup" closeButton={false}>
+              <Popup className="custom-popup-dark ck-ga-popup" closeButton={false}>
                 <SavedGameAreaPopupBody name={g.name} label={labelForSnapshot(g)} />
               </Popup>
             </Polygon>
@@ -220,7 +220,7 @@ function SavedGameAreaLayer({ geofences }: { geofences: GeofenceMapShape[] }) {
               opacity: 0.85,
             }}
           >
-            <Popup className="custom-popup-dark mw-ga-popup" closeButton={false}>
+            <Popup className="custom-popup-dark ck-ga-popup" closeButton={false}>
               <SavedGameAreaPopupBody name={g.name} label={labelForSnapshot(g)} radiusM={g.radiusM} />
             </Popup>
           </Circle>
@@ -423,7 +423,7 @@ export default function PositionsTraceMapModal({
             {error}
           </div>
         )}
-        <div className={`relative w-full ${mapHeightClass} rounded-b-2xl overflow-hidden bg-black/40 mw-positions-map-root shrink min-h-0`}>
+        <div className={`relative w-full ${mapHeightClass} rounded-b-2xl overflow-hidden bg-black/40 ck-positions-map-root shrink min-h-0`}>
           {!loading && !error && positions.length === 0 && (
             <div className="absolute inset-0 z-[500] flex flex-col items-center justify-center gap-2 text-gray-500 bg-[#121212]/90 backdrop-blur-sm">
               <FiMapPin className="w-10 h-10 opacity-30" />

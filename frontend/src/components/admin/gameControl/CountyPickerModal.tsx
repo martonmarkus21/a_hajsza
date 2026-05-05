@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FiGlobe, FiMap, FiMapPin, FiTarget, FiX } from 'react-icons/fi';
 import { createPortal } from 'react-dom';
-import MwTableSearchInput from '../../MwTableSearchInput';
-import MwSwitch from '../MwSwitch';
+import CkTableSearchInput from '../../CkTableSearchInput';
+import CkSwitch from '../CkSwitch';
 
 export interface CountyPickerOption {
   code: string;
@@ -326,7 +326,7 @@ export default function CountyPickerModal({
 
         <div className="relative z-10 space-y-3 border-b border-white/10 px-5 py-4">
           <p className="text-xs text-gray-500">{subtitle}</p>
-          <MwTableSearchInput
+          <CkTableSearchInput
             value={search}
             onChange={setSearch}
             placeholder={placeholder}
@@ -337,8 +337,8 @@ export default function CountyPickerModal({
             <button
               type="button"
               onClick={() => setActiveTab('counties')}
-              className={`mw-btn flex-1 items-center justify-center gap-2 text-sm ${
-                activeTab === 'counties' ? 'mw-btn-primary' : 'mw-btn-secondary'
+              className={`ck-btn flex-1 items-center justify-center gap-2 text-sm ${
+                activeTab === 'counties' ? 'ck-btn-primary' : 'ck-btn-secondary'
               }`}
             >
               <FiMap className="h-4 w-4" />
@@ -347,8 +347,8 @@ export default function CountyPickerModal({
             <button
               type="button"
               onClick={() => setActiveTab('custom')}
-              className={`mw-btn flex-1 items-center justify-center gap-2 text-sm ${
-                activeTab === 'custom' ? 'mw-btn-primary' : 'mw-btn-secondary'
+              className={`ck-btn flex-1 items-center justify-center gap-2 text-sm ${
+                activeTab === 'custom' ? 'ck-btn-primary' : 'ck-btn-secondary'
               }`}
             >
               <FiTarget className="h-4 w-4" />
@@ -409,7 +409,7 @@ export default function CountyPickerModal({
                         </div>
                       </div>
                     </div>
-                    <MwSwitch
+                    <CkSwitch
                       checked={hungarySelected}
                       onChange={onHungarySwitch}
                       srLabel="Magyarország kapcsoló"
@@ -469,7 +469,7 @@ export default function CountyPickerModal({
                             </span>
                           </span>
                         </span>
-                        <MwSwitch
+                        <CkSwitch
                           checked={on}
                           onChange={() => toggleCounty(county.code)}
                           srLabel={county.name}
@@ -539,7 +539,7 @@ export default function CountyPickerModal({
                           </span>
                         </span>
                       </span>
-                      <MwSwitch checked={on} onChange={() => toggleRegion(z.id)} srLabel={z.name} />
+                      <CkSwitch checked={on} onChange={() => toggleRegion(z.id)} srLabel={z.name} />
                     </button>
                   );
                 })}
@@ -552,10 +552,10 @@ export default function CountyPickerModal({
         <div className="relative z-10 flex min-h-[56px] items-center justify-between gap-3 border-t border-white/10 bg-black/30 px-5 py-4">
           <span className="min-w-0 flex-1 truncate text-xs text-gray-500">{footerText}</span>
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={requestClose} className="mw-btn mw-btn-secondary text-sm">
+            <button type="button" onClick={requestClose} className="ck-btn ck-btn-secondary text-sm">
               Mégsem
             </button>
-            <button type="button" onClick={doSave} className="mw-btn mw-btn-primary text-sm">
+            <button type="button" onClick={doSave} className="ck-btn ck-btn-primary text-sm">
               Mentés
             </button>
           </div>

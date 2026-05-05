@@ -19,8 +19,8 @@ import {
   FiX,
   FiZap,
 } from 'react-icons/fi';
-import MwDateTimePicker from '../../MwDateTimePicker';
-import MwSwitch from '../MwSwitch';
+import CkDateTimePicker from '../../CkDateTimePicker';
+import CkSwitch from '../CkSwitch';
 import TimeWindowInput from './TimeWindowInput';
 import CompactTimeField from './CompactTimeField';
 import { FloatingHoverTip } from '../FloatingHoverTip';
@@ -265,7 +265,7 @@ export default function GameDayEditorPanel({
                 <SectionLabel step={1} icon={<FiCalendar className="h-4 w-4" />}>
                   Dátum
                 </SectionLabel>
-                <MwDateTimePicker
+                <CkDateTimePicker
                   label="Játéknap dátuma"
                   value={draft.date ? `${draft.date}T12:00` : ''}
                   minLocal={datePickerBounds?.minLocal}
@@ -308,7 +308,7 @@ export default function GameDayEditorPanel({
                         </p>
                       </div>
                     </div>
-                    <MwSwitch
+                    <CkSwitch
                       checked={rules.isFinalDay === true}
                       disabled={hasOtherFinalDay}
                       onChange={(next) => {
@@ -359,14 +359,14 @@ export default function GameDayEditorPanel({
           </div>
 
           <footer className="relative z-10 flex items-center justify-end gap-2 border-t border-white/10 bg-black/20 px-6 py-4">
-            <button type="button" onClick={onClose} className="mw-btn mw-btn-secondary text-sm">
+            <button type="button" onClick={onClose} className="ck-btn ck-btn-secondary text-sm">
               Mégsem
             </button>
             <button
               type="button"
               onClick={save}
               disabled={saving || !draft.date}
-              className="mw-btn mw-btn-primary text-sm transition-opacity duration-300 disabled:pointer-events-none disabled:opacity-40"
+              className="ck-btn ck-btn-primary text-sm transition-opacity duration-300 disabled:pointer-events-none disabled:opacity-40"
             >
               <FiSave className="h-4 w-4" />
               {mode === 'create' ? 'Létrehozás' : 'Mentés'}
@@ -625,7 +625,7 @@ function IntervalScheduleEditor({
               },
             ]);
           }}
-          className="mw-btn mw-btn-primary whitespace-nowrap text-xs py-2"
+          className="ck-btn ck-btn-primary whitespace-nowrap text-xs py-2"
         >
           <FiPlus className="h-3.5 w-3.5" />
           Új sáv
@@ -996,7 +996,7 @@ function AreaScheduleEditor({
               },
             ]);
           }}
-          className="mw-btn mw-btn-primary whitespace-nowrap text-xs py-2"
+          className="ck-btn ck-btn-primary whitespace-nowrap text-xs py-2"
         >
           <FiPlus className="h-3.5 w-3.5" />
           Új váltás
@@ -1087,7 +1087,7 @@ function AreaScheduleEditor({
                   <button
                     type="button"
                     onClick={() => onOpenCountyPicker(idx)}
-                    className="mw-btn mw-btn-secondary flex h-11 w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap text-xs"
+                    className="ck-btn ck-btn-secondary flex h-11 w-full min-w-0 items-center justify-center gap-1.5 whitespace-nowrap text-xs"
                   >
                     <FiNavigation className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{areaRowLabel(row)}</span>

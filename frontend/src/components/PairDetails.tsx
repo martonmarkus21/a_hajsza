@@ -26,7 +26,7 @@ interface PairDetailsProps {
   calculateDistance: (lat1: number, lon1: number, lat2: number, lon2: number) => number;
   onClose: () => void;
   onCapture: (pairId: number) => void;
-  onMw: (pairId: number) => void;
+  onCk: (pairId: number) => void;
   onRename: (pairId: number, name: string) => void;
   onSendMessage: (pairId: number) => void;
   hasActiveGameAreaViolation?: boolean;
@@ -42,7 +42,7 @@ export default function PairDetails({
   calculateDistance,
   onClose,
   onCapture,
-  onMw,
+  onCk,
   onRename,
   onSendMessage,
   hasActiveGameAreaViolation = false,
@@ -76,7 +76,7 @@ export default function PairDetails({
 
   if (!pair) return null;
 
-  const isMw = pair.mostWanted;
+  const isCk = pair.celkereszt;
 
   const handleClose = () => {
     if (onClosingStart) onClosingStart();
@@ -125,7 +125,7 @@ export default function PairDetails({
               <div className={`flex items-center justify-center w-20 h-20 rounded-full text-white font-bold text-4xl shadow-lg transition-all duration-300 border-[4px] pb-1 ${
                 pair.captured
                   ? 'border-red-600 bg-red-600'
-                  : isMw
+                  : isCk
                     ? 'border-orange-500 bg-orange-500'
                     : 'border-orange-500 bg-[#222]'
               }`}>
@@ -187,26 +187,26 @@ export default function PairDetails({
                     <button
                       type="button"
                       onClick={() => setShowCaptureInfoModal(true)}
-                      className="mw-badge captured hover:bg-red-500/20 transition-colors"
+                      className="ck-badge captured hover:bg-red-500/20 transition-colors"
                       title="Elfogás részletei"
                     >
                       <FaHandcuffs className="w-3.5 h-3.5" /> Elfogva
                     </button>
                   )}
-                  {isMw && (
-                    <span className="mw-badge mw">
-                      <FiShield className="w-3.5 h-3.5 fill-current" /> Most Wanted
+                  {isCk && (
+                    <span className="ck-badge ck">
+                      <FiShield className="w-3.5 h-3.5 fill-current" /> Célkereszt
                     </span>
                   )}
                   {pair.active && !pair.captured && (
-                    <span className="mw-badge active">
+                    <span className="ck-badge active">
                       <FiCheckCircle className="w-3.5 h-3.5" /> Aktív
                     </span>
                   )}
                   {hasActiveGameAreaViolation && (
                     <button
                       onClick={() => onOpenViolationDetails?.(pair.id)}
-                      className="mw-badge error hover:bg-red-500/20 transition-colors"
+                      className="ck-badge error hover:bg-red-500/20 transition-colors"
                       title="Aktív szabályszegés részletei"
                     >
                       <FiAlertCircle className="w-3.5 h-3.5" /> Szabályszegés
@@ -322,11 +322,11 @@ export default function PairDetails({
               Bilincs
             </button>
             <div
-              id="mw-toggle-div"
+              id="ck-toggle-div"
               onClick={() => {
-                void onMw(pair.id);
+                void onCk(pair.id);
               }}
-              className={`flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer select-none ${isMw
+              className={`flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 cursor-pointer select-none ${isCk
                 ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
                 : 'bg-white/5 text-gray-300 hover:bg-white/10'
                 }`}
@@ -337,13 +337,13 @@ export default function PairDetails({
               style={{
                 border: 'none',
                 outline: 'none',
-                boxShadow: isMw ? 'inset 0 0 0 1px rgba(249, 115, 22, 0.2)' : 'none', // Simulated border
+                boxShadow: isCk ? 'inset 0 0 0 1px rgba(249, 115, 22, 0.2)' : 'none', // Simulated border
                 WebkitTapHighlightColor: 'transparent',
               }}
               tabIndex={-1}
             >
-              <FiShield className={`w-4 h-4 pointer-events-none ${isMw ? 'fill-current' : ''}`} />
-              <span className="pointer-events-none">{isMw ? 'MW' : 'MW'}</span>
+              <FiShield className={`w-4 h-4 pointer-events-none ${isCk ? 'fill-current' : ''}`} />
+              <span className="pointer-events-none">{isCk ? 'CK' : 'CK'}</span>
             </div>
             {/* Send Message - Subtler Button */}
             <button

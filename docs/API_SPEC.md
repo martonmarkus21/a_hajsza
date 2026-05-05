@@ -1,185 +1,250 @@
-# API Specifikáció
+# API specifikáció
 
-## Autentikáció
+<p align="center">
+  <img src="../frontend/src/assets/images/celkereszt_logomark.png" alt="Célkereszt logomark" width="88" />
+</p>
 
-A rendszer kétféle autentikációt használ:
-1. **Admin / Officer (Web/Panel)**: JWT token alapú (`Authorization: Bearer <token>`)
-2. **Device (Android App)**: Külön device JWT token tárolása és azonosítása. Bár a pozícióküldés és az app hívásai ezen device tokeneken alapulnak, a formátum ugyanúgy Bearer token.
+> **Szerepe:** A NestJS backend HTTP végpontjainak leírása és tipikus auth / példa válaszok — a táblák a **`backend/src/*controller*.ts`** állapotához igazítva.
 
-### Headers
+---
+
+### Tartalom
+
+1. [Kapcsolati alapok](#1-kapcsolati-alapok)
+2. [Hitelesítés](#2-hitelesítés)
+3. [Modulák áttekintése](#3-modulok-áttekintése-module-prefixek)
+4. [Teljes végpontlista](#4-teljes-végpontlista)
+5. [Referencia példák](#5-referencia-példa-hívások)
+6. [Hibaválaszok](#6-hibaválaszok)
+7. [Integráció](#7-integrációs-megjegyzések)
+8. [Kapcsolódó dokumentumok](#8-kapcsolódó-dokumentumok)
+
+---
+
+## 1. Kapcsolati alapok
+
+| Mező | Érték (tipikus dev) |
+|---|---|
+| API gyökér | `http://localhost:3000` |
+| Prefix | `/api/...` (a táblában feltüntetve) |
+| Content-Type | `application/json` |
+| WebSocket namespace | **`/ws/game`** → teljes példa `http://localhost:3000/ws/game` |
+
+---
+
+## 2. Hitelesítés
+
+### Web (admin / officer)
+
+- JWT a `POST /api/auth/login` után.
+- Küldés: **`Authorization: Bearer <token>`**
+
 ```http
-Authorization: Bearer <token>
-Content-Type: application/json
+Authorization: Bearer <jwt>
 ```
 
----
+JWT payload-ban a böngészethez **`sub`** = user id; a `JwtStrategy` a kérési kontextusban **`req.user.userId`** formát állít elő.
 
-## Endpointok
+### Mobil eszköz
 
-### Auth (Admin/Officer)
-- **`POST /api/auth/login`**
-  - Webes bejelentkezés Admin és Officer felhasználóknak.
-  - **Body**: `{ "username": "admin", "password": "password" }`
-  - **Response**: JWT token és user adatok.
-- **`GET /api/auth/profile`** - Bejelentkezett felhasználó profil adatainak lekérése.
-- **`PUT /api/auth/profile`**
-  - Profil módosítása (email és/vagy jelszó).
-  - **Body**: `{ "email": "uj@email.com", "currentPassword": "regi", "newPassword": "uj123" }`
-  - Jelszóváltoztatáshoz a `currentPassword` megadása kötelező.
-
-### Devices (Android App)
-- **`POST /api/devices/login`**
-  - Telefonos alkalmazás bejelentkezése.
-  - **Body** (kötelező mezők: `username`, `password`, `deviceId`; opcionális: `fcmToken`):
-    - `deviceId`: stabil eszközazonosító a szerver `devices.imei_or_device_id` mezőjéhez (Android kliensen jellemzően `Settings.Secure.ANDROID_ID`).
-  - **Példa**: `{ "username": "1", "password": "1", "deviceId": "android_id_…", "fcmToken": "…" }`
-  - **Response**: JWT token és device info.
-- **`GET /api/devices/me`** - Visszaadja a bejelentkezett eszköz adatait.
-- **`GET /api/devices`** - Kilistázza az összes regisztrált eszközt (Admin).
-- **`GET /api/devices/active`** - Visszaadja az online/aktív eszközöket (JWT: admin vagy officer).
-- **`POST /api/devices/logout`** - Kijelentkezteti az aktuális eszközt.
-- **`POST /api/devices/force-logout/:deviceId`** - Kijelentkeztet egy adott eszközt (Admin).
-- **`GET /api/devices/admin/mobile-connection`** - (Admin JWT) Android kapcsolódási csomag: `apiBaseUrl`, `enrollmentEnabled`, `enrollmentSecret`, `enrollmentSecretFromEnv` (.env felülírja-e a titkot).
-- **`POST /api/devices/admin/mobile-connection/regenerate`** - (Admin JWT) új véletlen titok az adatbázisban (`mobile_enrollment_secret`); nem fut, ha van `MOBILE_ENROLLMENT_SECRET` az `.env`-ben. Napló: `mobile_enrollment_secret_regenerated`.
-- **`POST /api/devices/fcm-token`** - (Enrollment + Device JWT) opcionális / frissített FCM push token a `devices.fcm_token` mezőben.
-- **`POST /api/devices/help-request`** - (Enrollment + Device JWT) globális „segítség kérése” toast a webes klienseknek.
-- **`POST /api/devices/vehicle-session-expired`** - (Enrollment + Device JWT) 40 perc jármű mód local lejára után: szerver oldali `vehicle_time_exceeded` rekord biztosítása, ha még nincs.
-
-### Mobil (nyilvános előellenőrzés)
-
-- **`GET /api/mobile/verify`**
-  - Token nélkül hívható; ha a szerveren van effektív beiratkozási titok (`.env` vagy `game_settings.mobile_enrollment_secret`), a kérésben kötelező a **`X-Mw-Enrollment-Secret`** fejléc (azonosító érték, mint az app „szerver kapcsolat” beállításánál).
-  - **Response**: `{ ok: true, enrollmentRequired: boolean }` — `enrollmentRequired: false`, ha egyáltalán nincs titok beállítva (fejléc opcionális).
-
-### Users (Admin)
-- **`GET /api/users`** - Felhasználók (adminok/officerek) listázása.
-- **`GET /api/users/:id`** - Egy felhasználó lekérése.
-- **`POST /api/users`** - Új felhasználó létrehozása.
-- **`PUT /api/users/:id`** - Felhasználó módosítása.
-- **`DELETE /api/users/:id`** - Felhasználó törlése.
-
-### Eseménynapló (audit_logs, Admin JWT)
-- **`GET /api/audit-logs/admin/meta`** — egyedi `action_type` és `entity_type` értékek a szűrőkhöz, valamint az összes sor száma. **Response**: `{ "actionTypes": string[], "entityTypes": string[], "totalRecords": number }`.
-- **`GET /api/audit-logs/admin/list`** — lapozott lista az `audit_logs` táblából, felhasználónévvel (`user` join).
-  - **Query**: `page`, `pageSize` (max 500), `sortBy` (`timestamp` | `id` | `actionType` | `username` | `entityType` | `entityId` | `ipAddress`), `sortDir`, opcionálisan `userId`, `actionType`, `entityType` (üres vagy `all` = nincs szűrés), `from` / `to` (ISO), `q` (keresés: IP, user-agent, JSON szöveg, felhasználónév — ILIKE).
-  - **Response**: `{ items: [...], total, page, pageSize }` — elemek: `id`, `userId`, `username`, `actionType`, `entityType`, `entityId`, `dataJson`, `ipAddress`, `userAgent`, `timestamp` (ISO).
-- **`GET /api/audit-logs/admin/export`** — CSV letöltés (UTF-8 BOM), ugyanazok a szűrők és rendezés, mint a listánál; legfeljebb 8000 sor.
-- **`DELETE /api/audit-logs/admin/:id`** — egy naplósor törlése; a törlés maga is naplózásra kerül (`audit_log_delete`), **kivéve** ha a törölt sor maga is `audit_log_delete` típusú volt (így nem keletkezik „örök” bejegyzés).
-- **`POST /api/audit-logs/admin/bulk-delete`** — tömeges törlés. **Body**: `{ "scope": "filtered" | "all" }`. A `filtered` esetén a **query** ugyanaz, mint a listánál (szűrők, rendezés — a lapozás nem számít); az összes egyező sor törlődik. A `all` esetén a teljes `audit_logs` tábla ürül. Egy összefoglaló napló: `audit_log_bulk_delete`.
-
-### Pozíciók
-- **`POST /api/position`**
-  - Menekülő app küldi a pozíciót.
-  - **Body**: `{ "deviceId": "string", "pairId": 1, "lat": 47.4, "lon": 19.0, "accuracy": 10, "speed": 0, "timestamp": "...", "vehicleMode": false, "vehicleSessionRemaining": 0 }`
-  - **Viselkedés (Redis + PostgreSQL)**:
-    - Minden fogadott minta bekerül a **Redis** „élő pozíció” kulcsba (pár szerint), így a játéktér / jármű / **maradási szabály** ellenőrzés és a scheduler ebből is tud dolgozni (játéknapon kívül is, ha az app küld).
-    - **PostgreSQL** `positions` táblába nem minden kérés ír: sor a játékidőzítő és az `allowPositionUpdatesForMap` / ciklus-szabályok szerint keletkezik (lásd `PositionsService`). A `game_area_exit` szabályszegés lezáródásakor (pár vissza a játékterületre) **nem** jön létre önálló `positions` sor.
-    - Amikor új `positions` sor keletkezik, a szerver elmenti a **mentéskor aktív játékterület(ek) pillanatképét** (`game_area_snapshot_json`) és azt, hogy **volt-e meg nem oldott szabályszegése** a párnak (`had_rule_violation_at_save`).
-    - **WebSocket**: `distanceUpdate` gyakrabban megy ki (távolságszámítás a kliensen); `positionUpdate` csak akkor, ha a térképen szabad frissíteni (pl. nyitott „pozíció ablak”, vagy aktív `game_area_exit` folyamatos követés). Új PG-s minta után globálisan kimegy a `savedPositionSample` esemény is (`pairId`, `id`). Admin törlés után: `savedPositionsDeleted` (`pairId`, `deleted`) — a kliensek frissíthetik a mentett pozíciók listáját.
-- **`GET /api/positions/admin/list`** (Admin JWT)
-  - Mentett (PostgreSQL) pozíciók lapozott listája szűréssel és rendezéssel.
-  - **Query**: `pairId` (opcionális), `from` / `to` (ISO timestamp, inkluzív), `page`, `pageSize` (max 5000), `sortBy` (`timestamp` | `id` | `pairId`), `sortDir` (`asc` | `desc`).
-  - **Response**: `{ items: [...], total, page, pageSize }` — az elemek tartalmazzák a pár azonosítókat, koordinátákat, `gameAreaSnapshot`, `hadRuleViolationAtSave` mezőket.
-- **`DELETE /api/positions/admin/pair/:pairId`** (Admin JWT) — a megadott pár **összes** mentett pozíciójának törlése a `positions` táblából. **Response**: `{ "deleted": number }`. WebSocket: `savedPositionsDeleted`.
-- **`POST /api/positions/admin/delete-by-ids`** (Admin JWT) — **Body**: `{ "pairId": number, "ids": number[] }` (minden ID-nek létező, ehhez a `pairId`-hez tartozó sornak kell lennie). **Response**: `{ "deleted": number }`. WebSocket: `savedPositionsDeleted`.
-- **`GET /api/positions/pair/:pairId/latest-saved`** (JWT: **admin** vagy **officer**)
-  - A megadott pár **legutóbbi mentett** pozíciósora (vagy `null`), ugyanazzal a mezőkészlettel, mint a list API elemek (pl. térkép modál / pár részletek).
-- **`POST /api/positions/pursuer-live`** (JWT: **admin** vagy **officer**)
-  - A webes böngésző aktuális GPS-e **Redisben**, üldözői távolsághoz — pl. napzárás FCM-ben a párhoz írt távolságsorhoz szükséges.
-  - **Body**: `{ "lat": number, "lon": number }`. **HTTP 204** üres válasszal.
-
-### Párok
-- **`GET /api/pairs`** - Összes pár lekérése (opcionális `?active=true` szűréssel).
-  - Elfogással kapcsolatos mezők a listaelemekben (ha releváns): pl. `captured`, `captureNote`, `captureTimestamp`, `captureLocation`, `capturedByUsername`, `hasActiveDevice` — a `captureNote` rövid magyarázat az aktuális követhetőségről / munkamenetről.
-  - **`lastPosition` a válaszban** (összefoglalva):
-    - Futó időzítő és `lastLocationUpdate` mellett, ha a pár szerepel a ciklus „már küldött” listájában: alapból a **ciklus első** PG-s mintája; ha van **újabb** sor ugyanahhoz a párhez a `positions` táblában ugyanazon ciklusban (több időzítő szerinti mentés), akkor az kerül vissza.
-    - Aktív, meg nem oldott **játékterület-elhagyás** szabályszegésnél: ha van élő Redis-pozíció, a `lastPosition` onnan jön (folyamatos követés).
-    - Ha a fenti speciális esetek egyike sem ad pozíciót, de van legutóbbi mentett sor a `positions` táblában a párhez: **az** kerül vissza (pl. frissen indított számláló, még nincs `lastLocationUpdate`, vagy a pár még nem küldött a ciklusban — így a térkép és a pár modál nem marad üres).
-    - Csak akkor `null`, ha egyáltalán nincs mentett pozíció a párhez. A részletes ágak a `PairsService` és a játékbeállítások összjátékától függnek.
-- **`POST /api/pairs`** - Új pár létrehozása (Admin).
-- **`PUT /api/pairs/:id`** - Pár adatainak (pl. aktív státusz) módosítása.
-- **`DELETE /api/pairs/:id`** - Pár törlése.
-- **`PUT /api/pairs/:id/name`** - Pár nevének beállítása.
-
-### Capture (Bilincs)
-- **`POST /api/capture`** (JWT: **admin** vagy **officer**; a rögzítő a tokenben lévő felhasználó)
-  - Elfogás rögzítése egy párra (validáció: aktív pár + frissen látott eszköz, cooldown, idempotencia, opcionális kliens időbélyeg).
-  - **Body** (JSON):
-    - `pairId` (number, kötelező)
-    - `requestId` (string, opcionális, max 100 karakter) — ugyanazzal az értékkel megismételt kérés **idempotens** siker választ ad (nem hoz létre duplikátumot).
-    - `clientTimestamp` (string, ISO 8601, opcionális) — ha megvan, a szerver ellenőrzi a megengedett tartományt (`CLIENT_TIMESTAMP_INVALID` hiba, ha nem OK).
-    - `pairLat`, `pairLon` (number, opcionális, **együtt** kell küldeni vagy egyik sem) — az üldözői felületen a rögzítéskor mutatott WGS‑84 koordináta; ha nincs, a szerver **Redis élő pozícióból**, majd szükség esetén a **legutóbbi mentett** `positions` sorból tölti ki a rögzített elfogási helyet.
-  - **Siker** (200): `{ "success": true, "message": "...", "idempotent"?: boolean, "capture": { "id", "pairId", "capturedBy", "timestamp" } }`
-  - **Gyakori hibakódok** (strukturált válasz `code` mezővel): `PAIR_NOT_FOUND`, `PAIR_INACTIVE`, `ALREADY_CAPTURED`, `COOLDOWN_ACTIVE`, `CAPTURE_COORDS_INCOMPLETE`, `CLIENT_TIMESTAMP_INVALID`.
-- **`DELETE /api/capture/:pairId`** (JWT: **admin** vagy **officer**) — az adott párhoz tartozó elfogás törlése / visszavonása (ha nincs rögzítés: `CAPTURE_NOT_FOUND`; siker: `CAPTURE_REVERTED`).
-
-### Most Wanted (MW)
-- **`POST /api/mw`** - MW jelzés beállítása egy párra.
-  - **Body**: `{ "pairId": 1, "userId": 1 }`
-- **`DELETE /api/mw/:pairId`** - MW jelzés levétele (törlése).
-
-### Messages (Üzenetküldés)
-- **`POST /api/messages/send`**
-  - Üzenet/Push notification küldése a telefonokra.
-  - **Body**: A célpont (pairId vagy all) és a tartalom.
-
-### Geofence
-- **`GET /api/geofence`** - Aktív/összes geofence lekérése.
-- **`POST /api/geofence`** - Új geofence létrehozása.
-- **`PUT /api/geofence/:id/activate`** - Geofence aktiválása.
-- **`PUT /api/geofence/:id/deactivate`** - Geofence deaktiválása.
-- **`DELETE /api/geofence/:id`** - Geofence törlése.
-- **`PUT /api/geofence/bulk-status`** - Több geofence atomikus aktiválása/deaktiválása (Admin).
-  - **Body**: `{ "activateIds": number[], "deactivateIds": number[] }` (üres tömbök megengedettek).
-
-### Játéktér (Belső területek/Megyék)
-- **`GET /api/game-area`** - Jelenlegi játéktér és szabályok lekérése.
-- **`GET /api/game-area/counties`** - Megyék geo adatainak lekérése.
-- **`PUT /api/game-area`** - Játéktér módosítása (Admin).
-
-### Játék Napok
-- **`GET /api/game-days`** - Összes versenynap lekérése.
-- **`GET /api/game-days/today`** - Mai versenynap beállításai.
-- **`POST /api/game-days`** - Versenynap létrehozása (Admin).
-- **`PUT /api/game-days/:id`** - Versenynap módosítása (Admin).
-- **`DELETE /api/game-days/:id`** - Versenynap törlése (Admin).
-
-### Game Settings (Játék beállítások & Időzítők)
-- **`GET /api/game-settings/countdown`** — Olvasási „irányítópult” (JWT: **device** token vagy **admin/officer web**). Tartalmazza többek között: `campaignStatus`, `isGameActive`, `stayRuleEnabled`, `stayRadiusKm`, páridőzítő (`nextLocationUpdate`), **nyitott szabályszegések** listája a bejelentkezett pár szerint (`activeRuleViolations`), játéknap összefoglalók, elfogás jelző.
-- **`GET /api/game-settings`** — Teljes globális beállítások + `runtime` (JWT: **csak admin**). A beállítások között például `gameEnabled`, `locationUpdateIntervalMinutes`, **`stayRuleEnabled`**, **`stayRadiusKm`** (km), **`mobileEnrollmentSecret`** (opcionális; az admin mobil QR / csatlakozás képernyőjéhez ugyanez más alapon is lekérhető).
-- **`PUT /api/game-settings`** — Beállítások frissítése (JWT: **csak admin**), köztük opcionálisan `stayRuleEnabled`, `stayRadiusKm`. Sikeres mentés után napló: `game_settings_update` (`audit_logs`).
-- **`POST /api/game-settings/timer/start`** — Játékmotor kézi indítása (JWT: **csak admin**). Napló: `game_runtime_engine_start`.
-- **`POST /api/game-settings/timer/stop`** — Játékmotor kézi leállítása (JWT: **csak admin**). Napló: `game_runtime_engine_stop`.
-
-> **Megjegyzés**: További admin műveletek is bekerülnek az eseménynaplóba (payload a `data_json` mezőben), például geofence aktiválás / deaktiválás / tömeges státusz (`geofence_activate`, `geofence_deactivate`, `geofence_bulk_status`), mentett pozíciók törlése (`position_delete_pair`, `position_delete_batch`), lezárt szabályszegés törlése (`rule_violation_delete`).
-
-### Szabályszegések (Rule Violations)
-- **`GET /api/rule-violations/active-game-area`** - Aktív „térképen folyamatosan követett” szabályszegések: `game_area_exit` és/vagy `vehicle_time_exceeded` nyitott sorai.
-- **`GET /api/rule-violations/list`** - Szabályszegések lapozott listája szűréssel és rendezéssel (Admin).
-  - **Query params**: `page`, `pageSize`, `type` (`all` vagy egy konkrét `violation_type` string, például `game_area_exit`, `vehicle_time_exceeded`, `end_of_day_stay`), `status`, `search`, `sortBy`, `sortDir`.
-  - **`end_of_day_stay`** (maradási szabály): játéknapok között túllépett bentmaradás; opcionális **következő játéknap első 30 percében** térképes követés (Redis + háttér pozíció). A percenkénti motor és FCM dokumentálva `SchedulerService`, `finalizeStayRuleViolation`.
-- **`DELETE /api/rule-violations/:id`** - Lezárt szabályszegés törlése (Admin).
+- Enrollment: **`MobileEnrollmentGuard`** — szükséges fejléc: **`x-ck-enrollment-secret`**
+- **`POST /api/devices/login`** sikerét követően a válasz **`token`** mezőjét Bearer-ként küldd a többi device-védett végponton.
 
 ---
 
-## Hibakezelés
+## 3. Modulok áttekintése (prefixek)
 
-Minden hiba esetén az alábbi JSON response formátum várható:
+| Prefix | Funkció |
+|---|---|
+| `/api/auth` | Web belépés, profil |
+| `/api/devices` | Eszköz auth, aktív állapot |
+| `/api/pairs`, `/api/game-days`, `/api/game-settings` | Játékállapot és admin beállítások |
+| `/api/position`, `/api/positions` | GPS és admin listák |
+| `/api/capture`, `/api/rule-violations`, `/api/celkereszt` | Játékesemények |
+| `/api/geofence`, `/api/game-area` | Területszabályok |
+| `/api/audit-logs/admin` | Audit |
+| `/api/mobile` | Publikus mobil ellenőrzés |
+
+*(A pontos sorrendhez lásd az alábbi táblázat.)*
+
+---
+
+## 4. Teljes végpontlista
+
+A lista közvetlenül a jelenlegi kontrollerek route-jaiból készült (ha végpontot adsz hozzá, frissítsd ezt a táblázatot is).
+
+### Speciális végpont
+
+| Method | Endpoint | Megjegyzés |
+|---|---|---|
+| `GET` | `/api/mobile/verify` | Mobil első párosítás ellenőrzés. Effektív titok mellett küldött **`x-ck-enrollment-secret`** szükséges (ellenkező esetben 401). Válasz: `{ ok, enrollmentRequired }` — `backend/src/mobile/mobile-enrollment.service.ts` → `verifyForPublicPing`. |
+
+### Összes route
+
+| Method | Endpoint |
+|---|---|
+| `GET` | `/` |
+| `GET` | `/health` |
+| `POST` | `/api/auth/login` |
+| `POST` | `/api/auth/register` |
+| `GET` | `/api/auth/profile` |
+| `PUT` | `/api/auth/profile` |
+| `GET` | `/api/users` |
+| `GET` | `/api/users/:id` |
+| `POST` | `/api/users` |
+| `PUT` | `/api/users/:id` |
+| `DELETE` | `/api/users/:id` |
+| `POST` | `/api/messages/send` |
+| `GET` | `/api/positions/pair/:pairId/latest-saved` |
+| `POST` | `/api/positions/pursuer-live` |
+| `GET` | `/api/positions/admin/list` |
+| `DELETE` | `/api/positions/admin/pair/:pairId` |
+| `POST` | `/api/positions/admin/delete-by-ids` |
+| `POST` | `/api/position` |
+| `GET` | `/api/game-settings/countdown` |
+| `GET` | `/api/game-settings` |
+| `PUT` | `/api/game-settings` |
+| `POST` | `/api/game-settings/timer/start` |
+| `POST` | `/api/game-settings/timer/stop` |
+| `POST` | `/api/capture` |
+| `DELETE` | `/api/capture/:pairId` |
+| `GET` | `/api/game-days` |
+| `GET` | `/api/game-days/today` |
+| `POST` | `/api/game-days` |
+| `PUT` | `/api/game-days/:id` |
+| `DELETE` | `/api/game-days/:id` |
+| `GET` | `/api/rule-violations/active-game-area` |
+| `GET` | `/api/rule-violations/list` |
+| `DELETE` | `/api/rule-violations/:id` |
+| `GET` | `/api/pairs` |
+| `POST` | `/api/pairs` |
+| `PUT` | `/api/pairs/:id` |
+| `DELETE` | `/api/pairs/:id` |
+| `PUT` | `/api/pairs/:id/name` |
+| `GET` | `/api/game-area` |
+| `GET` | `/api/game-area/counties` |
+| `PUT` | `/api/game-area` |
+| `POST` | `/api/celkereszt` |
+| `DELETE` | `/api/celkereszt/:pairId` |
+| `GET` | `/api/audit-logs/admin/meta` |
+| `GET` | `/api/audit-logs/admin/list` |
+| `GET` | `/api/audit-logs/admin/export` |
+| `POST` | `/api/audit-logs/admin/bulk-delete` |
+| `DELETE` | `/api/audit-logs/admin/:id` |
+| `GET` | `/api/mobile/verify` |
+| `GET` | `/api/devices/admin/mobile-connection` |
+| `POST` | `/api/devices/admin/mobile-connection/regenerate` |
+| `POST` | `/api/devices/login` |
+| `GET` | `/api/devices/me` |
+| `GET` | `/api/devices` |
+| `GET` | `/api/devices/active` |
+| `POST` | `/api/devices/logout` |
+| `POST` | `/api/devices/fcm-token` |
+| `POST` | `/api/devices/help-request` |
+| `POST` | `/api/devices/vehicle-session-expired` |
+| `POST` | `/api/devices/force-logout/:deviceId` |
+| `DELETE` | `/api/devices/:id` |
+| `GET` | `/api/geofence` |
+| `POST` | `/api/geofence` |
+| `PUT` | `/api/geofence/:id/activate` |
+| `PUT` | `/api/geofence/:id/deactivate` |
+| `PUT` | `/api/geofence/bulk-status` |
+| `DELETE` | `/api/geofence/:id` |
+
+---
+
+## 5. Referencia példa hívások
+
+### Admin / officer login
+
+**`POST /api/auth/login`** — body: `LoginDto`
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Hibaüzenet",
-    "details": {}
-  }
+  "username": "admin",
+  "password": "StrongPassword123!"
 }
 ```
 
-### Gyakori hibakódok
-- `UNAUTHORIZED`: Nincs jogosultság a művelethez
-- `VALIDATION_ERROR`: Hiányzó vagy hibás formátumú adatok (Body)
-- `NOT_FOUND`: Erőforrás (user, pár, geofence) nem található
-- `INTERNAL_ERROR`: Szerver / Adatbázis hiba
-- `RULE_VIOLATION`: Játékszabály megszegése (pl. túl hosszú autózás)
+Válasz: `AuthService.login()` → **`access_token`**, **`user`** (`id`, `username`, `email`, `role`).
+
+---
+
+### Device login
+
+**`POST /api/devices/login`**
+
+Fejléc: **`x-ck-enrollment-secret`**
+
+Body: `DeviceLoginDto`
+
+| Mező | Típus | Kötelező | Megjegyzés |
+|---|---|---|---|
+| `username` | string | igen | Pár **`assignedNumber`** stringként (pl. `"5"`) |
+| `password` | string | igen | Jelen implementáció: ugyanaz a szám, mint **`username`** |
+| `deviceId` | string | igen | Stabil Android / eszköz ID |
+| `fcmToken` | string \| skip | nem | Opcionális |
+
+```json
+{
+  "username": "5",
+  "password": "5",
+  "deviceId": "android-device-id-string"
+}
+```
+
+Válasz: **`success`**, **`token`**, **`device`**: `{ id, pairId, pairNumber, pairName }`.
+
+---
+
+### Célkereszt jelölés
+
+**`POST /api/celkereszt`** — JWT kötelező. Body **csak** `CreateCkFlagDto`:
+
+```json
+{ "pairId": 3 }
+```
+
+*`userId` a szerver teszi bele a JWT-ből; kliensen ne küldd.*
+
+Aktív játék hiányában: `400`, `GAME_NOT_IN_PROGRESS`.
+
+---
+
+## 6. Hibaválaszok
+
+NestJS standard forma:
+
+```json
+{
+  "statusCode": 400,
+  "message": "...",
+  "error": "Bad Request"
+}
+```
+
+| Kód | Jellemző ok |
+|---|---|
+| `400` | Validáció, üzleti szabály megsértése |
+| `401` | Auth hiány |
+| `403` | Szerepkör |
+| `404` | Nincs ilyen erőforrás |
+| `409` | Ütközés (pl. egy pár ⇄ egy eszköz) |
+| `500` | Szerverhiba |
+
+---
+
+## 7. Integrációs megjegyzések
+
+- Egységes HTTP kliens + egységnyi hiba- és Bearer-kezelő mind kliensen.
+- Sok mutálás auditált admin oldalról — fejlesztői eszközöknél légy tudatos a token mellett.
+
+---
+
+## 8. Kapcsolódó dokumentumok
+
+| Dokumentum | Témakör |
+|---|---|
+| [WEBSOCKET_EVENTS.md](WEBSOCKET_EVENTS.md) | Realtime csatorna és eseménynevek |
+| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Táblaszintű háttér |
+| [INSTALLATION.md](INSTALLATION.md) | Helyi futtatás és környezeti fájlok |

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FiChevronDown, FiClock } from 'react-icons/fi';
-import { MwTimeScrollWheel } from '../../MwTimeScrollWheel';
+import { CkTimeScrollWheel } from '../../CkTimeScrollWheel';
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
@@ -392,7 +392,7 @@ export default function CompactTimeField({
                 </span>
               </div>
               <div className="flex justify-center py-0.5">
-                <MwTimeScrollWheel
+                <CkTimeScrollWheel
                   hour={wh}
                   minute={wm}
                   onHourChange={(nh) => emit(nh, wm)}

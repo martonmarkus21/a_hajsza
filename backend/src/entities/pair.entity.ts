@@ -9,7 +9,7 @@ import {
 import { Device } from './device.entity';
 import { Position } from './position.entity';
 import { Capture } from './capture.entity';
-import { MwFlag } from './mw-flag.entity';
+import { CkFlag } from './ck-flag.entity';
 
 @Entity('pairs')
 export class Pair {
@@ -40,8 +40,8 @@ export class Pair {
   @OneToMany(() => Capture, (capture) => capture.pair)
   captures: Capture[];
 
-  @OneToMany(() => MwFlag, (mwFlag) => mwFlag.pair)
-  mwFlags: MwFlag[];
+  @OneToMany(() => CkFlag, (ckFlag) => ckFlag.pair)
+  ckFlags: CkFlag[];
 }
 
 

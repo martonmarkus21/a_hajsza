@@ -129,7 +129,7 @@ export default function DashboardHome({
 
   return (
     <div className="space-y-6">
-      <section className="mw-card !p-0 overflow-hidden">
+      <section className="ck-card !p-0 overflow-hidden">
         <div className="relative px-6 py-7 sm:px-8">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.18),transparent_56%),linear-gradient(120deg,rgba(255,255,255,0.03),transparent_45%,rgba(255,255,255,0.02))]" />
           <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -165,7 +165,7 @@ export default function DashboardHome({
               type="button"
               onClick={onGoToGameControl}
               onMouseUp={(e) => e.currentTarget.blur()}
-              className="mw-btn mw-btn-primary inline-flex items-center justify-center gap-2 self-start lg:self-auto"
+              className="ck-btn ck-btn-primary inline-flex items-center justify-center gap-2 self-start lg:self-auto"
             >
               Játék vezérlés
               <FiChevronRight className="h-4 w-4" />
@@ -175,7 +175,7 @@ export default function DashboardHome({
       </section>
 
       {gameSettings?.gameEnabled && gameSettings.countdown && (
-        <div className="mw-card !p-0 overflow-hidden relative">
+        <div className="ck-card !p-0 overflow-hidden relative">
           <div className="relative px-6 py-10 sm:px-8">
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-orange-500/5 via-transparent to-orange-500/5 animate-pulse" />
             <div className="relative z-10 text-center">
@@ -233,7 +233,7 @@ export default function DashboardHome({
       </div>
 
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-3">
-        <div className="mw-card xl:col-span-2">
+        <div className="ck-card xl:col-span-2">
           <button
             type="button"
             onClick={onGoToGameControl}
@@ -282,7 +282,7 @@ export default function DashboardHome({
           ) : null}
         </div>
 
-        <div className="mw-card">
+        <div className="ck-card">
           <button
             type="button"
             onClick={onGoToGameControl}
@@ -425,7 +425,7 @@ function StatCard({
           ? 'text-emerald-300 bg-emerald-500/15'
           : 'text-orange-300 bg-orange-500/15';
   return (
-    <div className="mw-card !p-0 overflow-hidden">
+    <div className="ck-card !p-0 overflow-hidden">
       <div className="grid min-h-[150px] content-center gap-3 px-6 py-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>

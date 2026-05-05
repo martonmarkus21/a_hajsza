@@ -164,7 +164,7 @@ export default function Admin() {
   const [activeGameAreaViolationDetails, setActiveGameAreaViolationDetails] = useState<Record<number, ActiveGameAreaViolation>>({});
 
   const persistFrozenLastLivePositions = () => {
-    localStorage.setItem('mw:frozen-last-live-positions', JSON.stringify(frozenLastLivePositionsRef.current));
+    localStorage.setItem('celkereszt:frozen-last-live-positions', JSON.stringify(frozenLastLivePositionsRef.current));
   };
 
   const freezeCurrentLastPosition = (
@@ -191,7 +191,7 @@ export default function Admin() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('mw:frozen-last-live-positions');
+      const raw = localStorage.getItem('celkereszt:frozen-last-live-positions');
       if (!raw) return;
       const parsed = JSON.parse(raw) as Record<string, NonNullable<Pair['lastPosition']>>;
       const normalized: Record<number, NonNullable<Pair['lastPosition']>> = {};
@@ -1072,19 +1072,19 @@ export default function Admin() {
     fetchPairs();
   };
 
-  const handleMw = async (pairId: number) => {
+  const handleCk = async (pairId: number) => {
     const pair = pairs.find((p) => p.id === pairId);
-    const wasMw = !!pair?.mostWanted;
-    const fallbackErr = wasMw
-      ? 'A Most Wanted státusz nem távolítható el.'
-      : 'A Most Wanted státusz nem állítható be.';
+    const wasCk = !!pair?.celkereszt;
+    const fallbackErr = wasCk
+      ? 'A Célkereszt státusz nem távolítható el.'
+      : 'A Célkereszt státusz nem állítható be.';
     try {
-      const res = wasMw
-        ? await fetch(apiUrl(`/api/mw/${pairId}`), {
+      const res = wasCk
+        ? await fetch(apiUrl(`/api/celkereszt/${pairId}`), {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
           })
-        : await fetch(apiUrl('/api/mw'), {
+        : await fetch(apiUrl('/api/celkereszt'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1097,7 +1097,7 @@ export default function Admin() {
         await fetchPairs();
         addNotification(
           'success',
-          wasMw ? 'Most Wanted státusz eltávolítva.' : 'Most Wanted státusz beállítva.',
+          wasCk ? 'Célkereszt státusz eltávolítva.' : 'Célkereszt státusz beállítva.',
         );
         return;
       }
@@ -1575,7 +1575,7 @@ export default function Admin() {
               setSelectedMessagePair(pair);
               setShowMessageModal(true);
             }}
-            handleMw={handleMw}
+            handleCk={handleCk}
             handleCapture={handleCapture}
             handleCaptureRevert={handleCaptureRevert}
             showCreateModal={showCreatePairModal}
@@ -1718,7 +1718,7 @@ export default function Admin() {
             calculateDistance={calculateDistance}
             onClose={() => setSelectedPair(null)}
             onCapture={handleCaptureDirect}
-            onMw={handleMw}
+            onCk={handleCk}
             onRename={(id, name) => handleEditPairName({ id, name })}
             hasActiveGameAreaViolation={
               !!(selectedPair && activeGameAreaExitViolations[selectedPair.id])

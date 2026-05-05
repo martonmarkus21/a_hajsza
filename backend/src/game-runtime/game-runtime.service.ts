@@ -266,10 +266,10 @@ export class GameRuntimeService {
 
   private async ensureGameSettings(): Promise<GameSettings> {
     /* Ugyanaz a kulcsminta mint a GameSettingsService: több véletlen sor esetén is az első (id ASC) egy legyen. */
-    let settings = await this.gameSettingsRepository.findOne({
-      where: {},
+    const rows = await this.gameSettingsRepository.find({
       order: { id: 'ASC' },
     });
+    let settings = rows[0];
     if (!settings) {
       settings = this.gameSettingsRepository.create({
         gameEnabled: false,
@@ -278,6 +278,11 @@ export class GameRuntimeService {
         stayRadiusKm: 5,
       });
       settings = await this.gameSettingsRepository.save(settings);
+    } else if (rows.length > 1) {
+      const duplicateIds = rows.slice(1).map((r) => r.id);
+      if (duplicateIds.length > 0) {
+        await this.gameSettingsRepository.delete(duplicateIds);
+      }
     }
     return settings;
   }

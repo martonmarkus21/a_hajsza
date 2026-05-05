@@ -8,7 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { PairsModule } from './pairs/pairs.module';
 import { PositionsModule } from './positions/positions.module';
 import { CapturesModule } from './captures/captures.module';
-import { MwFlagsModule } from './mw-flags/mw-flags.module';
+import { CkFlagsModule } from './ck-flags/ck-flags.module';
 import { GeofencesModule } from './geofences/geofences.module';
 import { GameDaysModule } from './game-days/game-days.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
@@ -42,9 +42,9 @@ function typeOrmLogging(): boolean | ('error' | 'warn' | 'info' | 'log' | 'schem
       type: 'postgres',
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432'),
-      username: process.env.DB_USERNAME || 'most_wanted',
+      username: process.env.DB_USERNAME || 'celkereszt',
       password: process.env.DB_PASSWORD || 'password',
-      database: process.env.DB_DATABASE || 'most_wanted',
+      database: process.env.DB_DATABASE || 'celkereszt',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: process.env.NODE_ENV === 'development',
       logging: typeOrmLogging(),
@@ -63,7 +63,7 @@ function typeOrmLogging(): boolean | ('error' | 'warn' | 'info' | 'log' | 'schem
     PairsModule,
     PositionsModule,
     CapturesModule,
-    MwFlagsModule,
+    CkFlagsModule,
     GeofencesModule,
     GameDaysModule,
     AuditLogsModule,

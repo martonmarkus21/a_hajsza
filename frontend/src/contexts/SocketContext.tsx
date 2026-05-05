@@ -27,8 +27,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onAuth = () => setTokenEpoch((n) => n + 1);
-    window.addEventListener('mw:auth-token-changed', onAuth);
-    return () => window.removeEventListener('mw:auth-token-changed', onAuth);
+    window.addEventListener('ck:auth-token-changed', onAuth);
+    return () => window.removeEventListener('ck:auth-token-changed', onAuth);
   }, []);
 
   useEffect(() => {

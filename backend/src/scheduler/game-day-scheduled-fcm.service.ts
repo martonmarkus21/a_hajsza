@@ -37,10 +37,10 @@ export class GameDayScheduledFcmService {
    * A játékmotor tick() után hívjuk (percenként): játéknap indulás és ütemezett szabályváltozások FCM-je.
    */
   async runMinute(now: Date): Promise<void> {
-    let settings = await this.gameSettingsRepository.findOne({
-      where: {},
+    const rows = await this.gameSettingsRepository.find({
       order: { id: 'ASC' },
     });
+    let settings = rows[0];
     if (!settings) {
       settings = this.gameSettingsRepository.create({
         gameEnabled: false,
@@ -49,6 +49,11 @@ export class GameDayScheduledFcmService {
         stayRadiusKm: 5,
       });
       settings = await this.gameSettingsRepository.save(settings);
+    } else if (rows.length > 1) {
+      const duplicateIds = rows.slice(1).map((r) => r.id);
+      if (duplicateIds.length > 0) {
+        await this.gameSettingsRepository.delete(duplicateIds);
+      }
     }
 
     if (settings.gameEnabled !== true) return;
@@ -72,7 +77,7 @@ export class GameDayScheduledFcmService {
 
     const boundaries = collectUniqueBoundaryHm(sr);
 
-    const title = 'Most Wanted';
+    const title = 'Célkereszt';
 
     if (inside && curHm === startHm) {
       const ivAtStart = resolveIntervalMinutes(sr, curHm, fb);

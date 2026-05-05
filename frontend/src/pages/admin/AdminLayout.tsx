@@ -3,8 +3,8 @@ import { ReactNode, useState } from 'react';
 import { FiSettings, FiUsers, FiMap, FiClock, FiLogOut, FiArrowLeft, FiSmartphone, FiChevronRight, FiAlertTriangle } from 'react-icons/fi';
 import { UserCog, MapPinned, ScrollText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import logoImage from '../../assets/images/most_wanted_logo_raw.png';
-import MWLoader from '../../components/MWLoader';
+import logoImage from '../../assets/images/celkereszt_logotype.png';
+import CkLoader from '../../components/CkLoader';
 
 interface AdminLayoutProps {
     children: ReactNode | ((sidebarOpen: boolean) => ReactNode);
@@ -30,7 +30,7 @@ export default function AdminLayout({
     const [sidebarOpen, setSidebarOpen] = useState(true);
 
     if (loading) {
-        return <MWLoader subtitle="Rendszer inicializálása..." />;
+        return <CkLoader subtitle="Rendszer inicializálása..." />;
     }
 
     const menuItems = [
@@ -214,7 +214,7 @@ export default function AdminLayout({
                     <div className="mb-8 animate-fade-in-up flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                         <div>
                             <h1 className="text-3xl font-bold text-white mb-2">{menuItems.find(i => i.id === activeTab)?.label}</h1>
-                            <p className="text-gray-500">{menuItems.find(i => i.id === activeTab)?.description || 'Most Wanted kezelőfelület'}</p>
+                            <p className="text-gray-500">{menuItems.find(i => i.id === activeTab)?.description || 'Célkereszt kezelőfelület'}</p>
                         </div>
                         {headerActions && (
                             <div className="flex items-center gap-3">

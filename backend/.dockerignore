@@ -1,0 +1,10 @@
+# Smaller build context — avoid uploading local node_modules to the daemon
+node_modules
+dist
+coverage
+.git
+.env
+.env.*
+*.log
+npm-debug.log*
+*.tsbuildinfo

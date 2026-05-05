@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiMail, FiShield, FiCalendar, FiLock, FiArrowLeft, FiLogOut, FiCheck, FiAlertCircle, FiSave, FiRotateCw } from 'react-icons/fi';
 import { authService, UserProfile } from '../services/auth';
-import logoImage from '../assets/images/most_wanted_logo_raw.png';
-import MWLoader from '../components/MWLoader';
+import logoImage from '../assets/images/celkereszt_logo.png';
+import CkLoader from '../components/CkLoader';
 
 export default function Profile() {
     const navigate = useNavigate();
@@ -127,7 +127,7 @@ export default function Profile() {
     };
 
     if (loading) {
-        return <MWLoader subtitle="Profil betöltése..." />;
+        return <CkLoader subtitle="Profil betöltése..." />;
     }
 
     if (error || !profile) {
@@ -141,7 +141,7 @@ export default function Profile() {
                     {/* Logo - low opacity */}
                     <img
                         src={logoImage}
-                        alt="Most Wanted"
+                        alt="Célkereszt"
                         className="h-16 w-auto object-contain drop-shadow-2xl select-none mb-8 opacity-40"
                     />
 
@@ -200,7 +200,7 @@ export default function Profile() {
 
                         <img
                             src={logoImage}
-                            alt="Most Wanted"
+                            alt="Célkereszt"
                             className="h-8 object-contain drop-shadow-md select-none opacity-40"
                         />
                     </div>
@@ -209,7 +209,7 @@ export default function Profile() {
 
                         {/* LEFT COLUMN: Profile Summary (4 cols) */}
                         <div className="lg:col-span-4 space-y-5">
-                            <div className="mw-card p-0 overflow-hidden sticky top-6">
+                            <div className="ck-card p-0 overflow-hidden sticky top-6">
                                 {/* Header gradient - Extended height and clarity */}
                                 <div className="h-36 bg-gradient-to-b from-orange-500/15 via-orange-900/5 to-transparent relative">
                                     <div className="absolute inset-0 opacity-20 mix-blend-overlay" />
@@ -273,7 +273,7 @@ export default function Profile() {
                         <div className="lg:col-span-8 space-y-6">
 
                             {/* Email Settings */}
-                            <div className="mw-card p-0 overflow-hidden flex flex-col">
+                            <div className="ck-card p-0 overflow-hidden flex flex-col">
                                 <div className="p-6 border-b border-white/10 flex items-center bg-white/[0.02]">
                                     <h3 className="text-xl font-bold text-white flex items-center gap-3">
                                         <div className="p-2 rounded-xl bg-blue-500/20 text-blue-500">
@@ -294,7 +294,7 @@ export default function Profile() {
                                                 type="email"
                                                 value={editEmail}
                                                 onChange={(e) => { setEditEmail(e.target.value); setEmailSuccess(''); setEmailError(''); }}
-                                                className="mw-input pl-11 focus:!border-blue-500/50 focus:!shadow-[0_0_0_4px_rgba(59,130,246,0.15)] bg-[#121212]/50"
+                                                className="ck-input pl-11 focus:!border-blue-500/50 focus:!shadow-[0_0_0_4px_rgba(59,130,246,0.15)] bg-[#121212]/50"
                                                 placeholder="pelda@email.com"
                                             />
                                         </div>
@@ -326,7 +326,7 @@ export default function Profile() {
                             </div>
 
                             {/* Password Settings */}
-                            <div className="mw-card p-0 overflow-hidden flex flex-col">
+                            <div className="ck-card p-0 overflow-hidden flex flex-col">
                                 <div className="p-6 border-b border-white/10 flex items-center bg-white/[0.02]">
                                     <h3 className="text-xl font-bold text-white flex items-center gap-3">
                                         <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400">
@@ -348,7 +348,7 @@ export default function Profile() {
                                                     type="password"
                                                     value={currentPassword}
                                                     onChange={(e) => { setCurrentPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
-                                                    className="mw-input pl-11 focus:!border-purple-500/50 focus:!shadow-[0_0_0_4px_rgba(168,85,247,0.15)] bg-[#121212]/50"
+                                                    className="ck-input pl-11 focus:!border-purple-500/50 focus:!shadow-[0_0_0_4px_rgba(168,85,247,0.15)] bg-[#121212]/50"
                                                     placeholder="••••••••"
                                                 />
                                             </div>
@@ -365,7 +365,7 @@ export default function Profile() {
                                                         type="password"
                                                         value={newPassword}
                                                         onChange={(e) => { setNewPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
-                                                        className="mw-input pl-11 focus:!border-purple-500/50 focus:!shadow-[0_0_0_4px_rgba(168,85,247,0.15)] bg-[#121212]/50"
+                                                        className="ck-input pl-11 focus:!border-purple-500/50 focus:!shadow-[0_0_0_4px_rgba(168,85,247,0.15)] bg-[#121212]/50"
                                                         placeholder="Új jelszó"
                                                     />
                                                 </div>
@@ -380,7 +380,7 @@ export default function Profile() {
                                                         type="password"
                                                         value={confirmPassword}
                                                         onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(''); setPasswordSuccess(''); }}
-                                                        className="mw-input pl-11 focus:!border-purple-500/50 focus:!shadow-[0_0_0_4px_rgba(168,85,247,0.15)] bg-[#121212]/50"
+                                                        className="ck-input pl-11 focus:!border-purple-500/50 focus:!shadow-[0_0_0_4px_rgba(168,85,247,0.15)] bg-[#121212]/50"
                                                         placeholder="Jelszó újra"
                                                     />
                                                 </div>
@@ -428,7 +428,7 @@ export default function Profile() {
                     {/* Footer */}
                     <div className="text-center pt-16 pb-8">
                         <p className="text-gray-600/40 text-[10px] font-medium tracking-widest uppercase">
-                            Most Wanted &bull; v1.0 &bull; {new Date().getFullYear()}
+                            Célkereszt &copy; {new Date().getFullYear()}
                         </p>
                     </div>
 

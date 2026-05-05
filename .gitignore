@@ -14,6 +14,7 @@ build/
 .env.*.local
 */.env
 */.env.local
+docker/env/backend.stack.env
 
 # Logs
 logs

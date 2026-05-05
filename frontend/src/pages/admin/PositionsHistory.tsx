@@ -14,8 +14,8 @@ import {
   FiTrash2,
   FiCheckSquare,
 } from 'react-icons/fi';
-import MwPairFilterGrid from '../../components/MwPairFilterGrid';
-import MwDateTimePicker from '../../components/MwDateTimePicker';
+import CkPairFilterGrid from '../../components/CkPairFilterGrid';
+import CkDateTimePicker from '../../components/CkDateTimePicker';
 import PositionsTraceMapModal from '../../components/PositionsTraceMapModal';
 import PositionRowMapPreview from '../../components/PositionRowMapPreview';
 import ConfirmationModal from '../../components/ConfirmationModal';
@@ -162,9 +162,9 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
 
   const hasActiveFilters = !!(pairFilter.trim() || fromLocal.trim() || toLocal.trim());
 
-  const mostWantedByPairId = useMemo(() => {
+  const celkeresztByPairId = useMemo(() => {
     const m = new Map<number, boolean>();
-    for (const p of pairs) m.set(p.id, !!p.mostWanted);
+    for (const p of pairs) m.set(p.id, !!p.celkereszt);
     return m;
   }, [pairs]);
   const capturedByPairId = useMemo(() => {
@@ -556,7 +556,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="mw-card relative overflow-hidden group">
+        <div className="ck-card relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <FiLayers className="w-20 h-20 text-blue-400" />
           </div>
@@ -569,7 +569,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
             </div>
           </div>
         </div>
-        <div className="mw-card relative overflow-hidden group">
+        <div className="ck-card relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <FiNavigation className="w-24 h-24 text-orange-500" />
           </div>
@@ -584,14 +584,14 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
         </div>
       </div>
 
-      <div className="mw-card p-4 sm:p-5 space-y-4">
+      <div className="ck-card p-4 sm:p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-end gap-3 lg:gap-4">
           <div className="w-full max-w-[13rem] shrink-0 space-y-1.5">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <FiUsers className="w-3.5 h-3.5 opacity-80" />
               Pár
             </label>
-            <MwPairFilterGrid
+            <CkPairFilterGrid
               pairs={pairs}
               value={pairFilter}
               onChange={(v) => {
@@ -602,7 +602,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 min-w-0">
-            <MwDateTimePicker
+            <CkDateTimePicker
               label="Időponttól"
               value={fromLocal}
               maxLocal={toLocal || undefined}
@@ -611,7 +611,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                 setPage(1);
               }}
             />
-            <MwDateTimePicker
+            <CkDateTimePicker
               label="Időpontig"
               value={toLocal}
               minLocal={fromLocal || undefined}
@@ -627,7 +627,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
               onClick={exportFilteredCsv}
               disabled={totalFiltered === 0}
               title="Letöltés: a jelenlegi szűrésnek és táblázat-rendezésnek megfelelő összes betöltött sor (legfeljebb 5000), CSV formátumban"
-              className="mw-btn mw-btn-primary inline-flex items-center justify-center gap-2 text-sm px-4 transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed"
+              className="ck-btn ck-btn-primary inline-flex items-center justify-center gap-2 text-sm px-4 transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed"
             >
               <FiDownload className="w-4 h-4 shrink-0" />
               Exportálás
@@ -641,7 +641,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                 setToLocal('');
                 setPage(1);
               }}
-              className="mw-btn inline-flex items-center justify-center gap-2 px-4 rounded-xl font-semibold text-sm bg-red-600 hover:bg-red-500 text-white border border-red-500/30 shadow-sm transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none disabled:hover:bg-red-600"
+              className="ck-btn inline-flex items-center justify-center gap-2 px-4 rounded-xl font-semibold text-sm bg-red-600 hover:bg-red-500 text-white border border-red-500/30 shadow-sm transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none disabled:hover:bg-red-600"
             >
               <FiX className="w-4 h-4 shrink-0" />
               Szűrők törlése
@@ -672,7 +672,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                   <button
                     type="button"
                     onClick={openMapFromToolbar}
-                    className={`mw-btn inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-400/25 bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-blue-950/30 transition-[color,background-color,border-color,opacity,transform] duration-200 hover:bg-blue-500 sm:w-auto ${
+                    className={`ck-btn inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-400/25 bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-blue-950/30 transition-[color,background-color,border-color,opacity,transform] duration-200 hover:bg-blue-500 sm:w-auto ${
                       selectionMode
                         ? 'opacity-[0.88] ring-1 ring-inset ring-white/15 scale-[0.99] hover:opacity-100 hover:scale-100'
                         : ''
@@ -684,7 +684,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                   <button
                     type="button"
                     onClick={() => setConfirmDeleteAllOpen(true)}
-                    className={`mw-btn inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/35 bg-red-600/90 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-red-950/25 transition-[color,background-color,border-color,opacity,transform] duration-200 hover:bg-red-500 sm:w-auto ${
+                    className={`ck-btn inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/35 bg-red-600/90 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-red-950/25 transition-[color,background-color,border-color,opacity,transform] duration-200 hover:bg-red-500 sm:w-auto ${
                       selectionMode
                         ? 'opacity-[0.88] ring-1 ring-inset ring-white/15 scale-[0.99] hover:opacity-100 hover:scale-100'
                         : ''
@@ -697,7 +697,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                   <button
                     type="button"
                     onClick={() => setSelectionMode((v) => !v)}
-                    className={`mw-btn inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold shadow-none transition-[color,background-color,border-color,opacity] duration-200 outline-none ring-0 focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0 sm:w-auto ${
+                    className={`ck-btn inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold shadow-none transition-[color,background-color,border-color,opacity] duration-200 outline-none ring-0 focus:shadow-none focus:outline-none focus-visible:shadow-none focus-visible:outline-none focus-visible:ring-0 sm:w-auto ${
                       selectionMode
                         ? 'border-amber-400/55 bg-amber-600/30 text-amber-50 hover:bg-amber-600/40'
                         : 'border-white/15 bg-white/5 text-gray-200 hover:bg-white/10'
@@ -837,8 +837,8 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                   />
                 ) : (
                   rows.map((row) => {
-                    const liveMw = mostWantedByPairId.has(row.pairId)
-                      ? !!mostWantedByPairId.get(row.pairId)
+                    const liveCk = celkeresztByPairId.has(row.pairId)
+                      ? !!celkeresztByPairId.get(row.pairId)
                       : false;
                     const liveCaptured = capturedByPairId.has(row.pairId)
                       ? !!capturedByPairId.get(row.pairId)
@@ -866,7 +866,7 @@ export default function PositionsHistory({ pairs, onSelectPairById }: PositionsH
                             className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] text-white transition-colors duration-300 ${
                               liveCaptured
                                 ? 'border-red-600 bg-red-600 hover:bg-red-500'
-                                : liveMw
+                                : liveCk
                                   ? 'border-orange-500 bg-orange-500 hover:bg-orange-400'
                                   : 'border-orange-500 bg-[#2a2a2a] hover:bg-[#383838]'
                             }`}

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { FiUser, FiTrash2, FiEdit, FiPlus, FiCheckCircle, FiXCircle, FiShield, FiUsers } from 'react-icons/fi';
 import { UserCog } from 'lucide-react';
 import Modal from '../../components/Modal';
-import MwTableSearchInput from '../../components/MwTableSearchInput';
+import CkTableSearchInput from '../../components/CkTableSearchInput';
 import {
     AdminDataTableCard,
     AdminTableEmptyRow,
@@ -83,7 +83,7 @@ export default function UserManagement({
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="mw-card relative overflow-hidden group">
+                <div className="ck-card relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <UserCog className="w-20 h-20 text-orange-400" />
                     </div>
@@ -93,7 +93,7 @@ export default function UserManagement({
                         <div className="text-gray-500 text-sm leading-relaxed">Admin és officer felhasználók együtt.</div>
                     </div>
                 </div>
-                <div className="mw-card relative overflow-hidden group">
+                <div className="ck-card relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <FiCheckCircle className="w-20 h-20 text-emerald-400" />
                     </div>
@@ -105,9 +105,9 @@ export default function UserManagement({
                 </div>
             </div>
 
-            <div className="mw-card p-4 sm:p-5">
+            <div className="ck-card p-4 sm:p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                    <MwTableSearchInput
+                    <CkTableSearchInput
                         value={searchTerm}
                         onChange={setSearchTerm}
                         placeholder="Keresés felhasználónév vagy e-mail szerint…"
@@ -116,7 +116,7 @@ export default function UserManagement({
                     <button
                         type="button"
                         onClick={() => setShowCreateModal(true)}
-                        className="mw-btn mw-btn-primary inline-flex w-full shrink-0 items-center justify-center gap-2 sm:w-auto"
+                        className="ck-btn ck-btn-primary inline-flex w-full shrink-0 items-center justify-center gap-2 sm:w-auto"
                     >
                         <FiPlus className="w-5 h-5 shrink-0" />
                         Új felhasználó

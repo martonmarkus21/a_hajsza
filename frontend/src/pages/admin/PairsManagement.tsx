@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { FiUsers, FiPlus, FiTrash2, FiMail, FiShield, FiEdit3, FiMinus, FiCheckCircle, FiXCircle, FiAlertCircle, FiTarget } from 'react-icons/fi';
 import { FaHandcuffs } from 'react-icons/fa6';
 import Modal from '../../components/Modal';
-import MwTableSearchInput from '../../components/MwTableSearchInput';
+import CkTableSearchInput from '../../components/CkTableSearchInput';
 import {
     AdminDataTableCard,
     AdminTableEmptyRow,
@@ -26,7 +26,7 @@ interface PairsManagementProps {
     deletePair: (id: number) => void;
     handleEditPairName: (pair: any) => void;
     handleSendMessage: (pair: any) => void;
-    handleMw: (pairId: number) => void;
+    handleCk: (pairId: number) => void;
     handleCapture: (pairId: number) => void;
     handleCaptureRevert: (pairId: number) => void;
     showCreateModal: boolean;
@@ -46,7 +46,7 @@ export default function PairsManagement({
     deletePair,
     handleEditPairName,
     handleSendMessage,
-    handleMw,
+    handleCk,
     handleCapture,
     handleCaptureRevert,
     showCreateModal,
@@ -58,7 +58,7 @@ export default function PairsManagement({
 }: PairsManagementProps) {
     const { addNotification } = useNotification();
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'captured' | 'mw'>('all');
+    const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'captured' | 'ck'>('all');
 
     const pairStats = useMemo(() => {
         const total = pairs.length;
@@ -67,7 +67,7 @@ export default function PairsManagement({
         return { total, active, captured };
     }, [pairs]);
     const [renamingPair, setRenamingPair] = useState<{ id: number; name: string } | null>(null);
-    const [sortConfig, setSortConfig] = useState<{ key: 'assignedNumber' | 'name' | 'status' | 'mw' | 'location', direction: 'asc' | 'desc' }>({ key: 'assignedNumber', direction: 'asc' });
+    const [sortConfig, setSortConfig] = useState<{ key: 'assignedNumber' | 'name' | 'status' | 'ck' | 'location', direction: 'asc' | 'desc' }>({ key: 'assignedNumber', direction: 'asc' });
 
     // Filter logic
     const filteredPairs = pairs.filter(pair => {
@@ -79,7 +79,7 @@ export default function PairsManagement({
             filterStatus === 'all' ? true :
                 filterStatus === 'active' ? pair.active && !pair.captured :
                     filterStatus === 'captured' ? pair.captured :
-                        filterStatus === 'mw' ? pair.mostWanted : true;
+                        filterStatus === 'ck' ? pair.celkereszt : true;
 
         return matchesSearch && matchesStatus;
     }).sort((a, b) => {
@@ -94,8 +94,8 @@ export default function PairsManagement({
                 const statusA = a.captured ? 0 : (a.active ? 2 : 1);
                 const statusB = b.captured ? 0 : (b.active ? 2 : 1);
                 return (statusA - statusB) * direction;
-            case 'mw':
-                return (Number(a.mostWanted) - Number(b.mostWanted)) * direction;
+            case 'ck':
+                return (Number(a.celkereszt) - Number(b.celkereszt)) * direction;
             case 'location':
                 const timeA = a.lastPosition ? new Date(a.lastPosition.timestamp).getTime() : 0;
                 const timeB = b.lastPosition ? new Date(b.lastPosition.timestamp).getTime() : 0;
@@ -128,7 +128,7 @@ export default function PairsManagement({
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="mw-card relative overflow-hidden group">
+                <div className="ck-card relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <FiUsers className="w-20 h-20 text-blue-400" />
                     </div>
@@ -141,7 +141,7 @@ export default function PairsManagement({
                         </div>
                     </div>
                 </div>
-                <div className="mw-card relative overflow-hidden group">
+                <div className="ck-card relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <FiTarget className="w-20 h-20 text-orange-400" />
                     </div>
@@ -155,9 +155,9 @@ export default function PairsManagement({
                 </div>
             </div>
 
-            <div className="mw-card p-4 sm:p-5 space-y-4">
+            <div className="ck-card p-4 sm:p-5 space-y-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
-                    <MwTableSearchInput
+                    <CkTableSearchInput
                         value={searchTerm}
                         onChange={setSearchTerm}
                         placeholder="Keresés név vagy sorszám alapján…"
@@ -168,16 +168,16 @@ export default function PairsManagement({
                             { id: 'all', label: 'Összes', icon: null },
                             { id: 'active', label: 'Aktív', icon: FiCheckCircle },
                             { id: 'captured', label: 'Elfogva', icon: FaHandcuffs },
-                            { id: 'mw', label: 'Most Wanted', icon: FiShield },
+                            { id: 'ck', label: 'Célkereszt', icon: FiShield },
                         ].map((filter) => (
                             <button
                                 key={filter.id}
                                 type="button"
-                                onClick={() => setFilterStatus(filter.id as 'all' | 'active' | 'captured' | 'mw')}
+                                onClick={() => setFilterStatus(filter.id as 'all' | 'active' | 'captured' | 'ck')}
                                 onMouseUp={(e) => e.currentTarget.blur()}
-                                className={`mw-btn justify-center md:w-auto ${filterStatus === filter.id
-                                    ? 'mw-btn-primary'
-                                    : 'mw-btn-secondary text-gray-400 hover:text-white'
+                                className={`ck-btn justify-center md:w-auto ${filterStatus === filter.id
+                                    ? 'ck-btn-primary'
+                                    : 'ck-btn-secondary text-gray-400 hover:text-white'
                                     }`}
                             >
                                 {filter.icon && <filter.icon className="w-4 h-4 shrink-0" />}
@@ -234,11 +234,11 @@ export default function PairsManagement({
                             </AdminTableSortTh>
                             <AdminTableSortTh
                                 align="center"
-                                onSort={() => handleSort('mw')}
-                                active={sortConfig.key === 'mw'}
+                                onSort={() => handleSort('ck')}
+                                active={sortConfig.key === 'ck'}
                                 direction={sortConfig.direction}
                             >
-                                MW
+                                CK
                             </AdminTableSortTh>
                             <AdminTableSortTh
                                 align="center"
@@ -267,7 +267,7 @@ export default function PairsManagement({
                                                 onClick={() => onPairSelect && onPairSelect(pair)}
                                                 className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] text-white transition-colors duration-300 ${pair.captured
                                                 ? 'border-red-600 bg-red-600 hover:bg-red-500'
-                                                : pair.mostWanted
+                                                : pair.celkereszt
                                                 ? 'border-orange-500 bg-orange-500 hover:bg-orange-400'
                                                 : 'border-orange-500 bg-[#2a2a2a] hover:bg-[#383838]'
                                                 }`}
@@ -324,17 +324,17 @@ export default function PairsManagement({
                                             <button
                                                 onClick={(e) => {
                                                     e.currentTarget.blur();
-                                                    void handleMw(pair.id);
+                                                    void handleCk(pair.id);
                                                 }}
-                                                className={`relative block mx-auto -translate-x-1.5 p-2 rounded-xl transition-all duration-300 outline-none border-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 bg-transparent ${pair.mostWanted
+                                                className={`relative block mx-auto -translate-x-1.5 p-2 rounded-xl transition-all duration-300 outline-none border-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 bg-transparent ${pair.celkereszt
                                                     ? 'text-orange-400'
                                                     : 'text-gray-600 hover:text-gray-400 hover:bg-white/5 opacity-60 hover:opacity-100'
                                                     }`}
                                                 style={{ WebkitTapHighlightColor: 'transparent', outline: 'none', boxShadow: 'none' }}
-                                                title="Most Wanted státusz váltása"
+                                                title="Célkereszt státusz váltása"
                                             >
-                                                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 transition-opacity duration-300 pointer-events-none bg-orange-500/20 blur-md rounded-full ${pair.mostWanted ? 'opacity-100' : 'opacity-0'}`} />
-                                                <FiShield className={`relative z-10 w-5 h-5 mx-auto transition-colors duration-300 ${pair.mostWanted ? 'fill-current' : ''}`} />
+                                                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 transition-opacity duration-300 pointer-events-none bg-orange-500/20 blur-md rounded-full ${pair.celkereszt ? 'opacity-100' : 'opacity-0'}`} />
+                                                <FiShield className={`relative z-10 w-5 h-5 mx-auto transition-colors duration-300 ${pair.celkereszt ? 'fill-current' : ''}`} />
                                             </button>
                                         </td>
                                         <td className="text-center py-4">

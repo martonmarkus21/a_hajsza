@@ -7,13 +7,13 @@ import { WebSocketModule } from '../websocket/websocket.module';
 import { GameDaysModule } from '../game-days/game-days.module';
 import { FcmModule } from '../fcm/fcm.module';
 import { Pair } from '../entities/pair.entity';
-import { MwFlag } from '../entities/mw-flag.entity';
+import { CkFlag } from '../entities/ck-flag.entity';
 import { RuleViolationsController } from './rule-violations.controller';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RuleViolation, GeofenceCompletion, Pair, MwFlag]),
+    TypeOrmModule.forFeature([RuleViolation, GeofenceCompletion, Pair, CkFlag]),
     WebSocketModule,
     GameDaysModule,
     FcmModule,

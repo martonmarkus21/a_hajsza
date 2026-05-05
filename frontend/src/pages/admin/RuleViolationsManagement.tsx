@@ -8,7 +8,7 @@ import {
   FiTrash2,
 } from 'react-icons/fi';
 import { DateTimeStackCell } from '../../utils/formatDateTimeBudapest';
-import MwTableSearchInput from '../../components/MwTableSearchInput';
+import CkTableSearchInput from '../../components/CkTableSearchInput';
 import {
   AdminDataTableCard,
   AdminTableEmptyRow,
@@ -21,7 +21,7 @@ import {
 } from '../../components/admin/AdminTableKit';
 import { useSocket } from '../../hooks/useSocket';
 import ConfirmationModal from '../../components/ConfirmationModal';
-import MwDropdownSelect, { type MwDropdownOption } from '../../components/MwDropdownSelect';
+import CkDropdownSelect, { type CkDropdownOption } from '../../components/CkDropdownSelect';
 import { useNotification } from '../../contexts/NotificationContext';
 import type { Pair } from '../../types';
 import { apiUrl } from '@/config/env';
@@ -31,7 +31,7 @@ export interface AdminRuleViolationRow {
   pairId: number;
   assignedNumber: number | null;
   pairName: string | null;
-  pairMostWanted?: boolean;
+  pairCelkereszt?: boolean;
   violationType: string;
   description: string | null;
   createdAt: string | null;
@@ -68,7 +68,7 @@ const STATUS_FILTERS: {
   { id: 'resolved', label: 'Lezárt', icon: FiCheckCircle },
 ];
 
-const TYPE_FILTER_OPTIONS: MwDropdownOption[] = [
+const TYPE_FILTER_OPTIONS: CkDropdownOption[] = [
   { value: 'all', label: 'Minden típus' },
   { value: 'game_area_exit', label: TYPE_LABELS.game_area_exit },
   { value: 'vehicle_time_exceeded', label: TYPE_LABELS.vehicle_time_exceeded },
@@ -87,7 +87,7 @@ interface RuleViolationsManagementProps {
   onOpenGameAreaDetails: (row: AdminRuleViolationRow) => void;
   onSelectPairById: (pairId: number) => void;
   onActiveViolationsNeedRefresh?: () => void | Promise<void>;
-  /** Élő Most Wanted státusz a párok listájából (friss lista), a szám-kör színezéséhez */
+  /** Élő Celkereszt státusz a párok listájából (friss lista), a szám-kör színezéséhez */
   pairs?: Pair[];
 }
 
@@ -315,10 +315,10 @@ export default function RuleViolationsManagement({
     }
   };
 
-  const mostWantedByPairId = useMemo(() => {
+  const celkeresztByPairId = useMemo(() => {
     const m = new Map<number, boolean>();
     for (const p of pairs ?? []) {
-      m.set(p.id, !!p.mostWanted);
+      m.set(p.id, !!p.celkereszt);
     }
     return m;
   }, [pairs]);
@@ -337,7 +337,7 @@ export default function RuleViolationsManagement({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="mw-card relative overflow-hidden group">
+        <div className="ck-card relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <FiAlertTriangle className="w-20 h-20 text-red-400" />
           </div>
@@ -352,7 +352,7 @@ export default function RuleViolationsManagement({
             </div>
           </div>
         </div>
-        <div className="mw-card relative overflow-hidden group">
+        <div className="ck-card relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <FiInfo className="w-20 h-20 text-orange-400" />
           </div>
@@ -367,9 +367,9 @@ export default function RuleViolationsManagement({
         </div>
       </div>
 
-      <div className="mw-card p-4 sm:p-5 space-y-4">
+      <div className="ck-card p-4 sm:p-5 space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
-          <MwTableSearchInput
+          <CkTableSearchInput
             value={searchInput}
             onChange={setSearchInput}
             placeholder="Keresés pár, típus vagy leírás szerint…"
@@ -383,14 +383,14 @@ export default function RuleViolationsManagement({
                 type="button"
                 onClick={() => setStatusFilter(filter.id)}
                 onMouseUp={(e) => e.currentTarget.blur()}
-                className={`mw-btn justify-center inline-flex items-center gap-2 flex-1 min-w-[5.5rem] sm:flex-initial sm:min-w-0 sm:w-auto ${statusFilter === filter.id ? 'mw-btn-primary' : 'mw-btn-secondary text-gray-400 hover:text-white'}`}
+                className={`ck-btn justify-center inline-flex items-center gap-2 flex-1 min-w-[5.5rem] sm:flex-initial sm:min-w-0 sm:w-auto ${statusFilter === filter.id ? 'ck-btn-primary' : 'ck-btn-secondary text-gray-400 hover:text-white'}`}
               >
                 {filter.icon && <filter.icon className="w-4 h-4 shrink-0" />}
                 {filter.label}
               </button>
             ))}
 
-            <MwDropdownSelect
+            <CkDropdownSelect
               value={typeFilter}
               onChange={setTypeFilter}
               ariaLabel="Típus szűrő"
@@ -454,16 +454,16 @@ export default function RuleViolationsManagement({
                   rows.map((row) => {
                     const activeGameAreaRow =
                       !row.resolved && row.violationType === 'game_area_exit';
-                    const livePairMw = mostWantedByPairId.has(row.pairId)
-                      ? !!mostWantedByPairId.get(row.pairId)
-                      : !!row.pairMostWanted;
+                    const livePairCk = celkeresztByPairId.has(row.pairId)
+                      ? !!celkeresztByPairId.get(row.pairId)
+                      : !!row.pairCelkereszt;
                     const livePairCaptured = capturedByPairId.has(row.pairId)
                       ? !!capturedByPairId.get(row.pairId)
                       : false;
                     return (
                   <tr
                     key={row.id}
-                    className={`group transition-colors ${activeGameAreaRow ? 'mw-table-row-active-violation' : 'hover:bg-white/5'}`}
+                    className={`group transition-colors ${activeGameAreaRow ? 'ck-table-row-active-violation' : 'hover:bg-white/5'}`}
                   >
                     <td className="text-center py-4 align-middle text-sm font-mono text-gray-400">{row.id}</td>
                     <td className="text-center py-4 align-middle">
@@ -474,7 +474,7 @@ export default function RuleViolationsManagement({
                         className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm mx-auto shadow-sm cursor-pointer border-[3px] text-white transition-colors duration-300 ${
                           livePairCaptured
                             ? 'border-red-600 bg-red-600 hover:bg-red-500'
-                            : livePairMw
+                            : livePairCk
                               ? 'border-orange-500 bg-orange-500 hover:bg-orange-400'
                               : 'border-orange-500 bg-[#2a2a2a] hover:bg-[#383838]'
                         }`}

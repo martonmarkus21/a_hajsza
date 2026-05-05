@@ -11,7 +11,7 @@ import type { Request } from 'express';
 import { GameSettings } from '../entities/game-settings.entity';
 
 /** Mobil kliens fejléc; az Android app minden releváns kérésnél küldi, ha a szerver megköveteli. */
-export const MOBILE_ENROLLMENT_HEADER = 'x-mw-enrollment-secret';
+export const MOBILE_ENROLLMENT_HEADER = 'x-ck-enrollment-secret';
 
 export type AdminMobileConnectionDto = {
   apiBaseUrl: string;
@@ -36,10 +36,10 @@ export class MobileEnrollmentService {
   }
 
   private async ensureGameSettingsRow(): Promise<GameSettings> {
-    let row = await this.gameSettingsRepository.findOne({
-      where: {},
+    const rows = await this.gameSettingsRepository.find({
       order: { id: 'ASC' },
     });
+    let row = rows[0];
     if (!row) {
       row = this.gameSettingsRepository.create({
         gameEnabled: false,
@@ -49,6 +49,23 @@ export class MobileEnrollmentService {
         mobileEnrollmentSecret: null,
       });
       row = await this.gameSettingsRepository.save(row);
+      return row;
+    }
+
+    // Self-heal: a tábla singletonként működik, ezért duplikátum esetén
+    // az első sort tartjuk meg, és (ha kell) átemeljük a meglévő mobil secretet.
+    if (rows.length > 1) {
+      if (!row.mobileEnrollmentSecret?.trim()) {
+        const nonEmptySecretRow = rows.find((r) => r.mobileEnrollmentSecret?.trim());
+        if (nonEmptySecretRow?.mobileEnrollmentSecret?.trim()) {
+          row.mobileEnrollmentSecret = nonEmptySecretRow.mobileEnrollmentSecret.trim();
+          row = await this.gameSettingsRepository.save(row);
+        }
+      }
+      const duplicateIds = rows.slice(1).map((r) => r.id);
+      if (duplicateIds.length > 0) {
+        await this.gameSettingsRepository.delete(duplicateIds);
+      }
     }
     return row;
   }
@@ -79,7 +96,9 @@ export class MobileEnrollmentService {
   }
 
   extractProvidedSecret(headers: Record<string, string | string[] | undefined>): string {
-    const raw = headers[MOBILE_ENROLLMENT_HEADER] ?? headers['X-Mw-Enrollment-Secret'];
+    const raw =
+      headers[MOBILE_ENROLLMENT_HEADER] ??
+      headers['x-ck-enrollment-secret'];
     if (Array.isArray(raw)) return String(raw[0] ?? '').trim();
     return String(raw ?? '').trim();
   }

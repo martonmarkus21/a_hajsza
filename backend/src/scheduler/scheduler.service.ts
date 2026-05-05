@@ -132,10 +132,10 @@ export class SchedulerService {
 
   @Cron('* * * * *', GAME_CRON_OPTIONS)
   async endOfDayStayWindowTick() {
-    let settings = await this.gameSettingsRepository.findOne({
-      where: {},
+    const rows = await this.gameSettingsRepository.find({
       order: { id: 'ASC' },
     });
+    let settings = rows[0];
     if (!settings) {
       settings = this.gameSettingsRepository.create({
         gameEnabled: false,
@@ -144,6 +144,11 @@ export class SchedulerService {
         stayRadiusKm: 5,
       });
       await this.gameSettingsRepository.save(settings);
+    } else if (rows.length > 1) {
+      const duplicateIds = rows.slice(1).map((r) => r.id);
+      if (duplicateIds.length > 0) {
+        await this.gameSettingsRepository.delete(duplicateIds);
+      }
     }
 
     if (!settings.stayRuleEnabled || !settings.gameEnabled) {
@@ -272,7 +277,7 @@ export class SchedulerService {
       order: { id: 'ASC' },
     });
 
-    const title = 'Most Wanted';
+    const title = 'Célkereszt';
     const bodyEndOnly = 'A mai játéknap véget ért.';
 
     await Promise.all(

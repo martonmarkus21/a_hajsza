@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 @Injectable()
 export class AppService {
   getHello(): string {
-    return 'Most Wanted - A hajsza API';
+    return 'Célkereszt - A hajsza API';
   }
 }
 

@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { RedisConnectionService } from './redis-connection.service';
 import { PositionSnapshot } from '../positions/position-snapshot';
 
-const LIVE_KEY_PREFIX = 'mw:live:position:';
-const STAY_ANCHOR_PREFIX = 'mw:stay:anchor:';
+const LIVE_KEY_PREFIX = 'ck:live:position:';
+const STAY_ANCHOR_PREFIX = 'ck:stay:anchor:';
 /** Longer than the 30-minute "active device" window so keys stay while pairs are online */
 const LIVE_TTL_SECONDS = 45 * 60;
 /** Lehet több nap a két ütemezett játéknap között — a maradást ugyanahhoz a naphoz kötjük (`anchorYmd`) addig */

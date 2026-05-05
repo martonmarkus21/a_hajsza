@@ -8,7 +8,7 @@ html {
   width: 100%;
 }
 
-/* Modern Most Wanted Design */
+/* Modern Celkereszt Design */
 /* Custom Scrollbar For Webkit - Global Unified Theme */
 ::-webkit-scrollbar {
   width: 6px;
@@ -41,9 +41,9 @@ html {
   height: 6px;
 }
 
-/* Modern Most Wanted Design System */
+/* Modern Celkereszt Design System */
 
-.mw-card {
+.ck-card {
   background: rgba(18, 18, 18, 0.6);
   /* Slightly more transparent for depth */
   backdrop-filter: blur(24px);
@@ -58,7 +58,7 @@ html {
   overflow: hidden;
 }
 
-.mw-card::before {
+.ck-card::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -66,12 +66,12 @@ html {
   pointer-events: none;
 }
 
-.mw-card:hover {
+.ck-card:hover {
   border-color: rgba(255, 255, 255, 0.15);
   box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.5);
 }
 
-.mw-input {
+.ck-input {
   width: 100%;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -82,24 +82,24 @@ html {
   transition: all 0.2s ease;
 }
 
-.mw-input::placeholder {
+.ck-input::placeholder {
   color: rgba(255, 255, 255, 0.3);
 }
 
-.mw-input:focus {
+.ck-input:focus {
   outline: none;
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(243, 111, 38, 0.5);
   box-shadow: 0 0 0 4px rgba(243, 111, 38, 0.1);
 }
 
-.mw-table {
+.ck-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
 }
 
-.mw-table th {
+.ck-table th {
   text-align: left;
   padding: 1.25rem 1.5rem;
   color: #9ca3af;
@@ -111,30 +111,30 @@ html {
   white-space: nowrap;
 }
 
-.mw-table td {
+.ck-table td {
   padding: 1.25rem 1.5rem;
   color: white;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   transition: background 0.2s;
 }
 
-.mw-table tr:last-child td {
+.ck-table tr:last-child td {
   border-bottom: none;
 }
 
-.mw-table tr:hover td {
+.ck-table tr:hover td {
   background: rgba(255, 255, 255, 0.03);
 }
 
 /* Felülírja a fenti tr:hover td-t: aktív játékterület-szabályszegés sor (a cellák háttérje külön kell, különben a globális hover szürke marad) */
-.mw-table tr.mw-table-row-active-violation td {
+.ck-table tr.ck-table-row-active-violation td {
   background: rgba(239, 68, 68, 0.06);
 }
-.mw-table tr.mw-table-row-active-violation:hover td {
+.ck-table tr.ck-table-row-active-violation:hover td {
   background: rgba(239, 68, 68, 0.11);
 }
 
-.mw-badge {
+.ck-badge {
   padding: 0.25rem 0.5rem;
   border-radius: 0.5rem;
   font-size: 0.75rem;
@@ -145,27 +145,27 @@ html {
   border: none;
 }
 
-.mw-badge.active, .mw-badge.online, .mw-badge.success {
+.ck-badge.active, .ck-badge.online, .ck-badge.success {
   background: rgba(34, 197, 94, 0.1);
   color: #22c55e;
 }
 
-.mw-badge.info {
+.ck-badge.info {
   background: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
 }
 
-.mw-badge.inactive, .mw-badge.missing, .mw-badge.error, .mw-badge.captured {
+.ck-badge.inactive, .ck-badge.missing, .ck-badge.error, .ck-badge.captured {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
 }
 
-.mw-badge.warning, .mw-badge.mw {
+.ck-badge.warning, .ck-badge.ck {
   background: rgba(249, 115, 22, 0.1);
   color: #f97316;
 }
 
-.mw-badge.offline, .mw-badge.neutral {
+.ck-badge.offline, .ck-badge.neutral {
   background: rgba(107, 114, 128, 0.1);
   color: #9ca3af;
 }
@@ -642,20 +642,20 @@ html {
 }
 
 /* Toggle Switch */
-.mw-toggle {
+.ck-toggle {
   position: relative;
   width: 52px;
   height: 28px;
   cursor: pointer;
 }
 
-.mw-toggle input {
+.ck-toggle input {
   opacity: 0;
   width: 0;
   height: 0;
 }
 
-.mw-toggle-slider {
+.ck-toggle-slider {
   position: absolute;
   inset: 0;
   background: rgba(239, 68, 68, 0.3);
@@ -664,7 +664,7 @@ html {
   transition: all 0.3s ease;
 }
 
-.mw-toggle-slider::before {
+.ck-toggle-slider::before {
   content: '';
   position: absolute;
   left: 3px;
@@ -678,31 +678,31 @@ html {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.mw-toggle input:checked+.mw-toggle-slider {
+.ck-toggle input:checked+.ck-toggle-slider {
   background: rgba(16, 185, 129, 0.3);
   border-color: rgba(16, 185, 129, 0.5);
 }
 
-.mw-toggle input:checked+.mw-toggle-slider::before {
+.ck-toggle input:checked+.ck-toggle-slider::before {
   left: calc(100% - 23px);
   background: #10b981;
 }
 
 /* Neutral Toggle Switch (Gray when inactive) */
-.mw-toggle-neutral {
+.ck-toggle-neutral {
   position: relative;
   width: 52px;
   height: 28px;
   cursor: pointer;
 }
 
-.mw-toggle-neutral input {
+.ck-toggle-neutral input {
   opacity: 0;
   width: 0;
   height: 0;
 }
 
-.mw-toggle-neutral-slider {
+.ck-toggle-neutral-slider {
   position: absolute;
   inset: 0;
   background: rgba(255, 255, 255, 0.1);
@@ -711,7 +711,7 @@ html {
   transition: all 0.3s ease;
 }
 
-.mw-toggle-neutral-slider::before {
+.ck-toggle-neutral-slider::before {
   content: '';
   position: absolute;
   left: 3px;
@@ -726,23 +726,23 @@ html {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.mw-toggle-neutral input:checked+.mw-toggle-neutral-slider {
+.ck-toggle-neutral input:checked+.ck-toggle-neutral-slider {
   background: rgba(16, 185, 129, 0.3);
   border-color: rgba(16, 185, 129, 0.5);
 }
 
-.mw-toggle-neutral input:checked+.mw-toggle-neutral-slider::before {
+.ck-toggle-neutral input:checked+.ck-toggle-neutral-slider::before {
   left: calc(100% - 23px);
   background: #10b981;
 }
 
 /* Role Selector */
-.mw-role-selector {
+.ck-role-selector {
   display: flex;
   gap: 0.5rem;
 }
 
-.mw-role-btn {
+.ck-role-btn {
   flex: 1;
   padding: 0.75rem 1rem;
   border-radius: 8px;
@@ -755,19 +755,19 @@ html {
   cursor: pointer;
 }
 
-.mw-role-btn:hover {
+.ck-role-btn:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.mw-role-btn.active {
+.ck-role-btn.active {
   background: linear-gradient(135deg, rgba(243, 111, 38, 0.2), rgba(243, 111, 38, 0.1));
   border-color: #f36f26;
   color: #f36f26;
   box-shadow: 0 0 12px rgba(243, 111, 38, 0.2);
 }
 
-.mw-role-btn.officer.active {
+.ck-role-btn.officer.active {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1));
   border-color: #3b82f6;
   color: #3b82f6;
@@ -775,17 +775,17 @@ html {
 }
 
 /* Modal Sections */
-.mw-modal-section {
+.ck-modal-section {
   padding: 1rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.mw-modal-section:last-child {
+.ck-modal-section:last-child {
   border-bottom: none;
   padding-bottom: 0;
 }
 
-.mw-modal-section-title {
+.ck-modal-section-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -881,7 +881,7 @@ body {
 }
 
 /* Compact saved-position game-area popup sizing */
-.mw-ga-popup .leaflet-popup-content {
+.ck-ga-popup .leaflet-popup-content {
   min-width: 0 !important;
   width: auto !important;
 }
@@ -1219,7 +1219,7 @@ body {
 }
 
 /* Modern Button System matching Sidebar */
-.mw-btn {
+.ck-btn {
   padding: 0.5rem 1rem;
   border-radius: 12px;
   font-weight: 600;
@@ -1233,48 +1233,48 @@ body {
   overflow: hidden;
 }
 
-.mw-btn-primary {
+.ck-btn-primary {
   background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
   color: white;
   box-shadow: none;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.mw-btn-primary:hover {
+.ck-btn-primary:hover {
   background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
   box-shadow: none;
 }
 
-.mw-btn-primary:active {
+.ck-btn-primary:active {
   transform: none;
 }
 
-.mw-btn-secondary {
+.ck-btn-secondary {
   background: rgba(255, 255, 255, 0.05);
   color: #e5e7eb;
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(8px);
 }
 
-.mw-btn-secondary:hover {
+.ck-btn-secondary:hover {
   background: rgba(255, 255, 255, 0.1);
   color: white;
   border-color: rgba(255, 255, 255, 0.2);
 }
 
-.mw-btn-danger {
+.ck-btn-danger {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
-.mw-btn-danger:hover {
+.ck-btn-danger:hover {
   background: rgba(239, 68, 68, 0.2);
   border-color: rgba(239, 68, 68, 0.4);
   color: #f87171;
 }
 
-.mw-btn-icon {
+.ck-btn-icon {
   width: 40px;
   height: 40px;
   padding: 0;
@@ -1286,7 +1286,7 @@ body {
 }
 
 /* Glass Container Helper */
-.mw-glass-panel {
+.ck-glass-panel {
   background: rgba(18, 18, 18, 0.6);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1294,15 +1294,15 @@ body {
 }
 
 /* Premium range slider — narancs, letisztult, sötét témához */
-.mw-range-slider {
+.ck-range-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   height: 10px;
   background: linear-gradient(to right,
-    var(--mw-range-color, #f97316) 0%,
-    var(--mw-range-color, #f97316) var(--mw-range-progress, 0%),
-    rgba(255, 255, 255, 0.08) var(--mw-range-progress, 0%),
+    var(--ck-range-color, #f97316) 0%,
+    var(--ck-range-color, #f97316) var(--ck-range-progress, 0%),
+    rgba(255, 255, 255, 0.08) var(--ck-range-progress, 0%),
     rgba(255, 255, 255, 0.08) 100%);
   border-radius: 999px;
   outline: none;
@@ -1310,66 +1310,66 @@ body {
   cursor: pointer;
 }
 
-.mw-range-slider::-webkit-slider-runnable-track {
+.ck-range-slider::-webkit-slider-runnable-track {
   height: 10px;
   border-radius: 999px;
   background: transparent;
 }
 
-.mw-range-slider::-moz-range-track {
+.ck-range-slider::-moz-range-track {
   height: 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
 }
 
-.mw-range-slider::-moz-range-progress {
+.ck-range-slider::-moz-range-progress {
   height: 10px;
   border-radius: 999px;
-  background: var(--mw-range-color, #f97316);
+  background: var(--ck-range-color, #f97316);
 }
 
-.mw-range-slider::-webkit-slider-thumb {
+.ck-range-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 22px;
   height: 22px;
   border-radius: 50%;
   background: #fff;
-  border: 3px solid var(--mw-range-color, #f97316);
+  border: 3px solid var(--ck-range-color, #f97316);
   margin-top: -6px;
   cursor: pointer;
   transition: transform 0.15s ease;
 }
 
-.mw-range-slider::-webkit-slider-thumb:hover {
+.ck-range-slider::-webkit-slider-thumb:hover {
   transform: scale(1.08);
 }
 
-.mw-range-slider:active::-webkit-slider-thumb {
+.ck-range-slider:active::-webkit-slider-thumb {
   cursor: pointer;
   transform: scale(1.12);
 }
 
-.mw-range-slider::-moz-range-thumb {
+.ck-range-slider::-moz-range-thumb {
   width: 22px;
   height: 22px;
   border-radius: 50%;
   background: #fff;
-  border: 3px solid var(--mw-range-color, #f97316);
+  border: 3px solid var(--ck-range-color, #f97316);
   cursor: pointer;
   transition: transform 0.15s ease;
 }
 
-.mw-range-slider::-moz-range-thumb:hover {
+.ck-range-slider::-moz-range-thumb:hover {
   transform: scale(1.08);
 }
 
-.mw-range-slider--emerald {
-  --mw-range-color: #10b981;
+.ck-range-slider--emerald {
+  --ck-range-color: #10b981;
 }
 
 /* Soft edge-fade for horizontal scrollers (no ugly solid bands) */
-.mw-edge-fade-x {
+.ck-edge-fade-x {
   -webkit-mask-image: linear-gradient(
     to right,
     transparent 0,

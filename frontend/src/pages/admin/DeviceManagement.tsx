@@ -17,7 +17,7 @@ import {
     FiAlertTriangle,
 } from 'react-icons/fi';
 import { DateTimeStackCell } from '../../utils/formatDateTimeBudapest';
-import MwTableSearchInput from '../../components/MwTableSearchInput';
+import CkTableSearchInput from '../../components/CkTableSearchInput';
 import {
     AdminDataTableCard,
     AdminTableEmptyRow,
@@ -31,7 +31,7 @@ import { DEFAULT_ADMIN_TABLE_PAGE_SIZE, useAdminListPagination } from '../../hoo
 import Modal from '../../components/Modal';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import { apiUrl } from '@/config/env';
-import { encodeMwMobileQrPayload } from '../../utils/mobileConnectionQr';
+import { encodeCkMobileQrPayload } from '../../utils/mobileConnectionQr';
 import { useNotification } from '../../contexts/NotificationContext';
 import { extractApiErrorMessage } from '../../utils/extractApiErrorMessage';
 
@@ -102,7 +102,7 @@ export default function DeviceManagement({
         },
     ) => {
         setAndroidConn(data);
-        const qrText = encodeMwMobileQrPayload(data.apiBaseUrl, data.enrollmentSecret || '');
+        const qrText = encodeCkMobileQrPayload(data.apiBaseUrl, data.enrollmentSecret || '');
         const url = await QRCode.toDataURL(qrText, {
             width: 176,
             margin: 1,
@@ -404,7 +404,7 @@ export default function DeviceManagement({
                             type="button"
                             onClick={() => setShowRegenerateSecretConfirm(true)}
                             disabled={androidConnLoading || androidConnRegenerating}
-                            className="mw-btn mw-btn-secondary flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-bold disabled:opacity-50"
+                            className="ck-btn ck-btn-secondary flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-bold disabled:opacity-50"
                         >
                             <FiRefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${androidConnRegenerating ? 'animate-spin' : ''}`} />
                             Új titok generálása
@@ -434,7 +434,7 @@ export default function DeviceManagement({
             />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="mw-card relative overflow-hidden group">
+                <div className="ck-card relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <FiSmartphone className="w-20 h-20 text-violet-400" />
                     </div>
@@ -444,7 +444,7 @@ export default function DeviceManagement({
                         <div className="text-gray-500 text-sm leading-relaxed">Összes felvett telefon vagy eszköz-ID a rendszerben.</div>
                     </div>
                 </div>
-                <div className="mw-card relative overflow-hidden group">
+                <div className="ck-card relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                         <FiActivity className="w-20 h-20 text-emerald-400" />
                     </div>
@@ -456,9 +456,9 @@ export default function DeviceManagement({
                 </div>
             </div>
 
-            <div className="mw-card p-4 sm:p-5 space-y-4">
+            <div className="ck-card p-4 sm:p-5 space-y-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
-                    <MwTableSearchInput
+                    <CkTableSearchInput
                         value={searchTerm}
                         onChange={setSearchTerm}
                         placeholder="Keresés IMEI vagy pár alapján…"
@@ -475,9 +475,9 @@ export default function DeviceManagement({
                                 type="button"
                                 onClick={() => setFilterStatus(filter.id as 'all' | 'online' | 'offline')}
                                 onMouseUp={(e) => e.currentTarget.blur()}
-                                className={`mw-btn flex-1 min-w-[5.5rem] md:flex-none md:min-w-0 ${filterStatus === filter.id
-                                    ? 'mw-btn-primary'
-                                    : 'mw-btn-secondary text-gray-400 hover:text-white'
+                                className={`ck-btn flex-1 min-w-[5.5rem] md:flex-none md:min-w-0 ${filterStatus === filter.id
+                                    ? 'ck-btn-primary'
+                                    : 'ck-btn-secondary text-gray-400 hover:text-white'
                                     }`}
                             >
                                 {filter.icon && <filter.icon className="w-4 h-4 shrink-0" />}
@@ -498,7 +498,7 @@ export default function DeviceManagement({
                         type="button"
                         onClick={() => setShowAndroidConnModal(true)}
                         onMouseUp={(e) => e.currentTarget.blur()}
-                        className="mw-btn mw-btn-primary shrink-0 flex items-center gap-2 px-4 py-2.5 text-sm font-bold"
+                        className="ck-btn ck-btn-primary shrink-0 flex items-center gap-2 px-4 py-2.5 text-sm font-bold"
                         title="Android kapcsolódási QR és titok"
                     >
                         <FiPlus className="w-4 h-4 shrink-0" />
@@ -578,11 +578,11 @@ export default function DeviceManagement({
                                     const hasPair = device.pairId || device.pairNumber;
                                     const pairViolation =
                                         device.pairId && activeGameAreaExitViolations?.[device.pairId];
-                                    const pairForMw =
+                                    const pairForCk =
                                         pairsList.find((p: { id: number }) => p.id === device.pairId) ||
                                         pairsList.find((p: { name: string }) => p.name === device.pairName);
-                                    const pairMostWanted = !!pairForMw?.mostWanted;
-                                    const pairCaptured = !!pairForMw?.captured;
+                                    const pairCelkereszt = !!pairForCk?.celkereszt;
+                                    const pairCaptured = !!pairForCk?.captured;
 
                                     return (
                                         <tr key={device.id} className="group hover:bg-white/5 transition-colors">
@@ -610,7 +610,7 @@ export default function DeviceManagement({
                                                             className={`w-8 h-8 flex-shrink-0 cursor-pointer rounded-full border-[3px] flex items-center justify-center font-bold text-white text-xs outline-none focus:outline-none transition-colors duration-300 ${
                                                                 pairCaptured
                                                                     ? 'border-red-600 bg-red-600 hover:bg-red-500'
-                                                                    : pairMostWanted
+                                                                    : pairCelkereszt
                                                                         ? 'border-orange-500 bg-orange-500 hover:bg-orange-400'
                                                                         : 'border-orange-500 bg-[#2a2a2a] hover:bg-[#383838]'
                                                             }`}

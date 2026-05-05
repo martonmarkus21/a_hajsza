@@ -10,7 +10,7 @@ import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { GameDaysService } from '../game-days/game-days.service';
 import { FcmService } from '../fcm/fcm.service';
 import { Pair } from '../entities/pair.entity';
-import { MwFlag } from '../entities/mw-flag.entity';
+import { CkFlag } from '../entities/ck-flag.entity';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
 import { RedisPositionService } from '../redis/redis-position.service';
@@ -27,8 +27,8 @@ export class RuleViolationsService {
     private geofenceCompletionRepository: Repository<GeofenceCompletion>,
     @InjectRepository(Pair)
     private pairRepository: Repository<Pair>,
-    @InjectRepository(MwFlag)
-    private mwFlagRepository: Repository<MwFlag>,
+    @InjectRepository(CkFlag)
+    private ckFlagRepository: Repository<CkFlag>,
     private webSocketGateway: WebSocketGateway,
     private gameDaysService: GameDaysService,
     private fcmService: FcmService,
@@ -89,7 +89,7 @@ export class RuleViolationsService {
       pairId: number;
       assignedNumber: number | null;
       pairName: string | null;
-      pairMostWanted: boolean;
+      pairCelkereszt: boolean;
       violationType: string;
       description: string | null;
       createdAt: string | null;
@@ -203,11 +203,11 @@ export class RuleViolationsService {
     const pairs = pairIds.length ? await this.pairRepository.findBy({ id: In(pairIds) }) : [];
     const pairMap = new Map(pairs.map((p) => [p.id, p]));
 
-    const mwRows = await this.mwFlagRepository.find({
+    const ckRows = await this.ckFlagRepository.find({
       where: { active: true },
       select: ['pairId'],
     });
-    const mwSet = new Set(mwRows.map((m) => m.pairId));
+    const ckSet = new Set(ckRows.map((m) => m.pairId));
 
     const [statsTotal, statsActive, statsResolved] = await Promise.all([
       this.ruleViolationRepository.count(),
@@ -227,7 +227,7 @@ export class RuleViolationsService {
           pairId: v.pairId,
           assignedNumber: pair?.assignedNumber ?? null,
           pairName: pair?.name ?? null,
-          pairMostWanted: mwSet.has(v.pairId),
+          pairCelkereszt: ckSet.has(v.pairId),
           violationType: v.violationType,
           description: v.description ?? null,
           createdAt: created ? created.toISOString() : null,

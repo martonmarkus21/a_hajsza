@@ -4,7 +4,7 @@ import { In, Repository } from 'typeorm';
 import { Pair } from '../entities/pair.entity';
 import { Position } from '../entities/position.entity';
 import { Capture } from '../entities/capture.entity';
-import { MwFlag } from '../entities/mw-flag.entity';
+import { CkFlag } from '../entities/ck-flag.entity';
 import { Device } from '../entities/device.entity';
 import { RuleViolation } from '../entities/rule-violation.entity';
 import { User } from '../entities/user.entity';
@@ -27,8 +27,8 @@ export class PairsService {
     private positionRepository: Repository<Position>,
     @InjectRepository(Capture)
     private captureRepository: Repository<Capture>,
-    @InjectRepository(MwFlag)
-    private mwFlagRepository: Repository<MwFlag>,
+    @InjectRepository(CkFlag)
+    private ckFlagRepository: Repository<CkFlag>,
     @InjectRepository(Device)
     private deviceRepository: Repository<Device>,
     @InjectRepository(RuleViolation)
@@ -113,11 +113,11 @@ export class PairsService {
         : [];
     const captureUserById = new Map(captureUsers.map((u) => [u.id, u]));
 
-    const mwRows = await this.mwFlagRepository.find({
+    const ckRows = await this.ckFlagRepository.find({
       where: { pairId: In(pairIds), active: true },
       select: ['pairId'],
     });
-    const mwPairIds = new Set(mwRows.map((m) => m.pairId));
+    const ckPairIds = new Set(ckRows.map((m) => m.pairId));
 
     const latestByPairId = await this.loadLatestPositionPerPair(pairIds);
 
@@ -134,7 +134,7 @@ export class PairsService {
       name: string | null;
       active: boolean;
       captured: boolean;
-      mostWanted: boolean;
+      celkereszt: boolean;
       hasActiveDevice: boolean;
       lastPosition: { lat: number; lon: number; timestamp: string } | null;
       captureNote: string | null;
@@ -229,7 +229,7 @@ export class PairsService {
         name: pair.name,
         active: hasActiveDevice,
         captured: captureByPairId.has(pair.id),
-        mostWanted: mwPairIds.has(pair.id),
+        celkereszt: ckPairIds.has(pair.id),
         hasActiveDevice,
         lastPosition: allowedLastPosition,
         captureNote:

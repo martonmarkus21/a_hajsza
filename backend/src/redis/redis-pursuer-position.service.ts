@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { RedisConnectionService } from './redis-connection.service';
 
-const KEY_PREFIX = 'mw:pursuer:pos:';
+const KEY_PREFIX = 'ck:pursuer:pos:';
 const TTL_SECONDS = 120;
 
 export type PursuerLocationPoint = {

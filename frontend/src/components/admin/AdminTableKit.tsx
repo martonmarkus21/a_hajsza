@@ -29,7 +29,7 @@ export interface AdminTableSortThProps {
   children: ReactNode;
 }
 
-/** mw-table rendezhető fejléc cella (ikon + szöveg). */
+/** ck-table rendezhető fejléc cella (ikon + szöveg). */
 export function AdminTableSortTh({
   onSort,
   active,
@@ -66,14 +66,14 @@ export interface AdminTableShellProps {
   tbodyClassName?: string;
 }
 
-/** Közös `mw-table` + thead/tbody (divide-y) szerkezet. */
+/** Közös `ck-table` + thead/tbody (divide-y) szerkezet. */
 export function AdminTableShell({
   headerRow,
   children,
   tbodyClassName = 'divide-y divide-white/5',
 }: AdminTableShellProps) {
   return (
-    <table className="mw-table">
+    <table className="ck-table">
       <thead>
         {headerRow}
       </thead>
@@ -125,7 +125,7 @@ export function AdminTablePaginationFooter({
           type="button"
           disabled={displayPage <= 1 || loading}
           onClick={onPrev}
-          className="mw-btn mw-btn-secondary inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs disabled:opacity-40"
+          className="ck-btn ck-btn-secondary inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs disabled:opacity-40"
         >
           <FiChevronLeft className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
           Előző
@@ -137,7 +137,7 @@ export function AdminTablePaginationFooter({
           type="button"
           disabled={displayPage >= totalPages || loading}
           onClick={onNext}
-          className="mw-btn mw-btn-secondary inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs disabled:opacity-40"
+          className="ck-btn ck-btn-secondary inline-flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs disabled:opacity-40"
         >
           Következő
           <FiChevronRight className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />

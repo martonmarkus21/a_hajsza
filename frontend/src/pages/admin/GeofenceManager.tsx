@@ -3,14 +3,14 @@ import { MapContainer, TileLayer, Circle, Polygon, Popup, useMapEvents, useMap, 
 import { FiPlus, FiTrash2, FiMapPin, FiGlobe, FiTarget, FiX, FiMap } from 'react-icons/fi';
 
 import L from 'leaflet';
-import mwOrangeImage from '../../assets/images/mw_orange.png';
+import ckMarkerImage from '../../assets/images/celkereszt_marker.png';
 import { useNotification } from '../../contexts/NotificationContext';
 
 import { Pair } from '../../types';
 import SmoothAnimatedMarker from '../../components/SmoothAnimatedMarker';
 import { buildPairMarkerDivHtml } from '../../utils/pairMapMarkerHtml';
-import MwTableSearchInput from '../../components/MwTableSearchInput';
-import MwSwitch from '../../components/admin/MwSwitch';
+import CkTableSearchInput from '../../components/CkTableSearchInput';
+import CkSwitch from '../../components/admin/CkSwitch';
 import { apiUrl } from '@/config/env';
 
 interface Geofence {
@@ -523,7 +523,7 @@ export default function GeofenceManager({
     return (
         <div className="flex gap-4 h-[calc(100vh-180px)] geofence-manager">
             {/* Left side - Lists - hidden when create modal is open */}
-            <div className={`flex-shrink-0 flex flex-col gap-0 overflow-hidden transition-all duration-500 ease-out mw-card p-0 ${showCreateModal ? 'w-0 opacity-0 !border-none !my-0' : 'w-[400px] opacity-100'}`}>
+            <div className={`flex-shrink-0 flex flex-col gap-0 overflow-hidden transition-all duration-500 ease-out ck-card p-0 ${showCreateModal ? 'w-0 opacity-0 !border-none !my-0' : 'w-[400px] opacity-100'}`}>
                 <div className="w-[400px] flex flex-col h-full flex-shrink-0">
                     {/* Header - Spacious (Reverted) */}
                 <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/[0.02]">
@@ -543,7 +543,7 @@ export default function GeofenceManager({
                 {/* Controls Area: Search & Tabs - Spacious (Reverted) */}
                 <div className="p-5 space-y-4 border-b border-white/5">
                     {/* Search Input */}
-                    <MwTableSearchInput
+                    <CkTableSearchInput
                         value={searchTerm}
                         onChange={setSearchTerm}
                         placeholder="Keresés..."
@@ -555,14 +555,14 @@ export default function GeofenceManager({
                     <div className="flex gap-2">
                         <button
                             onClick={() => setActiveTab('counties')}
-                            className={`mw-btn flex-1 justify-center gap-2 items-center ${activeTab === 'counties' ? 'mw-btn-primary' : 'mw-btn-secondary'}`}
+                            className={`ck-btn flex-1 justify-center gap-2 items-center ${activeTab === 'counties' ? 'ck-btn-primary' : 'ck-btn-secondary'}`}
                         >
                             <FiMap className="w-4 h-4" />
                             Vármegyék
                         </button>
                         <button
                             onClick={() => setActiveTab('custom')}
-                            className={`mw-btn flex-1 justify-center gap-2 items-center ${activeTab === 'custom' ? 'mw-btn-primary' : 'mw-btn-secondary'}`}
+                            className={`ck-btn flex-1 justify-center gap-2 items-center ${activeTab === 'custom' ? 'ck-btn-primary' : 'ck-btn-secondary'}`}
                         >
                             <FiTarget className="w-4 h-4" />
                             Egyedi zónák
@@ -603,7 +603,7 @@ export default function GeofenceManager({
                                         </div>
                                     </div>
                                 </div>
-                                <MwSwitch
+                                <CkSwitch
                                     checked={hungaryGeofence?.active || false}
                                     onChange={handleHungaryToggle}
                                     srLabel="Magyarország kapcsoló"
@@ -654,7 +654,7 @@ export default function GeofenceManager({
                                             </div>
                                         </div>
 
-                                        <MwSwitch
+                                        <CkSwitch
                                             checked={county.active}
                                             onChange={() => handleCountyToggle(county)}
                                             srLabel={county.name}
@@ -668,7 +668,7 @@ export default function GeofenceManager({
                                 <div className="px-1 mb-2">
                                     <button
                                         onClick={handleModalOpen}
-                                        className="w-full mw-btn mw-btn-secondary justify-center hover:bg-white/10 group dashed-border py-4 text-[15px] rounded-2xl"
+                                        className="w-full ck-btn ck-btn-secondary justify-center hover:bg-white/10 group dashed-border py-4 text-[15px] rounded-2xl"
                                         style={{ borderStyle: 'dashed' }}
                                     >
                                         <FiPlus className="w-5 h-5 text-orange-500 group-hover:scale-110 transition-transform" />
@@ -723,7 +723,7 @@ export default function GeofenceManager({
                                                     <FiTrash2 className="w-4 h-4" />
                                                 </button>
 
-                                                <MwSwitch
+                                                <CkSwitch
                                                     checked={geo.active}
                                                     onChange={() => handleCustomZoneToggle(geo.id, !geo.active)}
                                                     srLabel={geo.name}
@@ -740,7 +740,7 @@ export default function GeofenceManager({
             </div>
 
             {/* Right side - Map */}
-            <div className={`flex-1 mw-card p-0 overflow-hidden relative min-w-0 transition-all duration-500 ease-out ${showCreateModal ? 'mr-[380px]' : ''}`}>
+            <div className={`flex-1 ck-card p-0 overflow-hidden relative min-w-0 transition-all duration-500 ease-out ${showCreateModal ? 'mr-[380px]' : ''}`}>
                 <MapContainer
                     center={[47.1625, 19.5033]}
                     zoom={7}
@@ -996,7 +996,7 @@ export default function GeofenceManager({
                             duration={380}
                             icon={L.divIcon({
                                 className: 'custom-browser-location-marker',
-                                html: `<div style="width:${MARKER_SIZE}px;height:${MARKER_SIZE}px;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,0.4);background-image:url(${mwOrangeImage});background-size:cover;background-position:center;overflow:hidden;"></div>`,
+                                html: `<div style="width:${MARKER_SIZE}px;height:${MARKER_SIZE}px;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,0.4);background-image:url(${ckMarkerImage});background-size:cover;background-position:center;overflow:hidden;"></div>`,
                                 iconSize: [MARKER_SIZE, MARKER_SIZE],
                                 iconAnchor: [MARKER_SIZE / 2, MARKER_SIZE / 2],
                             })}
@@ -1042,7 +1042,7 @@ export default function GeofenceManager({
                                     className: 'custom-pair-marker',
                                     html: buildPairMarkerDivHtml({
                                         assignedNumber: pair.assignedNumber,
-                                        mostWanted: !!pair.mostWanted,
+                                        celkereszt: !!pair.celkereszt,
                                         hasViolation,
                                         captured: !!pair.captured,
                                         size: PAIR_ICON_SIZE,
@@ -1124,7 +1124,7 @@ export default function GeofenceManager({
                                     type="text"
                                     value={newGeofence.name}
                                     onChange={(e) => setNewGeofence({ ...newGeofence, name: e.target.value })}
-                                    className="mw-input w-full bg-black/20 focus:bg-black/40 transition-colors border-white/10"
+                                    className="ck-input w-full bg-black/20 focus:bg-black/40 transition-colors border-white/10"
                                     placeholder="Pl. Városháza környéke"
                                 />
                             </div>

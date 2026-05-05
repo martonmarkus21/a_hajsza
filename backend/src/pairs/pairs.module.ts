@@ -5,7 +5,7 @@ import { PairsService } from './pairs.service';
 import { Pair } from '../entities/pair.entity';
 import { Position } from '../entities/position.entity';
 import { Capture } from '../entities/capture.entity';
-import { MwFlag } from '../entities/mw-flag.entity';
+import { CkFlag } from '../entities/ck-flag.entity';
 import { Device } from '../entities/device.entity';
 import { RuleViolation } from '../entities/rule-violation.entity';
 import { User } from '../entities/user.entity';
@@ -15,7 +15,7 @@ import { GameRuntimeModule } from '../game-runtime/game-runtime.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Pair, Position, Capture, MwFlag, Device, RuleViolation, User]),
+    TypeOrmModule.forFeature([Pair, Position, Capture, CkFlag, Device, RuleViolation, User]),
     AuditLogsModule,
     FcmModule,
     GameRuntimeModule,

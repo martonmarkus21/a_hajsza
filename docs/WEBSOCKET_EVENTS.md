@@ -1,216 +1,171 @@
 # WebSocket események
 
-## Kapcsolat
+<p align="center">
+  <img src="../frontend/src/assets/images/celkereszt_logomark.png" alt="Célkereszt logomark" width="88" />
+</p>
 
-WebSocket namespace: `/ws/game`
+> **Szerepe:** Socket.IO események és payload-minták összefoglalója a **`backend/src/websocket/websocket.gateway.ts`** és kapcsolódó szolgáltatások alapján.
 
-Csatlakozás:
-```javascript
-const socket = io('wss://api.example.com/ws/game', {
-  auth: {
-    token: 'jwt_token_here'
-  }
+---
+
+### Tartalom
+
+1. [Kapcsolódás](#1-kapcsolódás)
+2. [Esemény irányok](#2-esemény-irányok)
+3. [Összes esemény](#3-összes-esemény-neve)
+4. [Részletes példák](#4-részletes-példák-server--kliens)
+5. [Kliens oldali irányelvek](#5-kliens-oldali-irányelvek)
+6. [Hibakeresés](#6-hibakeresés)
+7. [Kapcsolódó dokumentumok](#7-kapcsolódó-dokumentumok)
+
+---
+
+## 1. Kapcsolódás
+
+| Beállítás | Érték |
+|---|---|
+| Protokoll | Socket.IO |
+| Namespace | **`/ws/game`** |
+| Példa teljes URL (dev) | `http://localhost:3000/ws/game` |
+| Auth handshake | `auth.token` — opcionális JWT (gateway engedélyez token nélküli csatlakozást is) |
+
+Ha a webes alkalmazás más API gyökért mutat meg, a végpont: **`<API_GYÖKÉR>/ws/game`** (`frontend/src/config/env.ts`: `WS_GAME_URL`).
+
+```ts
+import { io } from "socket.io-client";
+
+const socket = io("http://localhost:3000/ws/game", {
+  auth: { token: "<jwt>" },
 });
 ```
 
-## Kliens → Szerver események
+---
 
-### `subscribe:positions`
-Előfizetés pozíció frissítésekre.
+## 2. Esemény irányok
 
-```json
-{
-  "gameId": "optional_game_id"
-}
-```
+- **Szerver → kliens:** broadcast típusú frissítések ( többség globálisan `emit`, a pozíciónál `positions` szoba ).
+- **Kliens → szerver:** **`subscribe:positions`** / **`unsubscribe:positions`** (`@SubscribeMessage`).
 
-### `unsubscribe:positions`
-Leiratkozás pozíció frissítésekről.
+A **`positions`** Socket.IO „szoba”: a pozíciós broadcastok ide mennek (**`broadcastPositionUpdate`**, **`broadcastDistanceUpdate`**).
 
-## Szerver → Kliens események
+---
+
+## 3. Összes esemény neve
+
+### Kliens → szerver (`@SubscribeMessage`)
+
+- **`subscribe:positions`**
+- **`unsubscribe:positions`**
+
+Mindkét handler a **`positions`** room-hoz ad / onnan távolít (`websocket.gateway.ts`).
+
+### Szerver → kliens (`emit`)
+
+- `positionUpdate`, `distanceUpdate`
+- `capture`, `captureReverted`
+- `ckHighlight`
+- `geofenceAlert`, `ruleViolation`
+- `pairStatusUpdate`, `gameAreaUpdate`, `gameRuntimeUpdate`
+- `globalToast`
+- `savedPositionSample`, `savedPositionsDeleted`
+
+---
+
+## 4. Részletes példák (szerver → kliens)
 
 ### `positionUpdate`
-Térképen megjelenő párkoordináta (nem minden GPS-küldésnél megy ki — lásd API spec: időzítő / szabályszegés „folyamatos” mód).
+
+Forrás: **`PositionsService`** → `broadcastPositionUpdate`.
 
 ```json
 {
-  "pairId": 1,
+  "pairId": 3,
   "lat": 47.4979,
   "lon": 19.0402,
-  "accuracy": 10.5,
-  "speed": 0,
-  "timestamp": "2024-01-15T10:30:00Z",
-  "vehicleMode": false
+  "accuracy": 12.5,
+  "speed": 1.2,
+  "timestamp": "2026-05-05T18:40:00.000Z",
+  "vehicleMode": false,
+  "distanceToNearestOfficer": null
 }
 ```
 
-### `distanceUpdate`
-Egyenes vonalú távolságszámításhoz használt friss koordináta — **gyakrabban** érkezik, mint a `positionUpdate` (a kliens a saját GPS + pár pozíciójából számolhat távolságot).
-
-```json
-{
-  "pairId": 1,
-  "lat": 47.4979,
-  "lon": 19.0402,
-  "distanceToNearestOfficer": null,
-  "timestamp": "2024-01-15T10:30:00Z"
-}
-```
-
-### `savedPositionSample`
-Új sor került a **PostgreSQL** `positions` táblába (időzítő ciklus szerinti mintavételezés — lásd API spec: `POST /api/position`). Globális broadcast (nem csak a `positions` szobába); tipikusan az admin „Mentett pozíciók” lista élő frissítésére.
-
-```json
-{
-  "pairId": 1,
-  "id": 42
-}
-```
-
-### `savedPositionsDeleted`
-Admin törölte a **PostgreSQL** `positions` táblából a mentett pontokat (egész pár vagy kiválasztott ID-k). Globális broadcast; az admin „Mentett pozíciók” felület újratölti a listát.
-
-```json
-{
-  "pairId": 1,
-  "deleted": 78
-}
-```
-
-### `capture`
-Pár elfogva.
-
-```json
-{
-  "pairId": 1,
-  "assignedNumber": 1,
-  "pairName": "Példa név",
-  "captureLocation": { "lat": 47.5, "lon": 19.0 },
-  "capturedBy": {
-    "id": 1,
-    "username": "officer1"
-  },
-  "timestamp": "2024-01-15T10:35:00Z"
-}
-```
-
-> Az `assignedNumber`, `pairName` és `captureLocation` a kliensek számára kényelmes megjelenítéshez kerülnek bele; a `captureLocation` lehet `null`, ha nem volt koordináta a rögzítéskor.
-
-### `mwHighlight`
-Most Wanted jelzés aktiválva/deaktiválva.
-
-```json
-{
-  "pairId": 1,
-  "active": true,
-  "flaggedBy": {
-    "id": 1,
-    "username": "officer1"
-  },
-  "timestamp": "2024-01-15T10:40:00Z"
-}
-```
-
-### `geofenceAlert`
-Geofence esemény (belépés, kilépés, teljesítés).
-
-```json
-{
-  "type": "completion", // 'entry', 'exit', 'completion'
-  "geofenceId": 1,
-  "geofenceName": "Balaton tű",
-  "pairId": 1,
-  "timestamp": "2024-01-15T10:45:00Z"
-}
-```
+---
 
 ### `ruleViolation`
-Szabályszegés észlelve vagy megszűnése (játékterület, jármű, maradás, stb.). A webes fő térkép / admin jelenleg **`game_area_exit`** és **`vehicle_time_exceeded`** esetén tesz globális toastot + „folyamatos követés” jelölést — a **`end_of_day_stay`** külön `globalToast`-tal is kiegészülhet (lásd lent).
+
+**Nincs egyetlen zárt séma:** a **`RuleViolationsService`** eltérő mezőket küldött esetek szerint.
+
+Példa – játékterület elhagyás (`game_area_exit`):
 
 ```json
 {
-  "pairId": 1,
+  "pairId": 3,
   "violationType": "game_area_exit",
   "description": "Pár kilépett a játéktérből",
   "continuousMode": true,
   "resolved": false,
-  "timestamp": "2024-01-15T10:50:00Z",
-  "createdAt": "2024-01-15T10:50:00Z"
+  "timestamp": "2026-05-05T18:41:00.000Z",
+  "createdAt": "2026-05-05T18:41:00.000Z"
 }
 ```
 
-> **Megjegyzés**: Ha `resolved: true`, a szabályszegés megszűnt (a pár visszatért a
-> játékterületre). A `continuousMode` ilyenkor `false` értékű.
+---
 
-### `globalToast`
-Egysoros, minden bejelentkezett webes kliensnek szóló üzenet (pl. segítségkérés, maradás miatti **következő nap első 30 perces** követés emlékeztető).
+### `ckHighlight`
+
+Forrás: **`CkFlagsService`** → `broadcastCkHighlight`.
+
+Új aktív jelölés minta:
 
 ```json
 {
-  "message": "Maradási szabály miatt a(z) 3. pár mozgása a következő 30 percben folyamatosan látható a térképen.",
+  "pairId": 3,
+  "active": true,
+  "flaggedBy": { "id": 2, "username": "Officer" },
+  "timestamp": "2026-05-05T18:45:00.000Z"
+}
+```
+
+*Megjegyzés:* a **`username`** jelen implementációban gyakran a fix **`"Officer"`** sztring (TODO a szolgáltatásban).
+
+---
+
+### `globalToast`
+
+Gateway típus: **`{ message: string; variant?: string }`**. Példa segítségkérésre (`DevicesService.sendHelpRequestFromDevice`):
+
+```json
+{
+  "message": "A(z) 5. pár segítséget kér.",
   "variant": "info"
 }
 ```
 
-> **`variant`** tipikusan `info` | `success` | `error` — a frontend a toast színére használja.
+---
 
-### `pairStatusUpdate`
-Pár státusz változás (aktív, inaktív, stb.).
+## 5. Kliens oldali irányelvek
 
-```json
-{
-  "pairId": 1,
-  "status": "active",
-  "changes": {
-    "captured": false,
-    "mostWanted": true
-  },
-  "timestamp": "2024-01-15T10:55:00Z"
-}
-```
+- Validáld a bejövő üzeneteket (sémaleíró könyvtárral), mert **`ruleViolation`** típus szerint változik.
+- Kapcsolatvesztés: exponenciális reconnect.
+- Válaszd szét élő állapot és perzisztens UI cache.
 
-### `gameAreaUpdate`
-Játéktér frissítés (admin).
+---
 
-```json
-{
-  "activeCounties": ["Pest", "Fejér"],
-  "activeRegions": ["dunatol_keleti"],
-  "updatedBy": 1,
-  "timestamp": "2024-01-15T11:00:00Z"
-}
-```
+## 6. Hibakeresés
 
-### `gameRuntimeUpdate`
-Játékmotor állapotfrissítés (kampány státusz, ciklus, engedélyezett pozíciókövetés).
+| Tünet | Teendő |
+|---|---|
+| Nincsenek események | JWT, namespace URL (`/ws/game`), room tagság |
+| Token van, pozíció nincs | Authed kliensek auto **`positions`** csatlakozás; manuális **`subscribe:positions`** |
+| Üres mező az eseményben | Adott broadcaster `*.service.ts` – Redis vs PostgreSQL állapot |
 
-```json
-{
-  "campaignStatus": "RUNNING",
-  "activeGameDayId": 1,
-  "currentCycleStartAt": "2024-01-15T10:00:00.000Z",
-  "currentCycleEndAt": "2024-01-15T10:20:00.000Z",
-  "allowPositionUpdatesForMap": false,
-  "currentIntervalMinutes": 20,
-  "isGameActive": true,
-  "isPastLastScheduledGameEnd": false,
-  "timestamp": "2024-01-15T10:15:00.000Z"
-}
-```
+---
 
-### `error`
-Hiba esemény.
+## 7. Kapcsolódó dokumentumok
 
-```json
-{
-  "code": "ERROR_CODE",
-  "message": "Hibaüzenet",
-  "timestamp": "2024-01-15T11:05:00Z"
-}
-```
-
-
-
-
-
-
+| Dokumentum | Témakör |
+|---|---|
+| [INSTALLATION.md](INSTALLATION.md) | Helyi futtatás |
+| [API_SPEC.md](API_SPEC.md) | REST végpontok |
+| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Perzisztencia |

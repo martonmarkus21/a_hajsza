@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { RedisConnectionService } from './redis-connection.service';
 
 /** Maradás: folyamatos „kinti” állapot mérföldköve és értesítés dedupe; térképreveláció TTL. */
-const OUTSIDE_PREFIX = 'mw:stay:outside_since:';
-const EXIT_WARN_PREFIX = 'mw:stay:exit_warn:';
-const MAP_REVEAL_PREFIX = 'mw:stay:map_reveal_until:';
+const OUTSIDE_PREFIX = 'ck:stay:outside_since:';
+const EXIT_WARN_PREFIX = 'ck:stay:exit_warn:';
+const MAP_REVEAL_PREFIX = 'ck:stay:map_reveal_until:';
 
 const TTL_SECONDS = 14 * 24 * 3600;
 

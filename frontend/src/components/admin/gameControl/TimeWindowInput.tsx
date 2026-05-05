@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FiArrowRight, FiChevronDown, FiClock } from 'react-icons/fi';
-import { MwTimeScrollWheel } from '../../MwTimeScrollWheel';
+import { CkTimeScrollWheel } from '../../CkTimeScrollWheel';
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
@@ -317,14 +317,14 @@ export default function TimeWindowInput({ start, end, onChange }: TimeWindowInpu
             </div>
             <div className="flex justify-center py-1">
               {active === 'start' ? (
-                <MwTimeScrollWheel
+                <CkTimeScrollWheel
                   hour={startParts.h}
                   minute={startParts.m}
                   onHourChange={(h) => emitStart(h, startParts.m)}
                   onMinuteChange={(m) => emitStart(startParts.h, m)}
                 />
               ) : active === 'end' ? (
-                <MwTimeScrollWheel
+                <CkTimeScrollWheel
                   hour={endParts.h}
                   minute={endParts.m}
                   onHourChange={(h) => emitEnd(h, endParts.m)}

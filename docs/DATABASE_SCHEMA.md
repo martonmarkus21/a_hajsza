@@ -1,274 +1,120 @@
 # Adatbázis séma
 
-## Táblák
+<p align="center">
+  <img src="../frontend/src/assets/images/celkereszt_logomark.png" alt="Célkereszt logomark" width="88" />
+</p>
 
-### `pairs`
-Párok táblája.
+> **Szerepe:** PostgreSQL + TypeORM szerkezet magas szintű áttekintése; élő állapot mellé lásd Redis használat a backend dokumentációjában és a kódban.
 
-```sql
-CREATE TABLE pairs (
-  id SERIAL PRIMARY KEY,
-  assigned_number INTEGER UNIQUE NOT NULL,
-  name VARCHAR(255),
-  active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+---
 
-### `devices`
-Eszközök (telefonok) táblája.
+### Tartalom
 
-```sql
-CREATE TABLE devices (
-  id SERIAL PRIMARY KEY,
-  pair_id INTEGER REFERENCES pairs(id) ON DELETE CASCADE,
-  imei_or_device_id VARCHAR(255) UNIQUE NOT NULL,
-  fcm_token TEXT,
-  last_seen_at TIMESTAMP,
-  logged_out_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+1. [Gyors tények](#1-gyors-tények)
+2. [Táblacsoportok](#2-táblacsoportok)
+3. [Kiemelt táblák](#3-kiemelt-táblák)
+4. [Fogalmi kapcsolatok](#4-fogalmi-kapcsolatok)
+5. [Index és integritás](#5-indexlési-ötletek)
+6. [Üzemeltetési gyakorlat](#6-fejlesztői--üzemeltetési-irányelvek)
+7. [Kapcsolódó dokumentumok](#7-kapcsolódó-dokumentumok)
 
-> Az `imei_or_device_id` egyedi eszközazonosító a bejelentkezéshez és a naplózáshoz (oszlopnév történelmi okból „IMEI”; az Android kliens jellemzően `ANDROID_ID` szerinti azonosítót küld).  
-> A `logged_out_at` a kijelentkezéskor áll be; sikeres bejelentkezéskor törlődik. Az utolsó valós szerverkapcsolat ideje a `last_seen_at` mezőben marad megjelenítéshez.
+---
 
-### `positions`
-Pozíciók táblája (történeti / időzítő szerinti **minták**; minden egyes app-os GPS-küldés nem feltétlenül kerül ide — lásd API specifikáció, Redis élő réteg).
+## 1. Gyors tények
 
-```sql
-CREATE TABLE positions (
-  id SERIAL PRIMARY KEY,
-  pair_id INTEGER REFERENCES pairs(id) ON DELETE CASCADE,
-  lat DECIMAL(10, 8) NOT NULL,
-  lon DECIMAL(11, 8) NOT NULL,
-  accuracy DECIMAL(10, 2),
-  speed DECIMAL(10, 2),
-  vehicle_mode BOOLEAN DEFAULT false,
-  vehicle_session_remaining INTEGER,
-  timestamp TIMESTAMP NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  game_area_snapshot_json JSONB,
-  had_rule_violation_at_save BOOLEAN DEFAULT false
-);
+| Rendszer | Szerepe |
+|---|---|
+| **PostgreSQL** | Perzisztens adat, audit, előzmények |
+| **TypeORM** | Entitások és migrációk (production: synchronize **nem** kapcsol) |
+| **Redis** | Élő GPS cache, háttérqueue – nem része ennek az SQL sémakiírásnak |
 
-CREATE INDEX idx_positions_pair_id ON positions(pair_id);
-CREATE INDEX idx_positions_timestamp ON positions(timestamp);
-CREATE INDEX idx_positions_pair_timestamp ON positions(pair_id, timestamp DESC);
-```
+---
 
-> **`game_area_snapshot_json`**: mentéskor aktív `game_area` geofence-ek pillanatképe (név, középpont, sugár, `metadata_json` polygon stb.) — admin térképes nézet / nyomvonal modál.  
-> **`had_rule_violation_at_save`**: a minta rögzítésekor volt-e a párnak meg nem oldott szabályszegése (pillanatkép, később nem változik).
+## 2. Táblacsoportok
 
-### `captures`
-Elfogások táblája.
+| Csoport | Táblák | Szerep |
+|---|---|---|
+| Identitás | `users`, `devices` | Szerepek, eszköz-kötés párhoz |
+| Játék | `pairs`, `game_days`, `game_settings`, `game_runtime_state` | Pár, naptár, globál és motor állapot |
+| Térképszabály | `geofences`, `geofence_completions` | Geofence játéklogika |
+| Esemény | `positions`, `rule_violations`, `captures`, `ck_flags` | Pozíció, szabály, elfogás, CK jelölés |
+| Napló | `audit_logs` | Admin-akció követése |
 
-```sql
-CREATE TABLE captures (
-  id SERIAL PRIMARY KEY,
-  pair_id INTEGER NOT NULL REFERENCES pairs(id) ON DELETE CASCADE,
-  captured_by_user_id INTEGER NOT NULL REFERENCES users(id),
-  location_id INTEGER REFERENCES positions(id),
-  request_id VARCHAR(100) UNIQUE,
-  client_timestamp TIMESTAMPTZ,
-  timestamp TIMESTAMPTZ NOT NULL,
-  captured_lat DOUBLE PRECISION,
-  captured_lon DOUBLE PRECISION,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT UQ_captures_pair_id_unique UNIQUE (pair_id)
-);
+*Tábla nevek egyeznek az `@Entity()` dekorátor **`name`** attribútumaival (`backend/src/entities`).*
 
-CREATE INDEX idx_captures_pair_id ON captures(pair_id);
-```
+---
 
-> **`pair_id`**: egy párhoz egyszerre legfeljebb egy elfogás (egyedi). **`request_id`**: opcionális kliens-kérés azonosító idempotens ismétléshez (egyedi, ha meg van adva). **`captured_lat` / `captured_lon`**: a rögzítés pillanatában mentett hely (nem feltétlenül egyezik a `location_id` sor koordinátájával). **`location_id`**: ha a hely a legutóbbi PG `positions` sorból lett kötve.
-
-### `mw_flags`
-Most Wanted jelzések táblája.
-
-```sql
-CREATE TABLE mw_flags (
-  id SERIAL PRIMARY KEY,
-  pair_id INTEGER REFERENCES pairs(id) ON DELETE CASCADE,
-  flagged_by_user_id INTEGER REFERENCES users(id),
-  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_mw_flags_pair_id ON mw_flags(pair_id);
-CREATE INDEX idx_mw_flags_active ON mw_flags(active);
-```
-
-### `users`
-Felhasználók (adminok, celebrendőrök) táblája.
-
-```sql
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  username VARCHAR(255) UNIQUE NOT NULL,
-  email VARCHAR(255) UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
-  role VARCHAR(50) NOT NULL, -- 'admin', 'officer'
-  active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+## 3. Kiemelt táblák
 
 ### `game_settings`
-Globális játékbeállítások (egyetlen „első sor” szerint dolgozik a rendszer olvasóként).
 
-```sql
-CREATE TABLE game_settings (
-  id SERIAL PRIMARY KEY,
-  location_update_interval_minutes INTEGER NOT NULL DEFAULT 20,
-  game_enabled BOOLEAN NOT NULL DEFAULT false,
-  stay_rule_enabled BOOLEAN NOT NULL DEFAULT false,
-  stay_radius_km DOUBLE PRECISION NOT NULL DEFAULT 5,
-  mobile_enrollment_secret VARCHAR(255),
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-> **`stay_rule_*`**: játéknapok között a zárás bázisa körül engedélyezett maximális távolság (cron + Redis, lásd scheduler). **`mobile_enrollment_secret`**: Android első párosítás fejléc-titkosítása — felülírható `MOBILE_ENROLLMENT_SECRET` `.env` változóval.
-
-### `game_days`
-Játék napok táblája.
-
-```sql
-CREATE TABLE game_days (
-  id SERIAL PRIMARY KEY,
-  date DATE NOT NULL,
-  start_time TIME NOT NULL,
-  end_time TIME NOT NULL,
-  special_rules_json JSONB,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_game_days_date ON game_days(date);
-```
-
-### `geofences`
-Geofence-ek (játéktér, scenariók) táblája.
-
-```sql
-CREATE TABLE geofences (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  center_lat DECIMAL(10, 8) NOT NULL,
-  center_lon DECIMAL(11, 8) NOT NULL,
-  radius_m INTEGER NOT NULL,
-  active BOOLEAN DEFAULT true,
-  active_from TIMESTAMP,
-  active_until TIMESTAMP,
-  geofence_type VARCHAR(50) NOT NULL, -- 'game_area', 'scenario', 'crossing_point'
-  metadata_json JSONB,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_geofences_active ON geofences(active);
-CREATE INDEX idx_geofences_type ON geofences(geofence_type);
-```
-
-### `geofence_completions`
-Geofence teljesítések táblája.
-
-```sql
-CREATE TABLE geofence_completions (
-  id SERIAL PRIMARY KEY,
-  geofence_id INTEGER REFERENCES geofences(id) ON DELETE CASCADE,
-  pair_id INTEGER REFERENCES pairs(id) ON DELETE CASCADE,
-  completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  position_id INTEGER REFERENCES positions(id),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(geofence_id, pair_id)
-);
-
-CREATE INDEX idx_geofence_completions_geofence ON geofence_completions(geofence_id);
-CREATE INDEX idx_geofence_completions_pair ON geofence_completions(pair_id);
-```
-
-### `audit_logs`
-Audit naplók táblája.
-
-```sql
-CREATE TABLE audit_logs (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id),
-  action_type VARCHAR(100) NOT NULL, -- 'capture', 'mw_flag', 'geofence_create', etc.
-  entity_type VARCHAR(50), -- 'pair', 'geofence', etc.
-  entity_id INTEGER,
-  data_json JSONB,
-  ip_address VARCHAR(45),
-  user_agent TEXT,
-  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
-CREATE INDEX idx_audit_logs_action_type ON audit_logs(action_type);
-CREATE INDEX idx_audit_logs_timestamp ON audit_logs(timestamp);
-```
-
-### `rule_violations`
-Szabályszegések táblája.
-
-```sql
-CREATE TABLE rule_violations (
-  id SERIAL PRIMARY KEY,
-  pair_id INTEGER REFERENCES pairs(id) ON DELETE CASCADE,
-  violation_type VARCHAR(100) NOT NULL, -- többek között: 'game_area_exit', 'vehicle_time_exceeded', 'end_of_day_stay', 'crossing_point_violation'
-  description TEXT,
-  position_id INTEGER REFERENCES positions(id),
-  resolved BOOLEAN DEFAULT false,
-  resolved_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_rule_violations_pair_id ON rule_violations(pair_id);
-CREATE INDEX idx_rule_violations_resolved ON rule_violations(resolved);
-```
+Globál rendszerbeállítások. **Logikai singleton**: egy élő sor várható. Mobil enrollment titok tárolása is ide tartozhat.
 
 ### `game_runtime_state`
-Játékmotor futásidejű állapota (egysoros konfigurációs/állapot tábla).
 
-```sql
-CREATE TABLE game_runtime_state (
-  id SERIAL PRIMARY KEY,
-  campaign_status VARCHAR(50) NOT NULL DEFAULT 'IDLE',
-  active_game_day_id INTEGER REFERENCES game_days(id),
-  current_cycle_start_at TIMESTAMP,
-  current_cycle_end_at TIMESTAMP,
-  allow_position_updates_for_map BOOLEAN DEFAULT false,
-  last_cycle_turn_at TIMESTAMP,
-  last_map_position_at TIMESTAMP,
-  pairs_sent_position_this_cycle JSONB DEFAULT '[]',
-  last_applied_area_schedule_key VARCHAR(255),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+Játékmotor pillanatnaptár: ciklus, időzítők, hogy mikor mehet élő pozíció a térképre (`game-runtime-state.entity.ts` → `game_runtime_state` tábla).
+
+### `pairs`
+
+Pár törzsadatai: hozzárendelt szám (`assignedNumber` / DB oszlop a TypeORM leképezés szerint), aktív jelölő, stb. Eszköz kötése a `devices` táblán keresztül (`pair_id`).
+
+### `positions`
+
+PostgreSQL-ba mentett GPS minták történeti visszanézéshez és admin exportokhoz.
+
+### `rule_violations`
+
+Aktív / feloldott szabálysérülések (típus mező például `game_area_exit`).
+
+### `ck_flags`
+
+Célkereszt állapot rekord páronként, aktív jelzővel és időbélyeggel.
+
+### `audit_logs`
+
+Struktúrált naplósorok admin mozdulatokról és egyes gépi eseményekről.
+
+---
+
+## 4. Fogalmi kapcsolatok
+
+```
+pairs ─┬──< positions
+       ├──< rule_violations
+       ├──< captures
+       ├──< ck_flags
+       └──< devices (gyakran 1:1 élő páronként users nélkül is)
+
+users ────< audit_logs
 ```
 
-## Kapcsolatok
+*(A pontos FK–onDelete viselkedés az entitás `JoinColumn` / `Cascade` beállításaitól függ.)*
 
-- `devices.pair_id` → `pairs.id`
-- `positions.pair_id` → `pairs.id`
-- `captures.pair_id` → `pairs.id`
-- `captures.captured_by_user_id` → `users.id`
-- `mw_flags.pair_id` → `pairs.id`
-- `mw_flags.flagged_by_user_id` → `users.id`
-- `geofence_completions.geofence_id` → `geofences.id`
-- `geofence_completions.pair_id` → `pairs.id`
-- `audit_logs.user_id` → `users.id`
-- `rule_violations.pair_id` → `pairs.id`
+---
 
+## 5. Indexlési ötletek
 
+| Tábla | Javasolt kulcs(ok) megfontolása |
+|---|---|
+| `positions` | `pair_id` + **`timestamp`** lekérdezések |
+| `rule_violations` | `pair_id` + **`created_at`** státusz szerint szűréskor |
+| `audit_logs` | **`created_at`** idő szerinti lapozás |
+| `devices` | **`last_seen_at`** aktivitás kérdéseknél |
 
+---
 
+## 6. Fejlesztői / üzemeltetési irányelvek
 
+- Séma változtatása mindig párosuljon áttekinthető migrációval **production-ben**.
+- `development` **`NODE_ENV`** alatt futó synchronize **ne** váljon éles automatizmus helyett.
+- `game_settings`: szolgáltatás rétegben előzd meg több konkurens élő sor káoszát (`ensureGameSettings` típus minták).
 
+---
+
+## 7. Kapcsolódó dokumentumok
+
+| Dokumentum | Témakör |
+|---|---|
+| [API_SPEC.md](API_SPEC.md) | REST rétegek mögött |
+| [WEBSOCKET_EVENTS.md](WEBSOCKET_EVENTS.md) | Realtime, nem tárolt események |
+| [INSTALLATION.md](INSTALLATION.md) | DB konténer helyben |

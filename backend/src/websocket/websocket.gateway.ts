@@ -76,8 +76,8 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     this.server.emit('capture', data);
   }
 
-  broadcastMwHighlight(data: any) {
-    this.server.emit('mwHighlight', data);
+  broadcastCkHighlight(data: any) {
+    this.server.emit('ckHighlight', data);
   }
 
   broadcastGeofenceAlert(data: any) {

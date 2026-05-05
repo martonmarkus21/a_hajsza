@@ -1,202 +1,78 @@
-# Android App Implementáció Összefoglaló
+# Android architektúra (implementációs jegyzetek)
 
-## Teljesített funkciók
+<p align="center">
+  <img src="../frontend/src/assets/images/celkereszt_logomark.png" alt="Célkereszt logomark" width="88" />
+</p>
 
-### ✅ 1. Device Bejelentkezés
-- **LoginActivity**: Teljes bejelentkezési képernyő
-- **API integráció**: `POST /api/devices/login` endpoint
-- **Token tárolás**: SharedPreferences-ben
-- **FCM token**: Automatikus küldés bejelentkezéskor
+> **Szerepe:** Magas szintű technikai konszenzus a `com.celkereszt.app` csomaghoz — nem váltja ki a pontos package / osztálynevek olvasását a forrásban.
 
-### ✅ 2. API Service
-- **Retrofit integráció**: Teljes API kommunikáció
-- **Auth interceptor**: Automatikus token hozzáadás
-- **Error handling**: Offline mód támogatás
-- **Device login**: Teljes implementáció
+---
 
-### ✅ 3. Location Service
-- **Foreground service**: Háttérben futó szolgáltatás
-- **GPS tracking**: Google Play Services Location API
-- **Folyamatos / gyakori pozícióküldés** a szervernek (`PositionRepository`), a játékmotor mintaciklusa a backendhez igazodik
-- **Játékállapot poll**: `GET /api/game-settings/countdown` (értesítés + broadcast a főképernyőnek)
-- **Vehicle mode**: Járműhasználat követés
+### Tartalom
 
-### ✅ 4. FCM Service
-- **Push notifications**: Teljes FCM integráció
-- **Token kezelés**: Automatikus token frissítés
-- **Message handling**: Üzenetek megjelenítése
-- **Broadcast**: MainActivity frissítés
+1. [Célrendszer tulajdonságai](#1-célrendszer-tulajdonságai)
+2. [Rétegek](#2-rétegek)
+3. [Kerülendő minták](#3-kerülendő-minták)
+4. [Minőség](#4-minőségbiztosítás-fejlesztőnek)
+5. [Kapcsolódó dokumentumok](#5-kapcsolódó-dokumentumok)
 
-### ✅ 5. Repository Pattern
-- **PositionRepository**: Adat réteg
-- **Offline cache**: Room database
-- **Sync mechanism**: Automatikus szinkronizálás
+---
 
-### ✅ 6. MainActivity
-- **UI**: Minimal fekete UI
-- **Message display**: Üzenetek megjelenítése
-- **Vehicle control**: Járműhasználat kezelés
-- **Help button**: Segítség kérés
+## 1. Célrendszer tulajdonságai
 
-### ✅ 7. PreferencesHelper
-- **Token storage**: Biztonságos token tárolás
-- **Device info**: Pár információk
-- **Vehicle state**: Járműhasználat állapot
+| Követelmény | Megközelítés |
+|---|---|
+| Mobil hálózati ingadozás | Központi HTTP kliens retry + felhasználói állapot (**loading / success / failure**) |
+| Enrollment titkok | Nem hardcodeolt – háttér titok tárolása platform KeyStore-ban / Preferences biztonságos rétegben ahogy az app teszi |
+| Háttér helyzet | Foreground service + jogosultság UX a platform szabályainak megfelelően |
 
-### ✅ 8. Build Configuration
-- **Kapt plugin**: Room compiler
-- **Dependencies**: Minden szükséges library
-- **Firebase**: Google Services integráció
+---
 
-### ✅ 9. UI/UX
-- **Themes**: Fekete-narancs színséma
-- **Layouts**: Login és Main activity
-- **Strings**: Magyar nyelvű szövegek
+## 2. Rétegek
 
-## Projekt struktúra
+### UI / Compose
 
-```
-android-app/
-├── app/
-│   ├── src/main/
-│   │   ├── java/com/mostwanted/app/
-│   │   │   ├── api/
-│   │   │   │   └── ApiService.kt          # API interfészek
-│   │   │   ├── database/
-│   │   │   │   ├── AppDatabase.kt        # Room database
-│   │   │   │   ├── PositionDao.kt        # DAO interfész
-│   │   │   │   └── PositionEntity.kt     # Entity osztály
-│   │   │   ├── repository/
-│   │   │   │   └── PositionRepository.kt # Adat réteg
-│   │   │   ├── service/
-│   │   │   │   ├── LocationService.kt     # GPS service
-│   │   │   │   └── FcmService.kt         # FCM service
-│   │   │   ├── util/
-│   │   │   │   ├── PreferencesHelper.kt  # SharedPreferences helper
-│   │   │   │   └── GameRuntimeFormatter.kt
-│   │   │   ├── viewmodel/
-│   │   │   │   └── MainViewModel.kt       # ViewModel
-│   │   │   ├── LoginActivity.kt          # Bejelentkezés
-│   │   │   └── MainActivity.kt           # Főképernyő
-│   │   ├── res/
-│   │   │   ├── layout/
-│   │   │   │   ├── activity_login.xml
-│   │   │   │   └── activity_main.xml
-│   │   │   ├── values/
-│   │   │   │   ├── strings.xml
-│   │   │   │   └── themes.xml
-│   │   │   └── ...
-│   │   └── AndroidManifest.xml
-│   ├── build.gradle.kts
-│   └── google-services.json (létrehozandó)
-├── build.gradle.kts
-├── settings.gradle.kts
-└── README.md
-```
+Deklaratív állapot (**StateFlow** / **`remember` állapot gépek**) – Compose preview-k a statikus blokkoknak.
 
-## Főbb komponensek
+### Adat és API
 
-### LoginActivity
-- Bejelentkezési képernyő
-- Pár szám és jelszó megadása
-- **Eszközazonosító** (`deviceId` a login body-ban): `Settings.Secure.ANDROID_ID`
-- FCM token automatikus küldés (ha elérhető)
-- Engedélyek: hely, értesítés (Android 13+), foreground service (részletek a manifestben)
+- Base URL felhasználói tárolása – minden relatív **`/api`** path a backend előírására illeszkedjen.
+- **Enrollment header:** **`x-ck-enrollment-secret`** mind azonos néven küldött, mint a **`MOBILE_ENROLLMENT_HEADER`** backend konstans.
+- Sikertelen **401 enrollment** válasszal visszalépés onboardingra.
 
-### MainActivity
-- Főképernyő minimal UI-val
-- Üzenetek megjelenítése
-- Járműhasználat kezelés
-- FCM üzenetek fogadása
+### Integrációk
 
-### LocationService
-- Foreground service
-- GPS pozíció követés, pozícióküldés a `PositionRepository`-n keresztül
-- Játékállapot / countdown poll (értesítés szöveg + broadcast)
+| Integráció | Megjegyzés |
+|---|---|
+| **FCM** | Token → **`POST /api/devices/fcm-token`** logout / újraindítás esetén is frissíthető |
+| **WebSocket** | Ha van kliens oldali figyelés: namespace **`/ws/game`** – általában a web admin használja élőben, az app REST + push domináns lehet |
 
-### ApiService
-- Retrofit API interfész
-- Auth interceptor
-- Device login endpoint
-- Position send endpoint
+---
 
-## Beállítási lépések
+## 3. Kerülendő minták
 
-1. **Firebase beállítás**
-   - Hozz létre Firebase projektet
-   - Add hozzá az Android app-ot
-   - Töltsd le a `google-services.json` fájlt
-   - Helyezd el az `app/` mappába
+- **Ne** logolj teljes authorization headert vagy enrollment titkot.
+- **Ne** commitolj **`.env`** jellegű runtime URL-t publikus repóba.
 
-2. **Backend URL**
-   - Módosítsd az `ApiService.kt`-ban a `BASE_URL`-t
-   - Emulator: `http://10.0.2.2:3000/`
-   - Valós eszköz: `http://<saját-ip>:3000/`
+---
 
-3. **Build**
-   - Nyisd meg Android Studio-ban
-   - Gradle sync
-   - Build és futtatás
+## 4. Minőségbiztosítás (fejlesztőnek)
 
-## API Endpoints
+| Teszt | Cél |
+|---|---|
+| `assembleDebug` | Fordíthatóság |
+| Enrollment + login | Session kezelés |
+| GPS mock | Backend pozíció pipeline |
+| Lassú hálózat (emulátor?) | Timeout UX |
+| Push | Foreground + background értesítés |
 
-### Device Login
-```
-POST /api/devices/login
-Body: {
-  "username": "1",
-  "password": "1",
-  "deviceId": "device_id",
-  "fcmToken": "fcm_token"
-}
-```
+---
 
-### Position Send
-```
-POST /api/position
-Header: Authorization: Bearer <token>
-Body: {
-  "deviceId": "string",
-  "pairId": 1,
-  "lat": 47.4979,
-  "lon": 19.0402,
-  "accuracy": 10.0,
-  "speed": 0.0,
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "vehicleMode": false,
-  "vehicleSessionRemaining": null
-}
-```
+## 5. Kapcsolódó dokumentumok
 
-## Engedélyek
-
-- `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` — GPS / hálózati hely
-- `ACCESS_BACKGROUND_LOCATION` — háttérben is fusson a helykövetés (manifest szerint)
-- `POST_NOTIFICATIONS` — push értesítések (Android 13+)
-- `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_LOCATION` — hely típusú előtérbeli szolgáltatás
-- `WAKE_LOCK` — háttérben futás
-
-## Offline működés
-
-- Pozíciók lokálisan tárolódnak Room database-ben
-- Automatikus szinkronizálás amikor internet elérhető
-- Sikertelen küldés esetén a pozíciók a Room-ban maradnak; a következő sikeres `sendPosition` szinkronizál
-
-## Járműhasználat
-
-- 40 perc limit
-- Automatikus leállítás limit után
-- Pozíció küldés vehicle mode-dal
-- Remaining time számítás
-
-## További fejlesztési lehetőségek
-
-- [ ] Járműhasználat visszaszámláló UI
-- [ ] Pozíció előzmények megjelenítése
-- [ ] Offline mód indikátor
-- [ ] Beállítások képernyő
-- [ ] Logout funkció
-- [ ] Hibakezelés UI
-- [ ] Unit tesztek
-- [ ] UI tesztek
-
+| Dokumentum | Témakör |
+|---|---|
+| [README.md](README.md) | Felhasználói / build szint |
+| [../docs/API_SPEC.md](../docs/API_SPEC.md) | Device contract |
+| [../docs/WEBSOCKET_EVENTS.md](../docs/WEBSOCKET_EVENTS.md) | Realtime (ha használjátok app oldalon) |
+| [../docs/FIREBASE_SETUP.md](../docs/FIREBASE_SETUP.md) | FCM backend oldal |

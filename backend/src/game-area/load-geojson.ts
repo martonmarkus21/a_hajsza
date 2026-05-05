@@ -40,8 +40,9 @@ export function loadCountiesFromGeoJSON(): Record<string, CountyData> {
   }
   
   if (!geojsonPath) {
-    console.warn(`GeoJSON file not found. Tried paths: ${possiblePaths.join(', ')}`);
-    return {};
+    throw new Error(
+      `Missing backend/data/counties.geojson (tried: ${possiblePaths.join(', ')}). Add and commit this file — game area logic depends on it.`,
+    );
   }
   
   logVerbose(`Loading GeoJSON from: ${geojsonPath}`);
@@ -87,8 +88,8 @@ export function loadCountiesFromGeoJSON(): Record<string, CountyData> {
     logVerbose(`Loaded ${Object.keys(counties).length} counties from GeoJSON`);
     return counties;
   } catch (error) {
-    console.error('Error loading GeoJSON file:', error);
-    return {};
+    console.error('Failed to read or parse counties GeoJSON:', error);
+    throw error;
   }
 }
 

@@ -13,9 +13,9 @@ import {
   FiX,
   FiZap,
 } from 'react-icons/fi';
-import MwDateTimePicker from '../../components/MwDateTimePicker';
-import MwDropdownSelect, { type MwDropdownOption } from '../../components/MwDropdownSelect';
-import MwTableSearchInput from '../../components/MwTableSearchInput';
+import CkDateTimePicker from '../../components/CkDateTimePicker';
+import CkDropdownSelect, { type CkDropdownOption } from '../../components/CkDropdownSelect';
+import CkTableSearchInput from '../../components/CkTableSearchInput';
 import Modal from '../../components/Modal';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import {
@@ -76,7 +76,7 @@ const ACTION_LABELS: Record<string, string> = {
   device_logout: 'Eszköz kijelentkezés',
   device_force_logout: 'Eszköz kényszer-kijelentkezés',
   mobile_enrollment_secret_regenerated: 'Mobil kapcsolódási titok megújítva',
-  mw_flag: 'Most Wanted jelzés',
+  ck_flag: 'Célkereszt jelzés',
   audit_log_delete: 'Naplóbejegyzés törölve',
   game_settings_update: 'Játékbeállítások módosítva',
   game_settings_timer_start: 'Lokációs időzítő indítva',
@@ -108,7 +108,7 @@ function actionBadgeClass(actionType: string): string {
   if (actionType.startsWith('device_')) return 'bg-slate-500/20 text-slate-200 border-slate-500/30';
   if (actionType.startsWith('message')) return 'bg-amber-500/15 text-amber-200 border-amber-500/30';
   if (actionType.startsWith('capture')) return 'bg-red-500/15 text-red-200 border-red-500/30';
-  if (actionType.startsWith('mw_')) return 'bg-orange-500/15 text-orange-200 border-orange-500/30';
+  if (actionType.startsWith('ck_')) return 'bg-orange-500/15 text-orange-200 border-orange-500/30';
   if (actionType.startsWith('position_')) return 'bg-teal-500/15 text-teal-200 border-teal-500/25';
   if (actionType.startsWith('rule_violation')) return 'bg-rose-500/12 text-rose-200 border-rose-500/25';
   if (actionType === 'audit_log_bulk_delete') return 'bg-amber-900/25 text-amber-100 border-amber-500/25';
@@ -293,24 +293,24 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
     </AdminTableSortTh>
   );
 
-  const actionOptions: MwDropdownOption[] = useMemo(() => {
-    const opts: MwDropdownOption[] = [{ value: 'all', label: 'Minden művelet' }];
+  const actionOptions: CkDropdownOption[] = useMemo(() => {
+    const opts: CkDropdownOption[] = [{ value: 'all', label: 'Minden művelet' }];
     for (const a of actionTypes) {
       opts.push({ value: a, label: `${actionLabel(a)} (${a})` });
     }
     return opts;
   }, [actionTypes]);
 
-  const entityOptions: MwDropdownOption[] = useMemo(() => {
-    const opts: MwDropdownOption[] = [{ value: 'all', label: 'Minden entitás típus' }];
+  const entityOptions: CkDropdownOption[] = useMemo(() => {
+    const opts: CkDropdownOption[] = [{ value: 'all', label: 'Minden entitás típus' }];
     for (const e of entityTypes) {
       opts.push({ value: e, label: e });
     }
     return opts;
   }, [entityTypes]);
 
-  const userOptions: MwDropdownOption[] = useMemo(() => {
-    const opts: MwDropdownOption[] = [{ value: 'all', label: 'Minden felhasználó' }];
+  const userOptions: CkDropdownOption[] = useMemo(() => {
+    const opts: CkDropdownOption[] = [{ value: 'all', label: 'Minden felhasználó' }];
     for (const u of users) {
       opts.push({ value: String(u.id), label: u.username });
     }
@@ -434,7 +434,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <div className="mw-card relative overflow-hidden group">
+        <div className="ck-card relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <FiShield className="w-20 h-20 text-emerald-400" />
           </div>
@@ -449,7 +449,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
             </div>
           </div>
         </div>
-        <div className="mw-card relative overflow-hidden group">
+        <div className="ck-card relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <FiActivity className="w-24 h-24 text-emerald-500/80" />
           </div>
@@ -465,14 +465,14 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
         </div>
       </div>
 
-      <div className="mw-card p-4 sm:p-5 space-y-4">
+      <div className="ck-card p-4 sm:p-5 space-y-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <FiZap className="w-3.5 h-3.5 opacity-80 shrink-0" />
               Művelet
             </label>
-            <MwDropdownSelect
+            <CkDropdownSelect
               value={actionFilter}
               options={actionOptions}
               ariaLabel="Művelet szűrő"
@@ -488,7 +488,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
               <FiLayers className="w-3.5 h-3.5 opacity-80 shrink-0" />
               Entitás típus
             </label>
-            <MwDropdownSelect
+            <CkDropdownSelect
               value={entityFilter}
               options={entityOptions}
               ariaLabel="Entitás típus szűrő"
@@ -504,7 +504,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
               <FiUser className="w-3.5 h-3.5 opacity-80 shrink-0" />
               Felhasználó
             </label>
-            <MwDropdownSelect
+            <CkDropdownSelect
               value={userFilter}
               options={userOptions}
               ariaLabel="Felhasználó szűrő"
@@ -518,7 +518,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <MwDateTimePicker
+          <CkDateTimePicker
             label="Időponttól"
             value={fromLocal}
             maxLocal={toLocal || undefined}
@@ -527,7 +527,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
               setFromLocal(v);
             }}
           />
-          <MwDateTimePicker
+          <CkDateTimePicker
             label="Időpontig"
             value={toLocal}
             minLocal={fromLocal || undefined}
@@ -545,7 +545,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
           </label>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div className="min-w-0 flex-1">
-              <MwTableSearchInput
+              <CkTableSearchInput
                 value={q}
                 onChange={(v) => {
                   setPage(1);
@@ -560,7 +560,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
                 onClick={() => void exportCsv()}
                 disabled={total === 0 || loading}
                 title="Letöltés: a jelenlegi szűrésnek és rendezésnek megfelelő sorok (legfeljebb 8000), CSV"
-                className="mw-btn mw-btn-primary inline-flex items-center justify-center gap-2 text-sm px-4 transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed"
+                className="ck-btn ck-btn-primary inline-flex items-center justify-center gap-2 text-sm px-4 transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none disabled:cursor-not-allowed"
               >
                 <FiDownload className="w-4 h-4 shrink-0" />
                 Exportálás
@@ -577,7 +577,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
                   setToLocal('');
                   setPage(1);
                 }}
-                className="mw-btn inline-flex items-center justify-center gap-2 px-4 rounded-xl font-semibold text-sm bg-red-600 hover:bg-red-500 text-white border border-red-500/30 shadow-sm transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none disabled:hover:bg-red-600"
+                className="ck-btn inline-flex items-center justify-center gap-2 px-4 rounded-xl font-semibold text-sm bg-red-600 hover:bg-red-500 text-white border border-red-500/30 shadow-sm transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none disabled:hover:bg-red-600"
               >
                 <FiX className="w-4 h-4 shrink-0" />
                 Szűrők törlése
@@ -587,7 +587,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
                 disabled={total === 0 || loading}
                 onClick={() => setBulkModalScope('filtered')}
                 title="A jelenlegi szűrőknek megfelelő összes naplósor törlése az adatbázisból (nem csak ez az oldal)"
-                className="mw-btn inline-flex items-center justify-center gap-2 px-4 rounded-xl font-semibold text-sm border border-amber-500/35 bg-amber-950/40 text-amber-100 hover:bg-amber-900/50 transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none"
+                className="ck-btn inline-flex items-center justify-center gap-2 px-4 rounded-xl font-semibold text-sm border border-amber-500/35 bg-amber-950/40 text-amber-100 hover:bg-amber-900/50 transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none"
               >
                 <FiTrash2 className="w-4 h-4 shrink-0" />
                 Szűrt törlése
@@ -597,7 +597,7 @@ export default function AuditLogsManagement({ users }: AuditLogsManagementProps)
                 disabled={loading || totalDbRecords === 0}
                 onClick={() => setBulkModalScope('all')}
                 title="Az összes naplóbejegyzés törlése — visszavonhatatlan"
-                className="mw-btn inline-flex items-center justify-center gap-2 px-4 rounded-xl font-semibold text-sm border border-red-500/40 bg-red-950/50 text-red-100 hover:bg-red-900/55 transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none"
+                className="ck-btn inline-flex items-center justify-center gap-2 px-4 rounded-xl font-semibold text-sm border border-red-500/40 bg-red-950/50 text-red-100 hover:bg-red-900/55 transition-[opacity,transform] duration-300 ease-out disabled:opacity-40 disabled:pointer-events-none"
               >
                 <FiAlertTriangle className="w-4 h-4 shrink-0" />
                 Összes törlése

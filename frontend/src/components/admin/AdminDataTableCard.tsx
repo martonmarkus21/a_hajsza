@@ -24,7 +24,7 @@ export interface AdminDataTableCardProps {
 }
 
 /**
- * Admin aloldalak közös „kártya + fejléc + görgethető táblázat” burkolója (mw-card, ikon, cím, találat-szám).
+ * Admin aloldalak közös „kártya + fejléc + görgethető táblázat” burkolója (ck-card, ikon, cím, találat-szám).
  */
 export function AdminDataTableCard({
   title,
@@ -35,7 +35,7 @@ export function AdminDataTableCard({
   footer,
   children,
   scrollClassName = 'overflow-x-auto custom-scrollbar',
-  cardClassName = 'mw-card p-0 overflow-hidden flex flex-col',
+  cardClassName = 'ck-card p-0 overflow-hidden flex flex-col',
 }: AdminDataTableCardProps) {
   const toneClass = ICON_TONE_CLASS[iconTone] ?? ICON_TONE_CLASS.orange;
 
@@ -66,7 +66,7 @@ export interface AdminTableEmptyRowProps {
   hint: string;
 }
 
-/** Üres táblaállapot: egy sor, középre igazított szöveg (mw-table tbody-ban használd). */
+/** Üres táblaállapot: egy sor, középre igazított szöveg (ck-table tbody-ban használd). */
 export function AdminTableEmptyRow({ colSpan, icon: Icon, title, hint }: AdminTableEmptyRowProps) {
   return (
     <tr>

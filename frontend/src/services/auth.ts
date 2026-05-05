@@ -1,7 +1,7 @@
 import api from './api';
 
 function notifyAuthTokenChanged() {
-  window.dispatchEvent(new CustomEvent('mw:auth-token-changed'));
+  window.dispatchEvent(new CustomEvent('ck:auth-token-changed'));
 }
 
 export interface LoginCredentials {

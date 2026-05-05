@@ -28,14 +28,14 @@ export class GameAreaService implements OnModuleInit {
       this.hungaryBoundary = loadHungaryBoundaryFromGeoJSON();
 
       if (Object.keys(this.counties).length === 0) {
-        console.warn('No counties loaded from GeoJSON, using fallback');
-      } else {
-        logVerbose(`Successfully loaded ${Object.keys(this.counties).length} counties from GeoJSON`);
+        throw new Error(
+          'backend/data/counties.geojson is required (commit it to the repo): at least one county polygon must load successfully.',
+        );
       }
+      logVerbose(`Successfully loaded ${Object.keys(this.counties).length} counties from GeoJSON`);
     } catch (error) {
-      console.error('Error loading GeoJSON data:', error);
-      this.counties = {};
-      this.hungaryBoundary = null;
+      console.error('GeoJSON loading failed:', error);
+      throw error;
     }
   }
 

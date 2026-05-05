@@ -24,7 +24,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.dispatchEvent(new CustomEvent('mw:auth-token-changed'));
+      window.dispatchEvent(new CustomEvent('ck:auth-token-changed'));
       // Only redirect if not already on login page to prevent infinite refresh loops
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.MostWanted" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.Celkereszt" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">#000000</item>
         <item name="colorPrimaryDark">#000000</item>
         <item name="colorAccent">#FF6B35</item>
@@ -11,11 +11,11 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 
-    <style name="Theme.MostWanted.Splash" parent="Theme.SplashScreen">
+    <style name="Theme.Celkereszt.Splash" parent="Theme.SplashScreen">
         <item name="android:windowBackground">@drawable/splash_background</item>
         <item name="windowSplashScreenBackground">@drawable/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo_mw</item>
-        <item name="postSplashScreenTheme">@style/Theme.MostWanted</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/celkereszt_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.Celkereszt</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>

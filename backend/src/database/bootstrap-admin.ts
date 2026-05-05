@@ -18,7 +18,7 @@ export async function ensureBootstrapAdmin(dataSource: DataSource): Promise<void
   await repo.save(
     repo.create({
       username: 'admin',
-      email: 'admin@mostwanted.hu',
+      email: 'admin@celkereszt.hu',
       passwordHash,
       role: 'admin',
       active: true,

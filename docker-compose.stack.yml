@@ -1,0 +1,71 @@
+# Teljes stack: Postgres, Redis, backend + frontend image.
+# Env: cp docker/env/backend.stack.env.example docker/env/backend.stack.env  (lásd docs/INSTALLATION.md §4)
+#
+# Indítás építéssel:
+#   docker compose -f docker-compose.stack.yml up -d --build
+# API http://localhost:3000 • Web http://localhost:8080
+# A böngésző az API-hoz közvetlen kapcsolódik → VITE_API_URL alapból localhost:3000.
+# Nem futtasd egyszerre a gyökér docker-compose.yml postgres/redis és ezen stack 5432/6379 ugyanezen portokon.
+
+name: celkereszt-stack
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: celkereszt
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: celkereszt
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_stack_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U celkereszt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_stack_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./docker/env/backend.stack.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+      args:
+        # Böngészőből hívható API-cím:
+        VITE_API_URL: http://localhost:3000
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_stack_data:
+  redis_stack_data:

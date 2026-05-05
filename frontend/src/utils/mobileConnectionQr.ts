@@ -1,7 +1,7 @@
-/** Megegyezik az Android [MobileConnectionQrParser] formátumával: MW1: + base64url(UTF-8 JSON). */
-const PREFIX = 'MW1:';
+/** Megegyezik az Android [MobileConnectionQrParser] formátumával: CK1: + base64url(UTF-8 JSON). */
+const PREFIX = 'CK1:';
 
-export function encodeMwMobileQrPayload(apiBaseUrl: string, enrollmentSecret: string): string {
+export function encodeCkMobileQrPayload(apiBaseUrl: string, enrollmentSecret: string): string {
   const u = apiBaseUrl.replace(/\s+$/, '').replace(/\/+$/, '');
   const s = enrollmentSecret.trim();
   const payload: { u: string; s?: string } = { u };

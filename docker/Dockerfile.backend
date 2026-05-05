@@ -9,6 +9,7 @@ RUN npm ci
 
 # Copy source code and build
 COPY . .
+# tsconfig.build.json sets incremental=false; .dockerignore excludes *.tsbuildinfo — otherwise tsc may emit no .js after a stale cache.
 RUN npm run build
 
 # Production stage
@@ -26,5 +27,5 @@ COPY --from=builder /app/data ./data
 
 EXPOSE 3000
 
-# Start app using node directly
-CMD ["node", "dist/main"]
+# Entrypoint: nest build outputs dist/main.js (see backend/tsconfig.build.json, rootDir: src).
+CMD ["node", "dist/main.js"]

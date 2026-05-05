@@ -19,7 +19,7 @@ import PositionsTraceMapModal, { type SinglePositionRow } from './components/Pos
 import { fetchLatestSavedPositionForPair } from './utils/fetchLatestSavedPosition';
 import { extractApiErrorMessage } from './utils/extractApiErrorMessage';
 import RuleViolationDetailsModal from './components/RuleViolationDetailsModal';
-import MWLoader from './components/MWLoader';
+import CkLoader from './components/CkLoader';
 import SendMessageModal from './components/SendMessageModal';
 import EditNameModal from './components/EditNameModal';
 import ConfirmationModal from './components/ConfirmationModal';
@@ -47,8 +47,8 @@ import {
 } from 'react-icons/fi';
 import { HiPencil } from 'react-icons/hi2';
 import { FaHandcuffs } from 'react-icons/fa6';
-import logoImage from './assets/images/most_wanted_logo_raw.png';
-import mwOrangeImage from './assets/images/mw_orange.png';
+import logoImage from './assets/images/celkereszt_logotype.png';
+import ckMarkerImage from './assets/images/celkereszt_marker.png';
 import 'leaflet/dist/leaflet.css';
 import './App.css';
 import SmoothAnimatedMarker from './components/SmoothAnimatedMarker';
@@ -432,7 +432,7 @@ function FloatingHeader({
             {/* Logo */}
             <img
               src={logoImage}
-              alt="Most Wanted"
+              alt="Célkereszt"
               className="h-8 object-contain drop-shadow-md select-none hidden sm:block"
             />
 
@@ -651,7 +651,7 @@ function ModernSidebar({
           ) : (
             activePairs.map(pair => {
               const isSelected = selectedPairId === pair.id;
-              const isMw = pair.mostWanted;
+              const isCk = pair.celkereszt;
               const hasViolation = !!activeGameAreaExitViolations[pair.id];
 
               return (
@@ -662,7 +662,7 @@ function ModernSidebar({
                     ? 'bg-orange-500/10 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.1)]'
                     : hasViolation
                       ? 'bg-red-500/[0.06] border-red-500/40 hover:bg-red-500/[0.09] hover:border-red-500/50'
-                    : isMw
+                    : isCk
                       ? 'bg-orange-500/[0.03] border-orange-500/20 hover:bg-orange-500/[0.06] hover:border-orange-500/30'
                       : 'bg-white/[0.03] border-white/5 hover:bg-white/[0.06] hover:border-white/10'
                     } ${pair.captured ? 'opacity-60 saturate-50' : ''}`}
@@ -675,7 +675,7 @@ function ModernSidebar({
                     <div className={`relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-xl text-white shadow-lg pb-0.5 transition-all duration-300 ${
                       pair.captured
                         ? 'bg-red-600 border-[3px] border-red-600'
-                        : isMw
+                        : isCk
                           ? 'bg-orange-500 border-[3px] border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)]'
                           : 'bg-[#222] border-[3px] border-orange-500'
                     }`}>
@@ -695,21 +695,21 @@ function ModernSidebar({
 
                     {/* Név/badge sor csak ha van tartalom — üres helykitöltő nélkül, hogy ne nőjön feleslegesen a sor */}
                     <div className="flex-1 min-w-0 flex flex-col gap-1">
-                      {(pair.name || isMw || hasViolation) && (
+                      {(pair.name || isCk || hasViolation) && (
                         <div className="flex items-center gap-2 flex-wrap">
                           {pair.name && (
                             <span className={`text-base font-bold truncate ${isSelected ? 'text-white' : 'text-gray-200 group-hover:text-white'}`}>
                               {pair.name}
                             </span>
                           )}
-                          {isMw && <span className="mw-badge mw !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]"><FiShield className="w-2.5 h-2.5 fill-current" /> MW</span>}
+                          {isCk && <span className="ck-badge ck !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]"><FiShield className="w-2.5 h-2.5 fill-current" /> CK</span>}
                           {pair.captured && (
-                            <span className="mw-badge error !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]">
+                            <span className="ck-badge error !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]">
                               <FaHandcuffs className="w-2.5 h-2.5" /> Elfogva
                             </span>
                           )}
                           {hasViolation && (
-                            <span className="mw-badge error !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]">
+                            <span className="ck-badge error !px-1.5 !py-0.5 !text-[10px] !rounded-[6px]">
                               <FiAlertCircle className="w-2.5 h-2.5" /> Szabálysz.
                             </span>
                           )}
@@ -896,7 +896,7 @@ function MapView() {
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
 
   const persistFrozenLastLivePositions = () => {
-    localStorage.setItem('mw:frozen-last-live-positions', JSON.stringify(frozenLastLivePositionsRef.current));
+    localStorage.setItem('celkereszt:frozen-last-live-positions', JSON.stringify(frozenLastLivePositionsRef.current));
   };
 
   const freezeCurrentLastPosition = (
@@ -923,7 +923,7 @@ function MapView() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('mw:frozen-last-live-positions');
+      const raw = localStorage.getItem('celkereszt:frozen-last-live-positions');
       if (!raw) return;
       const parsed = JSON.parse(raw) as Record<string, NonNullable<Pair['lastPosition']>>;
       const normalized: Record<number, NonNullable<Pair['lastPosition']>> = {};
@@ -1145,7 +1145,7 @@ function MapView() {
         const existing = prev.find((p) => p.id === data.pairId);
         if (!existing) {
           return [...prev, {
-            id: data.pairId, assignedNumber: 0, name: null, active: true, captured: false, mostWanted: false, hasActiveDevice: true,
+            id: data.pairId, assignedNumber: 0, name: null, active: true, captured: false, celkereszt: false, hasActiveDevice: true,
             lastPosition: { lat: data.lat, lon: data.lon, timestamp: data.timestamp },
             distanceToNearestOfficer: data.distanceToNearestOfficer,
           }];
@@ -1234,8 +1234,8 @@ function MapView() {
     socket.on('positionUpdate', handlePositionUpdate);
     socket.on('capture', handleCapture);
     socket.on('captureReverted', handleCaptureReverted);
-    socket.on('mwHighlight', (data: any) => {
-      setPairsState((prev) => prev.map((p) => p.id === data.pairId ? { ...p, mostWanted: data.active } : p));
+    socket.on('ckHighlight', (data: any) => {
+      setPairsState((prev) => prev.map((p) => p.id === data.pairId ? { ...p, celkereszt: data.active } : p));
       refetch();
     });
     socket.on('gameAreaUpdate', () => fetchGeofences());
@@ -1341,7 +1341,7 @@ function MapView() {
       socket.off('positionUpdate', handlePositionUpdate);
       socket.off('capture', handleCapture);
       socket.off('captureReverted', handleCaptureReverted);
-      socket.off('mwHighlight');
+      socket.off('ckHighlight');
       socket.off('gameAreaUpdate');
       socket.off('gameRuntimeUpdate');
       socket.off('ruleViolation');
@@ -1417,16 +1417,16 @@ function MapView() {
     }
   };
 
-  const handleMw = async (pairId: number) => {
+  const handleCk = async (pairId: number) => {
     const p = pairsState.find((x) => x.id === pairId);
-    const wasMw = !!p?.mostWanted;
-    const fallbackErr = wasMw
-      ? 'A Most Wanted státusz nem távolítható el.'
-      : 'A Most Wanted státusz nem állítható be.';
+    const wasCk = !!p?.celkereszt;
+    const fallbackErr = wasCk
+      ? 'A Célkereszt státusz nem távolítható el.'
+      : 'A Célkereszt státusz nem állítható be.';
     try {
-      const url = wasMw ? apiUrl(`/api/mw/${pairId}`) : apiUrl('/api/mw');
-      const method = wasMw ? 'DELETE' : 'POST';
-      const body = wasMw ? undefined : JSON.stringify({ pairId });
+      const url = wasCk ? apiUrl(`/api/celkereszt/${pairId}`) : apiUrl('/api/celkereszt');
+      const method = wasCk ? 'DELETE' : 'POST';
+      const body = wasCk ? undefined : JSON.stringify({ pairId });
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
@@ -1436,7 +1436,7 @@ function MapView() {
         refetch();
         addNotification(
           'success',
-          wasMw ? 'Most Wanted státusz eltávolítva.' : 'Most Wanted státusz beállítva.',
+          wasCk ? 'Célkereszt státusz eltávolítva.' : 'Célkereszt státusz beállítva.',
         );
         return;
       }
@@ -1501,7 +1501,7 @@ function MapView() {
 
 
   if (loading) {
-    return <MWLoader subtitle="Térkép betöltése..." />;
+    return <CkLoader subtitle="Térkép betöltése..." />;
   }
 
 
@@ -1532,7 +1532,7 @@ function MapView() {
               duration={380}
               icon={L.divIcon({
                 className: 'custom-browser-location-marker',
-                html: `<div style="width:32px;height:32px;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,0.4);background-image:url(${mwOrangeImage});background-size:cover;background-position:center;overflow:hidden;"></div>`,
+                html: `<div style="width:32px;height:32px;border-radius:50%;box-shadow:0 3px 10px rgba(0,0,0,0.4);background-image:url(${ckMarkerImage});background-size:cover;background-position:center;overflow:hidden;"></div>`,
                 iconSize: [32, 32],
                 iconAnchor: [16, 16],
               })}
@@ -1580,7 +1580,7 @@ function MapView() {
                   className: 'custom-pair-marker',
                   html: buildPairMarkerDivHtml({
                     assignedNumber: pair.assignedNumber,
-                    mostWanted: !!pair.mostWanted,
+                    celkereszt: !!pair.celkereszt,
                     hasViolation: !!activeGameAreaExitViolations[pair.id],
                     captured: !!pair.captured,
                   }),
@@ -1798,7 +1798,7 @@ function MapView() {
           onClose={() => { setShowPairDetails(false); setSelectedPair(null); setIsClosingPairDetails(false); }}
           onClosingStart={() => setIsClosingPairDetails(true)}
           onCapture={handleCapture}
-          onMw={handleMw}
+          onCk={handleCk}
           onRename={handleAssignName}
           hasActiveGameAreaViolation={!!activeGameAreaExitViolations[selectedPair.id]}
           onOpenViolationDetails={(pairId) => {

@@ -1,18 +1,18 @@
-version: '3.8'
+name: celkereszt
 
 services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: most_wanted
+      POSTGRES_USER: celkereszt
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: most_wanted
+      POSTGRES_DB: celkereszt
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U most_wanted"]
+      test: ["CMD-SHELL", "pg_isready -U celkereszt"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,9 +32,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-
-
-
-
-
-

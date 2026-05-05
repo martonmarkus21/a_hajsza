@@ -15,7 +15,7 @@ export async function seedDatabase(dataSource: DataSource) {
     const adminPassword = await bcrypt.hash('admin123', 10);
     const admin = userRepository.create({
       username: 'admin',
-      email: 'admin@mostwanted.hu',
+      email: 'admin@celkereszt.hu',
       passwordHash: adminPassword,
       role: 'admin',
       active: true,
@@ -31,7 +31,7 @@ export async function seedDatabase(dataSource: DataSource) {
       const officerPassword = await bcrypt.hash(`officer${i}123`, 10);
       const officer = userRepository.create({
         username: `officer${i}`,
-        email: `officer${i}@mostwanted.hu`,
+        email: `officer${i}@celkereszt.hu`,
         passwordHash: officerPassword,
         role: 'officer',
         active: true,
@@ -57,8 +57,6 @@ export async function seedDatabase(dataSource: DataSource) {
       }
     }
   }
-
-  console.log('Database seeded successfully!');
 }
 
 

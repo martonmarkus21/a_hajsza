@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiUser, FiLock, FiAlertCircle, FiArrowRight } from 'react-icons/fi';
 import { authService } from '../services/auth';
-import logoImage from '../assets/images/most_wanted_logo_raw.png';
+import logoImage from '../assets/images/celkereszt_logomark.png';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -72,18 +72,18 @@ export default function Login() {
                   <div className="absolute inset-0 bg-orange-500/20 blur-2xl rounded-full opacity-60 animate-pulse" />
                   <img
                     src={logoImage}
-                    alt="Most Wanted - A hajsza"
-                    className="h-28 object-contain drop-shadow-2xl relative z-10 animate-float"
+                    alt="Célkereszt - A hajsza"
+                    className="h-44 object-contain drop-shadow-2xl relative z-10 animate-float"
                   />
                 </div>
-                <h1 className="text-3xl font-bold text-white tracking-wide mb-2 font-display">Most Wanted</h1>
+                <h1 className="text-3xl font-bold text-white tracking-wide mb-2 font-display">Célkereszt</h1>
                 <p className="text-gray-400 text-xs tracking-widest uppercase font-medium">Adminisztrációs Rendszer</p>
               </div>
 
               {/* Footer Text (Moved to Left Side) */}
               <div className="absolute bottom-6 left-0 right-0 text-center">
                 <p className="text-gray-600/60 text-xs font-medium">
-                  v1.0 &bull; &copy; {new Date().getFullYear()}
+                  &copy; {new Date().getFullYear()}
                 </p>
               </div>
             </div>

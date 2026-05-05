@@ -39,7 +39,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         if (userStr) {
             try {
                 const user = JSON.parse(userStr);
-                const stored = localStorage.getItem(`mw_notifications_${user.username}`);
+                const stored = localStorage.getItem(`celkereszt_notifications_${user.username}`);
                 if (stored) {
                     return JSON.parse(stored).map((item: any) => ({
                         ...item,
@@ -70,7 +70,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             if (userStr) {
                 try {
                     const user = JSON.parse(userStr);
-                    localStorage.setItem(`mw_notifications_${user.username}`, JSON.stringify(newHistory));
+                    localStorage.setItem(`celkereszt_notifications_${user.username}`, JSON.stringify(newHistory));
                 } catch (e) {
                     console.error('Hiba a history mentésekor:', e);
                 }
@@ -80,7 +80,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }, []);
 
     const loadHistoryForUser = useCallback((username: string) => {
-        const stored = localStorage.getItem(`mw_notifications_${username}`);
+        const stored = localStorage.getItem(`celkereszt_notifications_${username}`);
         if (stored) {
             try {
                 const parsed = JSON.parse(stored).map((item: any) => ({

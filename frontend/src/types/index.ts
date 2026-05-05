@@ -4,7 +4,7 @@ export interface Pair {
   name: string | null;
   active: boolean;
   captured: boolean;
-  mostWanted: boolean;
+  celkereszt: boolean;
   lastPosition: {
     lat: number;
     lon: number;

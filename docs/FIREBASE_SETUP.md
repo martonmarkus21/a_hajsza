@@ -1,114 +1,110 @@
-# Firebase Cloud Messaging (FCM) Beállítás
+# Firebase / FCM beállítás
 
-Az üzenetküldés funkció működéséhez Firebase beállítás szükséges. Ez a dokumentum általános útmutatót nyújt a Firebase Cloud Messaging (FCM) konfigurálásához a projektben, anélkül hogy konkrét adatokat tartalmazna.
+<p align="center">
+  <img src="../frontend/src/assets/images/celkereszt_logomark.png" alt="Célkereszt logomark" width="88" />
+</p>
 
-## Projekt információk
+> **Szerepe:** Android push (FCM) összekötése Firebase projekten és backend service account változókon keresztül.
 
-**Firebase Projekt:**
-- **Project ID**: `<YOUR_PROJECT_ID>`
-- **Project Number**: `<YOUR_PROJECT_NUMBER>`
-- **Auth Domain**: `<YOUR_PROJECT_ID>.firebaseapp.com`
-- **Storage Bucket**: `<YOUR_PROJECT_ID>.firebasestorage.app`
+---
 
-Ezeket az információkat a Firebase Console-ban találod meg a projekt beállításai alatt.
+### Tartalom
 
-## Backend beállítás (Service Account)
+1. [Cél és komponensek](#1-cél-és-komponensek)
+2. [Firebase projekt és Android alkalmazás](#2-firebase-projekt-és-android-app)
+3. [Android alkalmazás fájlok](#3-android-alkalmazás-fájlok)
+4. [Backend service account](#4-backend-service-account)
+5. [Backend környezeti változók](#5-backend-környezeti-változók)
+6. [Ellenőrzés](#6-ellenőrzés)
+7. [Gyakori hibák](#7-gyakori-hibák)
+8. [Biztonság](#8-biztonság)
+9. [Kapcsolódó dokumentumok](#9-kapcsolódó-dokumentumok)
 
-A backend Firebase Admin SDK-t használ, ami service account credentials-et igényel.
+---
 
-### 1. Service Account Key létrehozása
+## 1. Cél és komponensek
 
-1. Menj a [Firebase Console](https://console.firebase.google.com/)-ba
-2. Válaszd ki a megfelelő projektet
-3. Kattints a **Project Settings** (fogaskerék ikon) menüpontra
-4. Menj a **Service Accounts** fülre
-5. Kattints a **Generate new private key** gombra
-6. A letöltött JSON fájl tartalmazza a szükséges adatokat
+| Komponens | Szerep |
+|---|---|
+| Firebase projekt | FCM végpont |
+| `google-services.json` | Android app Firebase azon |
+| Backend service account JWT | Küldő hitelesítés – **`FcmService`** (`firebase-admin`) |
 
-**Biztonsági figyelmeztetés:** A letöltött JSON fájlt soha ne add hozzá a verziókezelő rendszerhez (pl. Git). Használj környezeti változókat vagy biztonságos tárolást.
+Ha a három **`FIREBASE_*`** közül bármelyik hiányzik vagy sablon, a **`FcmService`** nem indul el: a webes admin életben maradhat, de **push és a teljes terepi élmény nélkül**.
 
-### 2. Backend .env fájl beállítása
+---
 
-Hozz létre egy `.env` fájlt a `backend/` mappában (vagy használd a meglévőt) és add hozzá a következő változókat:
+## 2. Firebase projekt és Android app
 
-```env
-# Firebase Configuration
-FIREBASE_PROJECT_ID=<YOUR_PROJECT_ID>
-FIREBASE_PRIVATE_KEY="<YOUR_PRIVATE_KEY>"
-FIREBASE_CLIENT_EMAIL=<YOUR_CLIENT_EMAIL>
-```
+1. [Firebase Console](https://console.firebase.google.com/).
+2. Új vagy létező projekt.
+3. **Add app** → Android → package név **`com.celkereszt.app`** (aktuális Gradle `applicationId` szerint ellenőrizd).
 
-**Fontos:**
-- A `FIREBASE_PRIVATE_KEY` értékét a letöltött JSON fájlból másold ki (a `private_key` mező). Ügyelj arra, hogy a `\n` karaktereket megtartsd a private key-ben.
-- A `FIREBASE_CLIENT_EMAIL` értéke a letöltött JSON fájlban a `client_email` mező.
-- Soha ne commitold a `.env` fájlt a verziókezelőbe. Használd a `.gitignore` fájlt ennek biztosítására.
+---
 
-**Példa a letöltött JSON fájl struktúrájára:**
-```json
-{
-  "type": "service_account",
-  "project_id": "<YOUR_PROJECT_ID>",
-  "private_key_id": "...",
-  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
-  "client_email": "<YOUR_CLIENT_EMAIL>",
-  ...
-}
-```
+## 3. Android alkalmazás fájlok
 
-### 3. Cloud Messaging API engedélyezése
+1. Töltsd le **`google-services.json`**.
+2. **`android-app/app/google-services.json`**
+3. Android Studio Gradle sync ellenőrizze a **`com.google.gms.google-services`** plugint és a Firebase BOM deps-t.
 
-1. Menj a [Google Cloud Console](https://console.cloud.google.com/)-ba
-2. Válaszd ki a megfelelő projektet
-3. Menj az **APIs & Services** > **Library** menüpontra
-4. Keress rá a "Firebase Cloud Messaging API"-ra
-5. Kattints rá és engedélyezd, ha még nincs engedélyezve
+---
 
-## Android App beállítás
+## 4. Backend service account
 
-1. **Firebase Console** > **Project Settings** > **Cloud Messaging**
-2. Ha még nincs Android app hozzáadva:
-   - Kattints az **Add app** gombra
-   - Válaszd az **Android** ikont
-   - Add meg a package name-t (pl. `com.yourcompany.yourapp`)
-   - Töltsd le a `google-services.json` fájlt
-   - Helyezd el az `android-app/app/` mappába
+1. Firebase Console → Project settings → Service accounts.
+2. **Új kulcs generálása** JSON.
+3. A JSON-ban szerepelnek a **`project_id`**, **`private_key`**, **`client_email`** értékek — ezekre képeződnek a backend env változók.
 
-**Megjegyzés:** A `google-services.json` fájl tartalmazza az alkalmazás-specifikus konfigurációt. Ne add hozzá a verziókezelőhöz.
+Credential fájlt **ne** commitálj gitbe.
 
-## Web Config (Frontend - opcionális)
+---
 
-Ha a frontend-ben is használni szeretnéd a Firebase-t, használd a következő konfigurációs objektumot (a Firebase Console-ból másold ki a pontos értékeket):
+## 5. Backend környezeti változók
 
-```javascript
-const firebaseConfig = {
-  apiKey: "<YOUR_API_KEY>",
-  authDomain: "<YOUR_PROJECT_ID>.firebaseapp.com",
-  projectId: "<YOUR_PROJECT_ID>",
-  storageBucket: "<YOUR_PROJECT_ID>.firebasestorage.app",
-  messagingSenderId: "<YOUR_PROJECT_NUMBER>",
-  appId: "<YOUR_APP_ID>"
-};
-```
+Sablon egy helyen: **`backend/.env.example`**. A három kötelező kulcs **`FcmService.onModuleInit()`** feltételei:
 
-Ezeket az értékeket a Firebase Console **Project Settings** > **General** > **Your apps** > **Web app** alatt találod.
+| Változó | Tartalom |
+|---|---|
+| `FIREBASE_PROJECT_ID` | `project_id` a JSON-ból |
+| `FIREBASE_PRIVATE_KEY` | `private_key` – `.env`-ben gyakran **`\n`** escape több sor helyett |
+| `FIREBASE_CLIENT_EMAIL` | `client_email` |
 
-## Tesztelés
+**Ha a backend Docker stackben fut:** **`docker/env/backend.stack.env`** — előállítás és helyük: **[INSTALLATION.md §4](INSTALLATION.md#4-út-b--minden-dockerben)**; változónevek **`backend/.env.example`** szerint.
 
-1. Indítsd el a backend-et
-2. Ellenőrizd a konzol kimenetét - látnod kellene: `Firebase initialized`
-3. Ha hiba van, ellenőrizd:
-   - A `.env` fájlban lévő értékeket (helyesek-e és kitöltöttek-e)
-   - A Cloud Messaging API engedélyezve van-e
-   - A service account key helyes-e és nem járt-e le
+---
 
-## Jelenlegi állapot
+## 6. Ellenőrzés
 
-Az FCM service működik, de csak akkor küld üzeneteket, ha a Firebase credentials be vannak állítva a `.env` fájlban.
+1. Backend indul **„Firebase initialized”** (verbose opció) vs **„Firebase credentials not provided”** sor a logban.
+2. Android felhasználó belép → eszköz küld **`POST /api/devices/fcm-token`**.
+3. Várd a pushot valós eseményre (pl. szabálysértés, admin trigger – ahol a kód FCM-et hív).
 
-Ha nincs beállítva, a rendszer figyelmeztetést ír ki: `Firebase credentials not provided, FCM disabled`, de nem hibázik. Ez lehetővé teszi a fejlesztést anélkül, hogy minden környezetben Firebase lenne konfigurálva.
+**Siker jele:** nincs auth hiba a logban, értesítés megjelenik foreground + background módban.
 
-## További ajánlások
+---
 
-- **Környezetek kezelése:** Használj különböző Firebase projekteket fejlesztési, staging és production környezetekhez.
-- **Biztonság:** Rendszeresen forgasd a service account kulcsokat és monitorozd a használatukat.
-- **Dokumentáció:** További információkért lásd a [Firebase dokumentációt](https://firebase.google.com/docs).
+## 7. Gyakori hibák
+
+| Jelenség | Ok / teendő |
+|---|---|
+| `messaging/invalid-registration-token` | Régi FCM token – friss regisztráció az appban |
+| `auth/invalid-credential` | Rossz `FIREBASE_PRIVATE_KEY` formázás (sortörés escape) vagy lejárt kulcs |
+| Push nincs, log tiszta | Android értesítési csatorna, akkumulátor optimalizálás, `POST /api/devices/fcm-token` lefutott-e |
+
+---
+
+## 8. Biztonság
+
+- Dev / prod **külön** Firebase projekt javasolt.
+- Production titkok **secret manager** vagy CI secret.
+- Service account kulcs rotáció évente vagy incidens után.
+
+---
+
+## 9. Kapcsolódó dokumentumok
+
+| Dokumentum | Témakör |
+|---|---|
+| [INSTALLATION.md](INSTALLATION.md) | Helyi stack |
+| [../android-app/README.md](../android-app/README.md) | Android build |

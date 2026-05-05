@@ -1,139 +1,159 @@
-# Most Wanted - A hajsza
+# Célkereszt - A hajsza
 
-Teljes működőképes rendszer a "Most Wanted – A hajsza" tévéműsor technikai hátteréhez.
+<p align="center">
+  <img src="frontend/src/assets/images/celkereszt_logo.png" alt="Célkereszt logó" width="520" />
+</p>
 
-## 🚀 Gyors indítás
+<p align="center">
+  Többplatformos, valós idejű pályafelügyeleti és játékmenet-koordinációs rendszer.
+</p>
 
-### 1. Adatbázis indítása
+## Technológiai stack
 
-```powershell
-docker-compose up -d
+![Backend](https://img.shields.io/badge/Backend-NestJS-E0234E?logo=nestjs&logoColor=white)
+![Frontend](https://img.shields.io/badge/Frontend-React-20232A?logo=react&logoColor=61DAFB)
+![Android](https://img.shields.io/badge/Android-Kotlin%20%2B%20Compose-3DDC84?logo=android&logoColor=white)
+![Database](https://img.shields.io/badge/Database-PostgreSQL-336791?logo=postgresql&logoColor=white)
+![Cache](https://img.shields.io/badge/Cache-Redis-DC382D?logo=redis&logoColor=white)
+![Realtime](https://img.shields.io/badge/Realtime-Socket.IO-010101?logo=socketdotio&logoColor=white)
+![Messaging](https://img.shields.io/badge/Messaging-Firebase%20FCM-FFCA28?logo=firebase&logoColor=black)
+
+## Tartalom
+
+- [Mi ez a rendszer](#mi-ez-a-rendszer)
+- [Mit tud a gyakorlatban](#mit-tud-a-gyakorlatban)
+- [Játékfolyamat lépésről lépésre](#játékfolyamat-lépésről-lépésre)
+- [Architektúra áttekintés](#architektúra-áttekintés)
+- [Gyors indulás](#gyors-indulás)
+- [Projekt struktúra](#projekt-struktúra)
+- [Dokumentáció](#dokumentáció)
+
+## Mi ez a rendszer
+
+A Célkereszt egy komplett operációs platform olyan játékokhoz vagy eseményekhez, ahol:
+
+- több páros mobil kliens valós időben mozog,
+- központi operátorok térképen követik a folyamatot,
+- szabályok (terület, idő, járműhasználat) automatikusan kiértékelődnek,
+- a rendszer minden fontos eseményt naplóz, visszakereshetően.
+
+Röviden: a platform összeköti a terepi mobil használatot, az admin felügyeletet és az automatizált játékmotort.
+
+## Mit tud a gyakorlatban
+
+### Operátori oldal (web)
+
+- párok kezelése és státuszkövetés,
+- élő térképes nézet és visszakereshető mentett pozíciók,
+- geofence és játéktér konfiguráció,
+- riasztások, szabályszegések és jelölések kezelése,
+- auditnapló, szűrés, export.
+
+### Mobil oldal (Android)
+
+- biztonságos első párosítás (URL + titok / QR),
+- eszközazonosított bejelentkezés,
+- háttér helyzetküldés,
+- push értesítések és helyi eseménylista,
+- dedikált kliensműveletek (segítségkérés, jármű mód lejárati jelzés).
+
+### Backend oldal
+
+- REST API és WebSocket események,
+- ciklus- és játéknap-vezérelt logika,
+- valós idejű állapot Redisben, történeti adatok PostgreSQL-ben,
+- szerepkör alapú hitelesítés és jogosultságkezelés.
+
+## Játékfolyamat lépésről lépésre
+
+1. **Előkészítés**
+   - Admin létrehozza a párokat, geofence-eket és játéknapokat.
+2. **Mobil párosítás**
+   - Android kliens beolvassa vagy megkapja a szerverkapcsolati adatokat.
+3. **Aktív játék**
+   - Páros kliens pozíciót küld, backend validál és állapotot számol.
+   - Webes felület realtime frissítéseket kap.
+4. **Szabályfigyelés**
+   - A rendszer automatikusan jelzi a terület- vagy időalapú eltéréseket.
+5. **Admin beavatkozás**
+   - Operátor jelöl, üzenetet küld, eseményt rögzít.
+6. **Utókövetés**
+   - Audit és történeti pozíciók alapján teljes visszajátszhatóság.
+
+## Architektúra áttekintés
+
+- **`backend/`**: NestJS API, játékmotor, WebSocket, audit, enrollment, FCM.
+- **`frontend/`**: React admin UI, térképes és listás felügyelet.
+- **`android-app/`**: Compose kliens, dinamikus szerverkapcsolat, háttér location.
+- **Infra**: PostgreSQL + Redis + opcionális Docker alapú lokális stack.
+
+<p align="center">
+  <img src="frontend/src/assets/images/celkereszt_logomark.png" alt="Célkereszt logomark" width="88" />
+</p>
+
+## Gyors indulás
+
+### Előfeltételek
+
+- Node.js 18+
+- Docker + Docker Compose
+- Android Studio (Android modulhoz)
+
+### 1) Infrastruktúra
+
+```bash
+docker compose up -d postgres redis
 ```
 
-### 2. Backend indítása
+### 2) Backend
 
-```powershell
+```bash
 cd backend
 npm install
-npm run build
-$env:SEED_DB="false"
-node dist/main.js
+cp .env.example .env
+npm run start:dev
 ```
 
-### 3. Frontend indítása
+### 3) Frontend
 
-```powershell
+```bash
 cd frontend
 npm install
-npm run build
-serve -s dist -l 3001
+npm run dev
 ```
 
-### 4. Bejelentkezés
+Webes felület: **`http://localhost:3001`**
 
-Nyisd meg: `http://localhost:3001`
+**Teljes stack Dockerben:** [docs/INSTALLATION.md §4](docs/INSTALLATION.md#4-út-b--minden-dockerben).
 
-**Demo felhasználók:**
-- Admin: `admin` / `admin123`
-- Officer1: `officer1` / `officer1123`
+### 4) Android
 
-## ✨ Főbb funkciók
+1. Nyisd meg az `android-app` mappát Android Studio-ban.
+2. Másold be a `google-services.json` fájlt az `android-app/app` mappába.
+3. Első induláskor add meg a szerver URL-t és az enrollment titkot (`x-ck-enrollment-secret` HTTP fejléc az API hívásokon).
 
-### Backend
-- ✅ REST API (NestJS)
-- ✅ WebSocket (Socket.IO) valós idejű frissítések (`positionUpdate`, `distanceUpdate`, `savedPositionSample`, `globalToast`, stb.)
-- ✅ PostgreSQL adatbázis (pozícióminták, üzleti adatok)
-- ✅ Redis: élő pár-pozíciók, üldöző böngésző-GPS (`pursuer-live`), maradási szabály állapota (anchor, kinti idő, következő napi térképreveláció), geofence gyorsítótár; ugyanazon példányon Bull/BullMQ is futhat
-- ✅ Játéknapok közötti **maradási szabály** (percenkénti ellenőrzés, FCM, `end_of_day_stay` rekord, következő nap első 30 perces térképláthatóság)
-- ✅ Ütemezett **játéknap** FCM / záró üzenetek, üldöző–pár távolság a nap végén (Redis üldöző pozíció alapján)
-- ✅ Mobil **csatlakoztatás**: nyilvános `GET /api/mobile/verify` + admin által forgatott titok (QR), `game_settings.mobile_enrollment_secret`
-- ✅ FCM (Firebase Cloud Messaging)
-- ✅ JWT autentikáció (admin/officer és device)
-- ✅ Device bejelentkezés rendszer
-- ✅ Pár kezelés (létrehozás, törlés, aktiválás)
-- ✅ Geofence kezelés (scenariók, játékterület, megyék)
-- ✅ Üzenetküldés API
+## Projekt struktúra
 
-### Frontend
-- ✅ Térkép (OpenStreetMap + React-Leaflet)
-- ✅ Geofence-ek megjelenítése (polygon támogatással)
-- ✅ Játék információk (állapot, idő, aktív párok, játékterület)
-- ✅ Párok listája (csak aktív párok)
-- ✅ Bilincs, MW, Név hozzárendelés, Üzenetküldés
-- ✅ Pár részletek modal
-- ✅ Elfogás (bilincs) API: szigorúbb validáció, idempotencia, elfogás részletei modal (hely, rögzítő, információs szöveg)
-- ✅ Admin panel (teljes funkcionalitással)
-- ✅ Admin **Eseménynapló** (audit lista, szűrés, CSV export, törlés; menü csak **admin** számára)
-- ✅ Admin **Eszközök**: Android kapcsolat (API alap URL + QR, titok rotálás), páros eszközlista
-- ✅ **Üldöző élő hely** küldése böngészőből (`POST /api/positions/pursuer-live`) — térképes távolság a játéknap zárásánál
-- ✅ Admin listák: közös táblázat-kártya (`AdminDataTableCard`), `AdminTableKit` (egységes `mw-table` váz, lapozó, rendezhető fejléc), lapozás a párok / eszközök / felhasználók tábláin is
-- ✅ Modern UI (fekete-narancs színséma)
-
-### Android App
-- ✅ Egy aktivitás + **Jetpack Compose** UI (bejelentkezés, főképernyő, értesítések); első indításkor **szerver beállítás** (API URL + titok, opcionálisan QR)
-- ✅ **EncryptedSharedPreferences** + dinamikus Retrofit alap URL (`ServerConnectionStore`)
-- ✅ Device bejelentkezés (`POST /api/devices/login`), FCM token frissítés, segítségkérés, jármű idő lejárata jelzése
-- ✅ **LocationService**: élő hely + jármű számláló mezők; a mintavételi gyakoriság a szerver játékmotorához igazodik
-- ✅ Lokális események (Room), FCM / foreground kezelés
-
-## 📱 Telefonos bejelentkezés
-
-Az alkalmazás első konfigurálása: admin felületen generált **API URL + titok** (vagy QR). Részletek: `android-app/README.md`, `docs/API_SPEC.md` (`/api/mobile/verify`), `backend/.env.example` (`PUBLIC_API_BASE_URL`, `MOBILE_ENROLLMENT_SECRET`).
-
-**API Endpoint**: `POST /api/devices/login`
-
-**Request** (a `deviceId` kötelező; tipikusan Android `ANDROID_ID`):
-```json
-{
-  "username": "1",
-  "password": "1",
-  "deviceId": "android_id_or_stable_string",
-  "fcmToken": null
-}
+```text
+a_hajsza/
+├── backend/
+├── frontend/
+├── android-app/
+├── docs/
+├── docker/
+│   ├── Dockerfile.backend
+│   └── Dockerfile.frontend
+├── docker-compose.yml
+└── docker-compose.stack.yml
 ```
 
-**Response**:
-```json
-{
-  "success": true,
-  "token": "jwt_token",
-  "device": {
-    "id": 1,
-    "pairId": 1,
-    "pairNumber": 1
-  }
-}
-```
+## Dokumentáció
 
-## 📁 Projekt struktúra
-
-```
-most_wanted/
-├── backend/          # NestJS backend API
-├── frontend/         # React webapp
-├── android-app/      # Android app
-├── docs/             # Dokumentáció
-└── docker-compose.yml
-```
-
-## 📚 Dokumentáció
-
-- [API specifikáció](docs/API_SPEC.md)
-- [Adatbázis séma](docs/DATABASE_SCHEMA.md)
-- [WebSocket események](docs/WEBSOCKET_EVENTS.md)
+- [Dokumentációs index](docs/README.md)
 - [Telepítési útmutató](docs/INSTALLATION.md)
-- [Firebase beállítás](docs/FIREBASE_SETUP.md)
-
-## ⚠️ Fontos megjegyzések
-
-- A párok alapértelmezetten **inaktívak**, amíg a telefonos app nem jelentkezik be
-- A seed script **nem hoz létre** automatikusan párokat (csak ha `SEED_PAIRS=true`)
-- Firebase credentials nélkül az üzenetküldés nem működik, de nem hibázik
-- A megyék polygon koordinátái egyszerűsítettek - pontosabb adatokért használj valós GeoJSON adatokat
-
-## 🔐 Biztonság
-
-- JWT token autentikáció
-- Device-based auth a pozícióküldéshez
-- Role-based access control (admin/officer)
-- HTTPS ajánlott production-ben
+- [Production deployment](docs/DEPLOYMENT.md)
+- [API specifikáció](docs/API_SPEC.md)
+- [WebSocket események](docs/WEBSOCKET_EVENTS.md)
+- [Adatbázis séma](docs/DATABASE_SCHEMA.md)
+- [Firebase / FCM beállítás](docs/FIREBASE_SETUP.md)
+- [Android kliens dokumentáció](android-app/README.md)

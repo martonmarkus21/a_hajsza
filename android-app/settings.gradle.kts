@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MostWanted"
+rootProject.name = "Celkereszt"
 include(":app")
 
 

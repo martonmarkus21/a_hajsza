@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.mostwanted.app"
+    namespace = "com.celkereszt.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.mostwanted.app"
+        applicationId = "com.celkereszt.app"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

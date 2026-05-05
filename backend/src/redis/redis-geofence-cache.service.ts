@@ -4,8 +4,8 @@ import { Repository } from 'typeorm';
 import { Geofence } from '../entities/geofence.entity';
 import { RedisConnectionService } from './redis-connection.service';
 
-const KEY_GAME_AREA = 'mw:cache:geofences:active:game_area';
-const KEY_SCENARIO = 'mw:cache:geofences:active:scenario';
+const KEY_GAME_AREA = 'ck:cache:geofences:active:game_area';
+const KEY_SCENARIO = 'ck:cache:geofences:active:scenario';
 /** Safety TTL if invalidation is missed; admin geofence changes call invalidate immediately */
 const CACHE_TTL_SECONDS = 600;
 
