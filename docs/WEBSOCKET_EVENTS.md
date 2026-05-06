@@ -64,7 +64,7 @@ Mindkét handler a **`positions`** room-hoz ad / onnan távolít (`websocket.gat
 - `positionUpdate`, `distanceUpdate`
 - `capture`, `captureReverted`
 - `ckHighlight`
-- `geofenceAlert`, `ruleViolation`
+- `ruleViolation`
 - `pairStatusUpdate`, `gameAreaUpdate`, `gameRuntimeUpdate`
 - `globalToast`
 - `savedPositionSample`, `savedPositionsDeleted`
@@ -122,12 +122,12 @@ Forrás: **`CkFlagsService`** → `broadcastCkHighlight`.
 {
   "pairId": 3,
   "active": true,
-  "flaggedBy": { "id": 2, "username": "Officer" },
+  "flaggedBy": { "id": 2, "username": "officer1" },
   "timestamp": "2026-05-05T18:45:00.000Z"
 }
 ```
 
-*Megjegyzés:* a **`username`** jelen implementációban gyakran a fix **`"Officer"`** sztring (TODO a szolgáltatásban).
+*Megjegyzés:* a **`username`** a CK jelölést végző **`/api/celkereszt` POST** hívónak a JWT‑jében szereplő felhasználónév (ugyanaz a felhasználó, mint **`flaggedBy.id`**).
 
 ---
 

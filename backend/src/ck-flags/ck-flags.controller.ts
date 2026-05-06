@@ -15,6 +15,7 @@ export class CkFlagsController {
       {
         ...createCkFlagDto,
         userId: req.user.userId,
+        username: req.user.username,
       },
       auditMetaFromRequest(req),
     );

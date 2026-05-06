@@ -4,7 +4,7 @@
   <img src="../frontend/src/assets/images/celkereszt_logomark.png" alt="Célkereszt logomark" width="88" />
 </p>
 
-> **Szerepe:** Mobil (pár) kliens fejlesztői és forgalmazás előtti ellenőrzési pontok. Build és API részletek a forráskód és **`../docs`** mappa mellett.
+> **Szerepe:** Mobil (pár) kliens áttekintése: build, első párosítás és modulfelosztás. Részletes architektúra: [IMPLEMENTATION.md](IMPLEMENTATION.md); HTTP szerződés: **`../docs`**.
 
 ---
 
@@ -17,14 +17,13 @@
 5. [Első párosítás](#5-első-párosítás)
 6. [Modulok](#6-modulok)
 7. [Hibakeresés](#7-hibakeresés)
-8. [Release előtti checklist](#8-release-előtti-checklist)
-9. [Kapcsolódó dokumentumok](#9-kapcsolódó-dokumentumok)
+8. [Kapcsolódó dokumentumok](#8-kapcsolódó-dokumentumok)
 
 ---
 
 ## 1. Feladatkör
 
-Pair eszköz: backendhez kapcsolódás (**enrollment** + **`POST /api/devices/login`** után Bearer token), lokáció küldése, **`help-request`** / **`vehicle-session-expired`** hívások, FCM fogadása.
+Pair eszköz: backendhez kapcsolódás (**enrollment ellenőrzés** + **`POST /api/devices/login`** után Bearer token), lokáció küldése, **`help-request`** / **`vehicle-session-expired`** hívások, FCM fogadása.
 
 Package jelen állapotban: **`com.celkereszt.app`** (`app/build.gradle.kts`).
 
@@ -35,9 +34,9 @@ Package jelen állapotban: **`com.celkereszt.app`** (`app/build.gradle.kts`).
 | Réteg | Eszköz |
 |---|---|
 | UI | Kotlin, Jetpack Compose |
-| REST | Retrofit (+ Gson / projekt szerinti HTTP réteg) |
+| REST | Retrofit + Gson (**`CkApiGson`**) |
 | Push | Firebase Cloud Messaging |
-| Lokáció | Android Location / háttér service (részletek a kódmodulokban) |
+| Lokáció | Android Location + háttér service (`LocationService`) |
 
 ---
 
@@ -47,9 +46,15 @@ Package jelen állapotban: **`com.celkereszt.app`** (`app/build.gradle.kts`).
 android-app/
 ├── app/src/main/java/com/celkereszt/app/
 │   ├── api/
+│   ├── database/          # Room
+│   ├── model/
+│   ├── repository/
+│   ├── service/           # LocationService, FcmService
 │   ├── ui/
-│   ├── services/
-│   └── util/
+│   ├── util/
+│   ├── viewmodel/
+│   ├── AppActivity.kt
+│   └── splash/
 └── app/src/main/res/
 ```
 
@@ -60,15 +65,15 @@ android-app/
 ### Előfeltételek
 
 - Android Studio stabil csatorna
-- JDK verzió: a projekt Gradle/AGP `jvmToolchain` követelményének megfelelően (**`gradle.properties`**, wrapper)
-- **`google-services.json`** → **`android-app/app/`**
+- JDK: **Gradle futtatáshoz lehetőleg 17** (*Settings → Gradle → Gradle JDK*: ne legyen ennél újabb, elkerülhető véletlen **jlink**/JdkImageTransform hiba); az app bytecode célja: **Java 11** (`compileOptions`, `kotlinOptions.jvmTarget`)
+- **`google-services.json`** → **`android-app/app/`** (Firebase Console szerint illeszd az **`applicationId`**-hez)
 
 ### Lépések
 
-1. Nyisd meg az **`android-app`** mappa gyökerét Android Studio-ban.
+1. **android-app** mappa megnyitása Android Studio-ban (projekt gyökér erre a könyvtárra mutasson).
 2. Gradle sync.
-3. Fizikai eszköz vagy emulátor.
-4. **`Run`** → **`debug`** build.
+3. Fizikai eszköz vagy emulátor összepárosítva / elindítva.
+4. **Run** → **debug** build.
 
 ---
 
@@ -78,8 +83,8 @@ Felhasználói onboarding adat:
 
 | Adat | Forrás |
 |---|---|
-| API gyökér | Kézi bevitel vagy QR (admin **`/api/devices/admin/mobile-connection`** DTO szerint, lásd dokumentáció) |
-| Enrollment titok | **`x-ck-enrollment-secret`** HTTP header minden guarded enroll/device hívás előtt |
+| API gyökér | Kézi bevitel vagy QR (admin **`/api/devices/admin/mobile-connection`** DTO, lásd **`../docs`** ) |
+| Enrollment titok | **`X-Ck-Enrollment-Secret`** (megegyező szándékú név mint backend **`MOBILE_ENROLLMENT_HEADER`**) |
 
 Részletes flow: **`../docs/API_SPEC.md`**, **`../docs/INSTALLATION.md`**.
 
@@ -89,12 +94,13 @@ Részletes flow: **`../docs/API_SPEC.md`**, **`../docs/INSTALLATION.md`**.
 
 | Terület | Funkció |
 |---|---|
-| Auth / párosítás | Enrollment ping, **`/api/devices/login`**, lokálisan tárolt device JWT |
-| Helyzet | Periodikus lokáció **→** **`POST /api/position`** (DTO a backendhez igazítva) |
-| Push | **`POST /api/devices/fcm-token`** regisztráció és notification channel kezelés |
-| UX | Compose képernyők, hibadiálogok, QR capture Activity |
+| Auth / párosítás | **`EnrollmentProbe`** → **`GET /api/mobile/verify`**, majd **`/api/devices/login`**, lokálisan tárolt device JWT (**`PreferencesHelper`**) |
+| Helyzet | Periodikus lokáció → **`POST /api/position`** (**`LocationService`**, manifest: **foreground + `location` típus**) |
+| Push | **`POST /api/devices/fcm-token`**, **`FcmService`** csatornák |
+| Helyi események | Room: **`EventRepository`** ( **`FcmService`** és társított UX menti / listázza) |
+| UX | Compose (**`AppNavGraph`**), QR (**`CkQrCaptureActivity`**) |
 
-Technikai mélyebb írás: [IMPLEMENTATION.md](IMPLEMENTATION.md).
+Részletesen: [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 ---
 
@@ -102,21 +108,13 @@ Technikai mélyebb írás: [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 | Hibaüzenet / tünet | Ellenőrzés |
 |---|---|
-| Érvénytelen mobil kapcsolódási titok | `game_settings` aktív **`mobileEnrollmentSecret`**, pontos **`x-ck-enrollment-secret`** fejléc |
-| Gradle „duplicate resources” | `res/mipmap*` – ne legyen párhuzamosan `ic_launcher.png` **és** `.webp` ugyanarra a névre |
-| FCM néma | **`google-services.json`**, backend **`FIREBASE_*`** – [../docs/FIREBASE_SETUP.md](../docs/FIREBASE_SETUP.md) |
+| Érvénytelen mobil kapcsolódási titok | `game_settings.mobile_enrollment_secret` / env felülírás; fejléc egyezése a **`ApiService.ENROLLMENT_SECRET_HEADER`** / backend konstanssal |
+| Gradle „duplicate resources” | `res/mipmap*` — ne legyen párhuzamosan **`ic_launcher.png`** és **`.webp`** ugyanarra a névzónára |
+| FCM néma | **`google-services.json`**, backend **`FIREBASE_*`** → [../docs/FIREBASE_SETUP.md](../docs/FIREBASE_SETUP.md) |
 
 ---
 
-## 8. Release előtti checklist
-
-- [ ] `assembleRelease` éles kulcsállománnyal (projekt szerinti signing)
-- [ ] Enrollment + login + lokáció + push útvonal teszt fizikai kütyün
-- [ ] Crashlytics / log opcionális követés bekötve organisation policy szerint
-
----
-
-## 9. Kapcsolódó dokumentumok
+## 8. Kapcsolódó dokumentumok
 
 | Dokumentum | Témakör |
 |---|---|

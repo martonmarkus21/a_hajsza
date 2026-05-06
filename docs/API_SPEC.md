@@ -4,7 +4,7 @@
   <img src="../frontend/src/assets/images/celkereszt_logomark.png" alt="Célkereszt logomark" width="88" />
 </p>
 
-> **Szerepe:** A NestJS backend HTTP végpontjainak leírása és tipikus auth / példa válaszok — a táblák a **`backend/src/*controller*.ts`** állapotához igazítva.
+> **Szerepe:** A NestJS backend HTTP végpontjainak leírása és tipikus auth / példa válaszok — a dokumentum **`backend/src/*controller*.ts`** (és route prefixek) állapotához igazítva.
 
 ---
 
@@ -12,7 +12,7 @@
 
 1. [Kapcsolati alapok](#1-kapcsolati-alapok)
 2. [Hitelesítés](#2-hitelesítés)
-3. [Modulák áttekintése](#3-modulok-áttekintése-module-prefixek)
+3. [Modulok áttekintése](#3-modulok-áttekintése-module-prefixek)
 4. [Teljes végpontlista](#4-teljes-végpontlista)
 5. [Referencia példák](#5-referencia-példa-hívások)
 6. [Hibaválaszok](#6-hibaválaszok)
@@ -48,7 +48,7 @@ JWT payload-ban a böngészethez **`sub`** = user id; a `JwtStrategy` a kérési
 ### Mobil eszköz
 
 - Enrollment: **`MobileEnrollmentGuard`** — szükséges fejléc: **`x-ck-enrollment-secret`**
-- **`POST /api/devices/login`** sikerét követően a válasz **`token`** mezőjét Bearer-ként küldd a többi device-védett végponton.
+- **`POST /api/devices/login`** sikerét követően a válaszból a **`token`** mező értékét minden további, device‑védett kéréshez az `Authorization: Bearer <token>` fejlécbe kell elhelyezni (integrátor / mobil kliens feladata).
 
 ---
 
@@ -65,13 +65,13 @@ JWT payload-ban a böngészethez **`sub`** = user id; a `JwtStrategy` a kérési
 | `/api/audit-logs/admin` | Audit |
 | `/api/mobile` | Publikus mobil ellenőrzés |
 
-*(A pontos sorrendhez lásd az alábbi táblázat.)*
+*(A pontos sorrendhez lásd az alábbi táblázatot.)*
 
 ---
 
 ## 4. Teljes végpontlista
 
-A lista közvetlenül a jelenlegi kontrollerek route-jaiból készült (ha végpontot adsz hozzá, frissítsd ezt a táblázatot is).
+A lista a jelenlegi kontrollerek route-jai alapján készült; új backend végpont felvételekor ezt a táblázatot érdemes együtt frissíteni.
 
 ### Speciális végpont
 
@@ -205,7 +205,7 @@ Válasz: **`success`**, **`token`**, **`device`**: `{ id, pairId, pairNumber, pa
 { "pairId": 3 }
 ```
 
-*`userId` a szerver teszi bele a JWT-ből; kliensen ne küldd.*
+*`userId` a szerver állítja be a JWT alapján; a kérés törzsében nem szükséges és nem ajánlott.*
 
 Aktív játék hiányában: `400`, `GAME_NOT_IN_PROGRESS`.
 
@@ -236,8 +236,8 @@ NestJS standard forma:
 
 ## 7. Integrációs megjegyzések
 
-- Egységes HTTP kliens + egységnyi hiba- és Bearer-kezelő mind kliensen.
-- Sok mutálás auditált admin oldalról — fejlesztői eszközöknél légy tudatos a token mellett.
+- Egységes HTTP kliens + egységes hiba- és Bearer-kezelő minden kliensen.
+- Sok mutálás auditált admin oldalról történik — fejlesztői / teszt klienseknél is érdemes ugyanígy kezelni a tokent és a jogosultságot.
 
 ---
 

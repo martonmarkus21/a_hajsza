@@ -37,7 +37,7 @@
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Hogyan építek image-et és mit figyelek élesben? |
 | [API_SPEC.md](API_SPEC.md) | HTTP végpontok |
 | [WEBSOCKET_EVENTS.md](WEBSOCKET_EVENTS.md) | Socket.IO |
-| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | PostgreSQL táblák |
+| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | PostgreSQL séma + Redis kulcsréteg |
 | [FIREBASE_SETUP.md](FIREBASE_SETUP.md) | Firebase / FCM |
 
 ---

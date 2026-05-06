@@ -12,6 +12,7 @@ import com.google.firebase.messaging.RemoteMessage
 import com.celkereszt.app.AppActivity
 import com.celkereszt.app.R
 import com.celkereszt.app.repository.EventRepository
+import com.celkereszt.app.util.CkLog
 import com.celkereszt.app.util.PreferencesHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,19 +37,19 @@ class FcmService : FirebaseMessagingService() {
         // Check for force logout or pair deletion
         val dataType = remoteMessage.data["type"]
         if (dataType == "pair_deleted") {
-            android.util.Log.d("FcmService", "Pair deleted: logging out device")
+            CkLog.d("FcmService", "Pair deleted: logging out device")
             handleForceLogout(SessionEndReason.PairDeleted)
             return
         }
         if (dataType == "force_logout" || remoteMessage.data["action"] == "logout") {
-            android.util.Log.d("FcmService", "Force logout received, logging out device")
+            CkLog.d("FcmService", "Force logout received, logging out device")
             handleForceLogout(SessionEndReason.ForceLogout)
             return
         }
 
         // Check for location update request
         if (dataType == "location_update_request" || remoteMessage.data["action"] == "update_location") {
-            android.util.Log.d("FcmService", "Location update request received")
+            CkLog.d("FcmService", "Location update request received")
             saveEvent(
                 title = "Azonnali pozíció",
                 body = "A szerver friss pozíció küldését kéri.",
@@ -105,19 +106,19 @@ class FcmService : FirebaseMessagingService() {
         // Stop location service
         val serviceIntent = Intent(this, com.celkereszt.app.service.LocationService::class.java)
         stopService(serviceIntent)
-        
+
         // Call logout API (before clearing preferences, so token is still available)
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
             try {
                 val apiService = com.celkereszt.app.api.ApiService.create(this@FcmService)
                 apiService.deviceLogout()
-                android.util.Log.d("FcmService", "Force logout API called successfully")
+                CkLog.d("FcmService", "Force logout API called successfully")
             } catch (e: Exception) {
                 android.util.Log.e("FcmService", "Force logout API error: ${e.message}", e)
             } finally {
                 // Clear preferences
                 prefs.clear()
-                
+
                 when (reason) {
                     SessionEndReason.PairDeleted -> {
                         showNotification(
@@ -145,7 +146,7 @@ class FcmService : FirebaseMessagingService() {
                         )
                     }
                 }
-                
+
                 // Broadcast logout event to the compose host activity if it's running
                 val intent = Intent("com.celkereszt.app.FORCE_LOGOUT").apply {
                     setPackage(packageName)
@@ -156,7 +157,7 @@ class FcmService : FirebaseMessagingService() {
     }
 
     private fun handleLocationUpdateRequest() {
-        android.util.Log.d("FcmService", "Handling location update request")
+        CkLog.d("FcmService", "Handling location update request")
         val serviceIntent = Intent(this, com.celkereszt.app.service.LocationService::class.java)
         serviceIntent.action = "UPDATE_LOCATION"
         ContextCompat.startForegroundService(this, serviceIntent)

@@ -44,7 +44,7 @@ export class CkFlagsService {
       active: true,
       flaggedBy: {
         id: createCkFlagDto.userId,
-        username: 'Officer', // TODO: Get from user service
+        username: createCkFlagDto.username ?? "",
       },
       timestamp: savedCkFlag.timestamp.toISOString(),
     });

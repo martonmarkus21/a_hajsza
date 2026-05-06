@@ -2,6 +2,7 @@ package com.celkereszt.app.api
 
 import android.content.Context
 import android.content.Intent
+import com.celkereszt.app.BuildConfig
 import com.celkereszt.app.util.PreferencesHelper
 import com.celkereszt.app.util.ServerConnectionStore
 import okhttp3.Interceptor
@@ -47,15 +48,18 @@ interface ApiService {
             val baseUrl = ServerConnectionStore(context).getApiBaseUrl()
                 ?: throw IllegalStateException("Nincs beállítva API cím. Előbb add meg a szerver kapcsolatot.")
 
-            val loggingInterceptor = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
-            }
-
             val prefs = PreferencesHelper(context)
             val serverStore = ServerConnectionStore(context)
 
-            val clientBuilder = OkHttpClient.Builder()
-                .addInterceptor(loggingInterceptor)
+            val clientBuilder = OkHttpClient.Builder().apply {
+                if (BuildConfig.DEBUG) {
+                    addInterceptor(
+                        HttpLoggingInterceptor().apply {
+                            level = HttpLoggingInterceptor.Level.BODY
+                        },
+                    )
+                }
+            }
                 .addInterceptor(Interceptor { chain ->
                     val secret = serverStore.getEnrollmentSecret()
                     val b = chain.request().newBuilder()

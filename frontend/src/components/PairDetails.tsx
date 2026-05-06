@@ -341,9 +341,10 @@ export default function PairDetails({
                 WebkitTapHighlightColor: 'transparent',
               }}
               tabIndex={-1}
+              title="Célkereszt státusz váltása"
             >
               <FiShield className={`w-4 h-4 pointer-events-none ${isCk ? 'fill-current' : ''}`} />
-              <span className="pointer-events-none">{isCk ? 'CK' : 'CK'}</span>
+              <span className="pointer-events-none">Célkereszt</span>
             </div>
             {/* Send Message - Subtler Button */}
             <button

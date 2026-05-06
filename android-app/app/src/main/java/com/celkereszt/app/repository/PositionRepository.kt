@@ -5,6 +5,7 @@ import com.celkereszt.app.api.ApiService
 import com.celkereszt.app.api.PositionRequest
 import com.celkereszt.app.database.AppDatabase
 import com.celkereszt.app.database.PositionEntity
+import com.celkereszt.app.util.CkLog
 import com.celkereszt.app.util.PreferencesHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,8 +16,8 @@ class PositionRepository(context: Context) {
     private val prefs = PreferencesHelper(context)
 
     suspend fun sendPosition(position: PositionEntity): Boolean {
-        android.util.Log.d("PositionRepository", "sendPosition called: deviceId=${position.deviceId}, pairId=${position.pairId}, lat=${position.lat}, lon=${position.lon}")
-        
+        CkLog.d("PositionRepository", "sendPosition called: deviceId=${position.deviceId}, pairId=${position.pairId}, lat=${position.lat}, lon=${position.lon}")
+
         val token = prefs.getToken()
         if (token == null) {
             android.util.Log.w("PositionRepository", "No token, saving to local database")
@@ -27,7 +28,7 @@ class PositionRepository(context: Context) {
             return false
         }
 
-        android.util.Log.d("PositionRepository", "Token found, sending to API")
+        CkLog.d("PositionRepository", "Token found, sending to API")
         return try {
             val request = PositionRequest(
                 deviceId = position.deviceId,
@@ -42,9 +43,9 @@ class PositionRepository(context: Context) {
             )
 
             // Token is automatically added by the interceptor
-            android.util.Log.d("PositionRepository", "Calling API sendPosition")
+            CkLog.d("PositionRepository", "Calling API sendPosition")
             val response = apiService.sendPosition(request)
-            android.util.Log.d("PositionRepository", "API response: success=${response.success}, message=${response.message}")
+            CkLog.d("PositionRepository", "API response: success=${response.success}, message=${response.message}")
 
             if (response.success) {
                 // Mark as synced if it was saved locally

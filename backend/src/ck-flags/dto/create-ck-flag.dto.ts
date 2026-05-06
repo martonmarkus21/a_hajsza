@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional } from 'class-validator';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateCkFlagDto {
   @IsNumber()
@@ -6,11 +6,9 @@ export class CreateCkFlagDto {
 
   @IsOptional()
   @IsNumber()
-  userId?: number; // Optional, will be set by controller from req.user
+  userId?: number; // Set by controller from JWT (body value ignored)
+
+  @IsOptional()
+  @IsString()
+  username?: string; // Set by controller from JWT (body value ignored)
 }
-
-
-
-
-
-

@@ -1,5 +1,6 @@
 package com.celkereszt.app.api
 
+import com.celkereszt.app.BuildConfig
 import com.celkereszt.app.util.ServerConnectionStore
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -17,11 +18,15 @@ private interface EnrollmentVerifyApi {
 object EnrollmentProbe {
     suspend fun verify(apiBaseUrl: String, enrollmentSecret: String): MobileEnrollmentVerifyResponse {
         val normalized = ServerConnectionStore.normalizeApiBaseUrlStatic(apiBaseUrl)
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+        val client = OkHttpClient.Builder().apply {
+            if (BuildConfig.DEBUG) {
+                addInterceptor(
+                    HttpLoggingInterceptor().apply {
+                        level = HttpLoggingInterceptor.Level.BASIC
+                    },
+                )
+            }
         }
-        val client = OkHttpClient.Builder()
-            .addInterceptor(logging)
             .addInterceptor { chain ->
                 val b = chain.request().newBuilder()
                 if (enrollmentSecret.isNotBlank()) {

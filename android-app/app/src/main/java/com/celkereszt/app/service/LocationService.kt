@@ -20,6 +20,7 @@ import com.celkereszt.app.api.ApiService
 import com.celkereszt.app.api.CkApiGson
 import com.celkereszt.app.database.PositionEntity
 import com.celkereszt.app.repository.PositionRepository
+import com.celkereszt.app.util.CkLog
 import com.celkereszt.app.util.GameRuntimeFormatter
 import androidx.core.app.NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE
 import com.celkereszt.app.util.PreferencesHelper
@@ -71,13 +72,13 @@ class LocationService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = buildForegroundNotification(getString(R.string.location_service_default_status))
         startForeground(1, notification)
-        
+
         // Check if this is a location update request
         if (intent?.action == "UPDATE_LOCATION") {
-            android.util.Log.d("LocationService", "Location update requested via FCM")
+            CkLog.d("LocationService", "Location update requested via FCM")
             sendCurrentPosition()
         }
-        
+
         return START_STICKY
     }
 
@@ -194,7 +195,7 @@ class LocationService : Service() {
             override fun onLocationResult(locationResult: LocationResult) {
                 // Process all locations in the result (not just lastLocation)
                 locationResult.locations.forEach { location ->
-                    android.util.Log.d("LocationService", "Location update received via callback: lat=${location.latitude}, lon=${location.longitude}, accuracy=${location.accuracy}, time=${location.time}")
+                    CkLog.d("LocationService", "Location update received via callback: lat=${location.latitude}, lon=${location.longitude}, accuracy=${location.accuracy}, time=${location.time}")
                     sendLocation(location)
                     lastSentLocation = location
                 }
@@ -221,7 +222,7 @@ class LocationService : Service() {
                     locationCallback,
                     mainLooper // Use mainLooper to ensure callbacks work in background
                 )
-                android.util.Log.d("LocationService", "Location updates started successfully")
+                CkLog.d("LocationService", "Location updates started successfully")
             } else {
                 android.util.Log.w("LocationService", "Location permission not granted, cannot start location updates")
             }
@@ -256,14 +257,14 @@ class LocationService : Service() {
                         val now = System.currentTimeMillis()
                         val lastLocationTime = lastSentLocation?.time ?: 0
                         val timeSinceLastLocation = now - lastLocationTime
-                        
+
                         // Only use timer as backup if we haven't received location in last 2 seconds
                         if (timeSinceLastLocation > 2000) {
                             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                                 if (location != null) {
                                     // Check if this location is newer than what we last sent
                                     if (lastSentLocation == null || location.time > lastSentLocation!!.time) {
-                                        android.util.Log.d("LocationService", "Timer backup: Sending position (no recent callback update)")
+                                        CkLog.d("LocationService", "Timer backup: Sending position (no recent callback update)")
                                         sendLocation(location)
                                         lastSentLocation = location
                                     }
@@ -316,9 +317,9 @@ class LocationService : Service() {
         }
         val deviceId = prefsHelper.getDeviceId()
         val pairId = prefsHelper.getPairId()
-        
-        android.util.Log.d("LocationService", "sendLocation called: deviceId=$deviceId, pairId=$pairId, lat=${location.latitude}, lon=${location.longitude}")
-        
+
+        CkLog.d("LocationService", "sendLocation called: deviceId=$deviceId, pairId=$pairId, lat=${location.latitude}, lon=${location.longitude}")
+
         if (pairId == 0) {
             android.util.Log.w("LocationService", "pairId is 0, not sending position")
             // Not logged in yet
@@ -327,7 +328,7 @@ class LocationService : Service() {
 
         val vehicleMode = prefsHelper.isVehicleMode()
         val vehicleStartTime = prefsHelper.getVehicleStartTime()
-        
+
         var vehicleSessionRemaining: Int? = null
         if (vehicleMode && vehicleStartTime > 0) {
             val elapsed = System.currentTimeMillis() - vehicleStartTime
@@ -357,9 +358,9 @@ class LocationService : Service() {
         // Each position send is non-blocking and independent
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                android.util.Log.d("LocationService", "Sending position to repository (async, non-blocking)")
+                CkLog.d("LocationService", "Sending position to repository (async, non-blocking)")
                 val success = positionRepository.sendPosition(position)
-                android.util.Log.d("LocationService", "Position send result: $success")
+                CkLog.d("LocationService", "Position send result: $success")
             } catch (e: Exception) {
                 android.util.Log.e("LocationService", "Error sending position: ${e.message}", e)
                 // The positionRepository.sendPosition already handles saving to local database on error

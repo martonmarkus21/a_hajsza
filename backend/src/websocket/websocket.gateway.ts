@@ -80,10 +80,6 @@ export class WebSocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     this.server.emit('ckHighlight', data);
   }
 
-  broadcastGeofenceAlert(data: any) {
-    this.server.emit('geofenceAlert', data);
-  }
-
   broadcastRuleViolation(data: any) {
     this.server.emit('ruleViolation', data);
   }

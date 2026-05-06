@@ -35,6 +35,7 @@ import com.celkereszt.app.ui.navigation.Routes
 import com.celkereszt.app.ui.theme.CelkeresztTheme
 import com.celkereszt.app.repository.EventRepository
 import com.celkereszt.app.util.AppErrorMessages
+import com.celkereszt.app.util.CkLog
 import com.celkereszt.app.util.PreferencesHelper
 import com.celkereszt.app.util.ServerConnectionStore
 import com.celkereszt.app.viewmodel.AuthViewModel
@@ -393,7 +394,7 @@ class AppActivity : ComponentActivity() {
                 val response = ApiService.create(this@AppActivity).getGameCountdown()
                 mainViewModel.updateLiveStatusFromResponse(response)
             } catch (e: Exception) {
-                android.util.Log.w("AppActivity", "countdown: ${e.message}")
+                CkLog.d("AppActivity", "countdown: ${e.message}")
             }
         }
     }

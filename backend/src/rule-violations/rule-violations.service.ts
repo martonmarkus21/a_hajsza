@@ -5,7 +5,6 @@ import { RuleViolation } from '../entities/rule-violation.entity';
 import { Geofence } from '../entities/geofence.entity';
 import { PositionSnapshot } from '../positions/position-snapshot';
 import { RedisGeofenceCacheService } from '../redis/redis-geofence-cache.service';
-import { GeofenceCompletion } from '../entities/geofence-completion.entity';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
 import { GameDaysService } from '../game-days/game-days.service';
 import { FcmService } from '../fcm/fcm.service';
@@ -15,7 +14,6 @@ import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import type { AuditRequestMeta } from '../common/audit-request.util';
 import { RedisPositionService } from '../redis/redis-position.service';
 import { RedisStayRuleService } from '../redis/redis-stay-rule.service';
-import { haversineKm } from '../common/haversine-km';
 
 @Injectable()
 export class RuleViolationsService {
@@ -23,8 +21,6 @@ export class RuleViolationsService {
     @InjectRepository(RuleViolation)
     private ruleViolationRepository: Repository<RuleViolation>,
     private redisGeofenceCache: RedisGeofenceCacheService,
-    @InjectRepository(GeofenceCompletion)
-    private geofenceCompletionRepository: Repository<GeofenceCompletion>,
     @InjectRepository(Pair)
     private pairRepository: Repository<Pair>,
     @InjectRepository(CkFlag)
@@ -280,14 +276,19 @@ export class RuleViolationsService {
     const violations: RuleViolation[] = [];
     let gameAreaExitViolationActive = false;
 
-    // Check game area exit
-    const gameAreaGeofences = await this.redisGeofenceCache.getActiveGameAreaGeofences();
+    // Kilépés szabály: „játékterület” = aktív game_area ∪ aktív scenario (ugyanazzal a geo + időablak ellenőrzéssel).
+    const [gameAreaGeofences, scenarioGeofences] = await Promise.all([
+      this.redisGeofenceCache.getActiveGameAreaGeofences(),
+      this.redisGeofenceCache.getActiveScenarioGeofences(),
+    ]);
+    const boundaryGeofences = [...gameAreaGeofences, ...scenarioGeofences];
 
-    if (gameAreaGeofences.length > 0) {
+    if (boundaryGeofences.length > 0) {
       const lat = Number(position.lat);
       const lon = Number(position.lon);
-      const isInsideGameArea = gameAreaGeofences.some((geofence) =>
-        this.isInsideGameAreaGeofence(lat, lon, geofence),
+      const now = new Date();
+      const isInsideGameArea = boundaryGeofences.some((geofence) =>
+        this.isInsidePlayableBoundaryAt(lat, lon, geofence, now),
       );
 
       gameAreaExitViolationActive = !isInsideGameArea;
@@ -386,9 +387,6 @@ export class RuleViolationsService {
         violations.push(created);
       }
     }
-
-    // Check geofence completions (scenarios)
-    await this.checkGeofenceCompletions(pairId, position);
 
     return { violations, gameAreaExitViolationActive };
   }
@@ -511,57 +509,6 @@ export class RuleViolationsService {
     return savedViolation;
   }
 
-  private async checkGeofenceCompletions(pairId: number, position: PositionSnapshot) {
-    const activeGeofences = await this.redisGeofenceCache.getActiveScenarioGeofences();
-
-    for (const geofence of activeGeofences) {
-      // Check if already completed
-      const existing = await this.geofenceCompletionRepository.findOne({
-        where: { geofenceId: geofence.id, pairId },
-      });
-
-      if (existing) continue;
-
-      // Check if within geofence
-      const isInside = this.isPointInCircle(
-        Number(position.lat),
-        Number(position.lon),
-        parseFloat(geofence.centerLat.toString()),
-        parseFloat(geofence.centerLon.toString()),
-        geofence.radiusM,
-      );
-
-      if (isInside) {
-        // Check time window if specified
-        const now = new Date();
-        if (geofence.activeFrom && now < geofence.activeFrom) continue;
-        if (geofence.activeUntil && now > geofence.activeUntil) continue;
-
-        // Create completion
-        const completion = this.geofenceCompletionRepository.create({
-          geofenceId: geofence.id,
-          pairId,
-        });
-        await this.geofenceCompletionRepository.save(completion);
-
-        // Broadcast completion
-        this.webSocketGateway.broadcastGeofenceAlert({
-          type: 'completion',
-          geofenceId: geofence.id,
-          geofenceName: geofence.name,
-          pairId,
-          timestamp: new Date().toISOString(),
-        });
-
-        // Send push notification
-        await this.fcmService.sendToPair(pairId, {
-          title: 'Feladat teljesítve',
-          body: `Sikeresen teljesítettétek: ${geofence.name}`,
-        });
-      }
-    }
-  }
-
   private isPointInCircle(
     lat: number,
     lon: number,
@@ -588,7 +535,24 @@ export class RuleViolationsService {
     );
   }
 
-  private isPointInPolygon(lat: number, lon: number, polygon: number[][]): boolean {
+  /** `game_area_exit` határ: geometriában belül, és opcionális activeFrom / activeUntil között (mindkét geofence-típusra). */
+  private isInsidePlayableBoundaryAt(
+    lat: number,
+    lon: number,
+    geofence: Geofence,
+    now: Date,
+  ): boolean {
+    if (geofence.activeFrom != null && now < geofence.activeFrom) return false;
+    if (geofence.activeUntil != null && now > geofence.activeUntil)
+      return false;
+    return this.isInsideGameAreaGeofence(lat, lon, geofence);
+  }
+
+  private isPointInPolygon(
+    lat: number,
+    lon: number,
+    polygon: number[][],
+  ): boolean {
     // polygon format: [[lon, lat], [lon, lat], ...]
     let inside = false;
 
@@ -600,7 +564,7 @@ export class RuleViolationsService {
 
       const intersects =
         yi > lat !== yj > lat &&
-        lon < ((xj - xi) * (lat - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+        lon < ((xj - xi) * (lat - yi)) / (yj - yi || Number.EPSILON) + xi;
 
       if (intersects) inside = !inside;
     }

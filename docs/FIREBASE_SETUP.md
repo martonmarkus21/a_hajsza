@@ -27,7 +27,7 @@
 | Komponens | Szerep |
 |---|---|
 | Firebase projekt | FCM végpont |
-| `google-services.json` | Android app Firebase azon |
+| `google-services.json` | Android Firebase-konfiguráció: projekt- és alkalmazásazonosítók (a `com.google.gms.google-services` plugin ebből tölti a kliens SDK / FCM adatokat) |
 | Backend service account JWT | Küldő hitelesítés – **`FcmService`** (`firebase-admin`) |
 
 Ha a három **`FIREBASE_*`** közül bármelyik hiányzik vagy sablon, a **`FcmService`** nem indul el: a webes admin életben maradhat, de **push és a teljes terepi élmény nélkül**.
