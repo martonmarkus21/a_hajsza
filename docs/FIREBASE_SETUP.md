@@ -107,4 +107,5 @@ Sablon egy helyen: **`backend/.env.example`**. A három kötelező kulcs **`FcmS
 | Dokumentum | Témakör |
 |---|---|
 | [INSTALLATION.md](INSTALLATION.md) | Helyi stack |
-| [../android-app/README.md](../android-app/README.md) | Android build |
+| [../android-app/README.md](../android-app/README.md) | Android (debug, modulok) |
+| [ANDROID_RELEASE_BUILD.md](ANDROID_RELEASE_BUILD.md) | Release APK build és aláírás |

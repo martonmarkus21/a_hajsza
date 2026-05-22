@@ -25,7 +25,9 @@
 | 4 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Adatbázis modell |
 | 5 | [FIREBASE_SETUP.md](FIREBASE_SETUP.md) | Push |
 | 6 | [DEPLOYMENT.md](DEPLOYMENT.md) | Docker image, éles környezet |
-| 7 | [../android-app/README.md](../android-app/README.md) | Android |
+| 7 | [../android-app/README.md](../android-app/README.md) | Android (fejlesztés, modulok) |
+| 8 | [ANDROID_RELEASE_BUILD.md](ANDROID_RELEASE_BUILD.md) | Release APK build + aláírás |
+| 9 | [LAN_DEV.md](LAN_DEV.md) | Telefon / helyi IP (Wi‑Fi), `.env`, HTTP |
 
 ---
 
@@ -39,6 +41,8 @@
 | [WEBSOCKET_EVENTS.md](WEBSOCKET_EVENTS.md) | Socket.IO |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | PostgreSQL séma + Redis kulcsréteg |
 | [FIREBASE_SETUP.md](FIREBASE_SETUP.md) | Firebase / FCM |
+| [ANDROID_RELEASE_BUILD.md](ANDROID_RELEASE_BUILD.md) | Telepíthető release APK (Firebase, JDK, sign) |
+| [LAN_DEV.md](LAN_DEV.md) | Fizikai telefon, PC LAN IP, web CORS |
 
 ---
 

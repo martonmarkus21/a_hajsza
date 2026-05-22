@@ -132,6 +132,8 @@ Webes felület: **`http://localhost:3001`**
 2. Másold be a `google-services.json` fájlt az `android-app/app` mappába.
 3. Első induláskor add meg a szerver URL-t és az enrollment titkot (`x-ck-enrollment-secret` HTTP fejléc az API hívásokon).
 
+**Telepíthető release APK** (build, JDK, aláírás): [docs/ANDROID_RELEASE_BUILD.md](docs/ANDROID_RELEASE_BUILD.md).
+
 ## Projekt struktúra
 
 ```text
@@ -156,4 +158,5 @@ a_hajsza/
 - [WebSocket események](docs/WEBSOCKET_EVENTS.md)
 - [Adatbázis séma](docs/DATABASE_SCHEMA.md)
 - [Firebase / FCM beállítás](docs/FIREBASE_SETUP.md)
+- [Android release APK build](docs/ANDROID_RELEASE_BUILD.md)
 - [Android kliens dokumentáció](android-app/README.md)

@@ -75,6 +75,8 @@ android-app/
 3. Fizikai eszköz vagy emulátor összepárosítva / elindítva.
 4. **Run** → **debug** build.
 
+**Release APK** (Firebase `google-services.json`, JDK 17, aláírás, GitHub Release): **[../docs/ANDROID_RELEASE_BUILD.md](../docs/ANDROID_RELEASE_BUILD.md)**.
+
 ---
 
 ## 5. Első párosítás
@@ -111,6 +113,7 @@ Részletesen: [IMPLEMENTATION.md](IMPLEMENTATION.md).
 | Érvénytelen mobil kapcsolódási titok | `game_settings.mobile_enrollment_secret` / env felülírás; fejléc egyezése a **`ApiService.ENROLLMENT_SECRET_HEADER`** / backend konstanssal |
 | Gradle „duplicate resources” | `res/mipmap*` — ne legyen párhuzamosan **`ic_launcher.png`** és **`.webp`** ugyanarra a névzónára |
 | FCM néma | **`google-services.json`**, backend **`FIREBASE_*`** → [../docs/FIREBASE_SETUP.md](../docs/FIREBASE_SETUP.md) |
+| Nem éri el a szervert (LAN) | **`localhost` tilos a telefonon**; [../docs/LAN_DEV.md](../docs/LAN_DEV.md) |
 
 ---
 
@@ -122,4 +125,6 @@ Részletesen: [IMPLEMENTATION.md](IMPLEMENTATION.md).
 | [../docs/INSTALLATION.md](../docs/INSTALLATION.md) | Teljes stack helyben |
 | [../docs/API_SPEC.md](../docs/API_SPEC.md) | Device végpontok |
 | [../docs/FIREBASE_SETUP.md](../docs/FIREBASE_SETUP.md) | FCM |
+| [../docs/ANDROID_RELEASE_BUILD.md](../docs/ANDROID_RELEASE_BUILD.md) | Release APK build és aláírás |
+| [../docs/LAN_DEV.md](../docs/LAN_DEV.md) | Telefon, helyi IP (Wi‑Fi) |
 | [IMPLEMENTATION.md](IMPLEMENTATION.md) | Architektúra mélyebb |

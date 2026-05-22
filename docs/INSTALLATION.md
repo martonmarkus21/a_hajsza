@@ -197,7 +197,9 @@ Lásd **Út A** és **Út B** felül.
 
 ## 8. Android kliens
 
-Rövid összegzés: **[../android-app/README.md](../android-app/README.md)**.
+Rövid összegzés: **[../android-app/README.md](../android-app/README.md)**. Fizikai telefon, helyi IP (Wi‑Fi): **[LAN_DEV.md](LAN_DEV.md)**.
+
+**Telepíthető release APK** (saját Firebase `google-services.json`, JDK, aláírás): **[ANDROID_RELEASE_BUILD.md](ANDROID_RELEASE_BUILD.md)**.
 
 ---
 
@@ -245,4 +247,6 @@ Image buildek, titokkezelés, checklist: **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) |
 | [FIREBASE_SETUP.md](FIREBASE_SETUP.md) |
 | [DEPLOYMENT.md](DEPLOYMENT.md) |
+| [LAN_DEV.md](LAN_DEV.md) |
+| [ANDROID_RELEASE_BUILD.md](ANDROID_RELEASE_BUILD.md) |
 | [../android-app/README.md](../android-app/README.md) |
